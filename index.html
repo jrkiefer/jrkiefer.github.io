@@ -523,6 +523,7 @@
       for (const t of TYPES) {
         doughLeft[t] = counts[t] - doughUse[t];
         ballsToMake[t] = tomorrowNeed[t] - doughLeft[t];
+        if (t === 'sic' && ballsToMake[t] < 2) ballsToMake[t] = 2;
         trays[t] = ballsToMake[t] <= 0 ? 0 : Math.ceil(ballsToMake[t] / PER_TRAY[t]);
       }
 
