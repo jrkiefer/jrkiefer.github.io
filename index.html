@@ -1,0 +1,298 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Dough Bible 2026</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background: #f5f5f5;
+      color: #333;
+      font-size: 16px;
+      padding-bottom: 2rem;
+    }
+    header {
+      background: #b71c1c;
+      color: #fff;
+      text-align: center;
+      padding: 1rem;
+    }
+    header h1 { font-size: 1.5rem; }
+    main { max-width: 480px; margin: 0 auto; padding: 1rem; }
+
+    .section-title {
+      font-size: 1.1rem;
+      font-weight: 700;
+      margin: 1rem 0 0.5rem;
+      color: #b71c1c;
+    }
+
+    .input-group { margin-bottom: 0.75rem; }
+    .input-group label {
+      display: block;
+      font-weight: 600;
+      margin-bottom: 0.25rem;
+      font-size: 0.9rem;
+    }
+    .input-group input {
+      width: 100%;
+      padding: 0.6rem 0.75rem;
+      font-size: 1rem;
+      border: 1px solid #ccc;
+      border-radius: 6px;
+      background: #fff;
+    }
+    .input-group input:focus {
+      outline: none;
+      border-color: #b71c1c;
+      box-shadow: 0 0 0 2px rgba(183,28,28,0.2);
+    }
+
+    .input-row {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 0.5rem;
+    }
+
+    button#calc-btn {
+      display: block;
+      width: 100%;
+      padding: 0.85rem;
+      font-size: 1.1rem;
+      font-weight: 700;
+      color: #fff;
+      background: #b71c1c;
+      border: none;
+      border-radius: 8px;
+      cursor: pointer;
+      margin-top: 1rem;
+    }
+    button#calc-btn:active { background: #7f0000; }
+
+    #results { display: none; margin-top: 1.25rem; }
+
+    .result-card {
+      background: #fff;
+      border-radius: 8px;
+      padding: 0.75rem 1rem;
+      margin-bottom: 0.75rem;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+    }
+    .result-card h3 {
+      font-size: 1rem;
+      margin-bottom: 0.4rem;
+      color: #b71c1c;
+    }
+    .result-card .row {
+      display: flex;
+      justify-content: space-between;
+      padding: 0.2rem 0;
+      font-size: 0.9rem;
+    }
+    .result-card .row .label { color: #666; }
+    .result-card .row .value { font-weight: 600; }
+    .negative { color: #b71c1c; }
+    .surplus { color: #2e7d32; }
+
+    .summary-card {
+      background: #b71c1c;
+      color: #fff;
+      border-radius: 8px;
+      padding: 1rem;
+      text-align: center;
+      margin-bottom: 0.75rem;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.15);
+    }
+    .summary-card .big {
+      font-size: 2rem;
+      font-weight: 800;
+      line-height: 1.2;
+    }
+    .summary-card .label {
+      font-size: 0.85rem;
+      opacity: 0.85;
+    }
+    .summary-row {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 0.75rem;
+    }
+
+    .sales-left-card {
+      background: #fff;
+      border-radius: 8px;
+      padding: 0.75rem 1rem;
+      margin-bottom: 0.75rem;
+      text-align: center;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+    }
+    .sales-left-card .label { color: #666; font-size: 0.85rem; }
+    .sales-left-card .value { font-size: 1.5rem; font-weight: 700; color: #333; }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Dough Bible 2026</h1>
+  </header>
+  <main>
+    <div class="section-title">Sales Info</div>
+    <div class="input-group">
+      <label for="currentSales">Current Sales ($)</label>
+      <input type="text" id="currentSales" inputmode="decimal" placeholder="$1,700">
+    </div>
+    <div class="input-group">
+      <label for="todayForecast">Today's Forecast ($)</label>
+      <input type="text" id="todayForecast" inputmode="decimal" placeholder="$10,000">
+    </div>
+    <div class="input-group">
+      <label for="tomorrowForecast">Tomorrow's Forecast ($)</label>
+      <input type="text" id="tomorrowForecast" inputmode="decimal" placeholder="$10,000">
+    </div>
+
+    <div class="section-title">Current Dough Counts</div>
+    <div class="input-row">
+      <div class="input-group">
+        <label for="countIndi">Individual</label>
+        <input type="text" id="countIndi" inputmode="numeric" placeholder="0">
+      </div>
+      <div class="input-group">
+        <label for="countSmall">Small</label>
+        <input type="text" id="countSmall" inputmode="numeric" placeholder="0">
+      </div>
+    </div>
+    <div class="input-row">
+      <div class="input-group">
+        <label for="countLarge">Large</label>
+        <input type="text" id="countLarge" inputmode="numeric" placeholder="0">
+      </div>
+      <div class="input-group">
+        <label for="countSic">Sicilian</label>
+        <input type="text" id="countSic" inputmode="numeric" placeholder="0">
+      </div>
+    </div>
+
+    <button id="calc-btn">Calculate</button>
+
+    <div id="results"></div>
+  </main>
+
+  <script>
+    const DOUGH_TABLE = [
+      { threshold: 3750,  indi: 11, small: 52,  large: 44,  sic: 2 },
+      { threshold: 4000,  indi: 12, small: 58,  large: 50,  sic: 2 },
+      { threshold: 4400,  indi: 13, small: 63,  large: 56,  sic: 2 },
+      { threshold: 4800,  indi: 14, small: 69,  large: 62,  sic: 2 },
+      { threshold: 5200,  indi: 15, small: 74,  large: 65,  sic: 2 },
+      { threshold: 5700,  indi: 17, small: 81,  large: 72,  sic: 2 },
+      { threshold: 6300,  indi: 18, small: 88,  large: 79,  sic: 2 },
+      { threshold: 6800,  indi: 20, small: 94,  large: 87,  sic: 3 },
+      { threshold: 7200,  indi: 21, small: 101, large: 94,  sic: 3 },
+      { threshold: 7800,  indi: 22, small: 108, large: 99,  sic: 3 },
+      { threshold: 8300,  indi: 24, small: 115, large: 106, sic: 3 },
+      { threshold: 9100,  indi: 26, small: 125, large: 117, sic: 3 },
+      { threshold: 10000, indi: 28, small: 136, large: 126, sic: 4 },
+      { threshold: 10700, indi: 30, small: 146, large: 137, sic: 4 },
+      { threshold: 11500, indi: 32, small: 156, large: 148, sic: 4 },
+      { threshold: 12250, indi: 34, small: 166, large: 159, sic: 4 },
+      { threshold: 13000, indi: 37, small: 177, large: 166, sic: 5 },
+      { threshold: 13900, indi: 39, small: 187, large: 177, sic: 5 },
+      { threshold: 14750, indi: 41, small: 197, large: 188, sic: 5 },
+      { threshold: 15500, indi: 43, small: 206, large: 195, sic: 5 },
+      { threshold: 16250, indi: 44, small: 214, large: 205, sic: 6 },
+      { threshold: 17000, indi: 44, small: 225, large: 216, sic: 6 },
+      { threshold: 17750, indi: 44, small: 235, large: 225, sic: 6 },
+      { threshold: 18500, indi: 44, small: 246, large: 237, sic: 6 },
+      { threshold: 19250, indi: 44, small: 255, large: 247, sic: 6 },
+      { threshold: 20000, indi: 44, small: 266, large: 256, sic: 7 },
+      { threshold: 20750, indi: 44, small: 276, large: 267, sic: 7 },
+    ];
+
+    const PER_TRAY = { indi: 11, small: 8, large: 6, sic: 3 };
+    const TRAYS_PER_BATCH = 11;
+    const TYPES = ['indi', 'small', 'large', 'sic'];
+    const TYPE_LABELS = { indi: 'Individual', small: 'Small', large: 'Large', sic: 'Sicilian' };
+
+    function parseDollar(str) {
+      return parseFloat(String(str).replace(/[$,\s]/g, '')) || 0;
+    }
+
+    function lookup(dollarAmount) {
+      let closest = DOUGH_TABLE[0];
+      let minDiff = Math.abs(dollarAmount - closest.threshold);
+      for (const entry of DOUGH_TABLE) {
+        const diff = Math.abs(dollarAmount - entry.threshold);
+        if (diff < minDiff || (diff === minDiff && entry.threshold > closest.threshold)) {
+          closest = entry;
+          minDiff = diff;
+        }
+      }
+      return closest;
+    }
+
+    function formatDollar(n) {
+      return '$' + n.toLocaleString('en-US');
+    }
+
+    function calculate() {
+      const currentSales = parseDollar(document.getElementById('currentSales').value);
+      const todayForecast = parseDollar(document.getElementById('todayForecast').value);
+      const tomorrowForecast = parseDollar(document.getElementById('tomorrowForecast').value);
+      const counts = {
+        indi: parseInt(document.getElementById('countIndi').value) || 0,
+        small: parseInt(document.getElementById('countSmall').value) || 0,
+        large: parseInt(document.getElementById('countLarge').value) || 0,
+        sic: parseInt(document.getElementById('countSic').value) || 0,
+      };
+
+      const salesLeft = todayForecast - currentSales;
+      const doughUse = lookup(salesLeft);
+      const doughLeft = {};
+      const tomorrowNeed = lookup(tomorrowForecast);
+      const ballsToMake = {};
+      const trays = {};
+
+      for (const t of TYPES) {
+        doughLeft[t] = counts[t] - doughUse[t];
+        ballsToMake[t] = tomorrowNeed[t] - doughLeft[t];
+        trays[t] = ballsToMake[t] <= 0 ? 0 : Math.ceil(ballsToMake[t] / PER_TRAY[t]);
+      }
+
+      const totalTrays = TYPES.reduce((sum, t) => sum + trays[t], 0);
+      const batches = totalTrays === 0 ? 0 : Math.ceil(totalTrays / TRAYS_PER_BATCH);
+
+      // Render
+      let html = '';
+
+      html += '<div class="sales-left-card">';
+      html += '<div class="label">Sales Left</div>';
+      html += '<div class="value">' + formatDollar(salesLeft) + '</div>';
+      html += '</div>';
+
+      for (const t of TYPES) {
+        const leftClass = doughLeft[t] < 0 ? 'negative' : '';
+        html += '<div class="result-card">';
+        html += '<h3>' + TYPE_LABELS[t] + '</h3>';
+        html += '<div class="row"><span class="label">Dough Use</span><span class="value">' + doughUse[t] + '</span></div>';
+        html += '<div class="row"><span class="label">Dough Left</span><span class="value ' + leftClass + '">' + doughLeft[t] + '</span></div>';
+        html += '<div class="row"><span class="label">Tomorrow\'s Need</span><span class="value">' + tomorrowNeed[t] + '</span></div>';
+        html += '<div class="row"><span class="label">Balls to Make</span><span class="value">' + ballsToMake[t] + '</span></div>';
+        html += '<div class="row"><span class="label">Trays (' + ballsToMake[t] + ' &divide; ' + PER_TRAY[t] + ' &uarr;)</span><span class="value">' + trays[t] + '</span></div>';
+        html += '</div>';
+      }
+
+      html += '<div class="summary-row">';
+      html += '<div class="summary-card"><div class="label">Total Trays</div><div class="big">' + totalTrays + '</div></div>';
+      html += '<div class="summary-card"><div class="label">Batches</div><div class="big">' + batches + '</div></div>';
+      html += '</div>';
+
+      const resultsEl = document.getElementById('results');
+      resultsEl.innerHTML = html;
+      resultsEl.style.display = 'block';
+    }
+
+    document.getElementById('calc-btn').addEventListener('click', calculate);
+  </script>
+</body>
+</html>
