@@ -84,22 +84,23 @@
       color: #64748b;
       font-weight: 400;
     }
-    .dollar-wrap {
-      position: relative;
+
+    /* ── Dollar input with external $ ── */
+    .dollar-field {
       display: flex;
       align-items: center;
+      gap: 6px;
     }
-    .dollar-wrap .prefix {
-      position: absolute;
-      left: 12px;
-      color: #64748b;
+    .dollar-field .dollar-sign {
+      font-family: 'Space Mono', monospace;
       font-size: 1rem;
       font-weight: 700;
-      pointer-events: none;
-      z-index: 1;
+      color: #f1f5f9;
+      flex-shrink: 0;
     }
-    .dollar-wrap input {
-      padding-left: 28px;
+    .dollar-field input {
+      flex: 1;
+      min-width: 0;
     }
     .dollar-hint {
       font-size: 0.6rem;
@@ -110,6 +111,7 @@
     .dollar-hint span {
       color: #94a3b8;
     }
+
     input[type="text"] {
       width: 100%;
       height: 48px;
@@ -132,6 +134,52 @@
     input[type="text"]:focus {
       border-color: #d32f2f;
       box-shadow: 0 0 0 3px rgba(211,47,47,0.2);
+    }
+
+    /* ── Tray Counter ── */
+    .tray-toggle {
+      font-family: 'Space Mono', monospace;
+      font-size: 0.55rem;
+      color: #64748b;
+      background: none;
+      border: none;
+      cursor: pointer;
+      padding: 0;
+      margin-left: 4px;
+      text-decoration: underline;
+      text-decoration-style: dotted;
+      transition: color 0.2s;
+    }
+    .tray-toggle:hover { color: #94a3b8; }
+    .tray-toggle.active { color: #94a3b8; }
+    .tray-counter {
+      display: none;
+      margin-top: 6px;
+    }
+    .tray-counter.open { display: block; }
+    .tray-counter .tc-row {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 6px;
+    }
+    .tray-counter .tc-group label {
+      font-size: 0.55rem;
+      color: #94a3b8;
+      margin-bottom: 2px;
+    }
+    .tray-counter input {
+      height: 38px;
+      font-size: 0.85rem;
+    }
+    .tray-counter .tc-total {
+      font-size: 0.6rem;
+      color: #94a3b8;
+      margin-top: 4px;
+      text-align: right;
+    }
+    .tray-counter .tc-total span {
+      color: #e2e8f0;
+      font-weight: 700;
     }
 
     /* ── Sales Left Banner ── */
@@ -297,16 +345,16 @@
       <div class="input-grid-2">
         <div class="input-group">
           <label for="currentSales">Current Sales</label>
-          <div class="dollar-wrap">
-            <span class="prefix">$</span>
+          <div class="dollar-field">
+            <span class="dollar-sign">$</span>
             <input type="text" id="currentSales" inputmode="decimal" placeholder="1.7">
           </div>
           <div class="dollar-hint" id="hintCurrentSales"></div>
         </div>
         <div class="input-group">
           <label for="todayForecast">Today's Forecast</label>
-          <div class="dollar-wrap">
-            <span class="prefix">$</span>
+          <div class="dollar-field">
+            <span class="dollar-sign">$</span>
             <input type="text" id="todayForecast" inputmode="decimal" placeholder="10">
           </div>
           <div class="dollar-hint" id="hintTodayForecast"></div>
@@ -314,8 +362,8 @@
       </div>
       <div class="input-group">
         <label for="tomorrowForecast">Tomorrow's Forecast</label>
-        <div class="dollar-wrap">
-          <span class="prefix">$</span>
+        <div class="dollar-field">
+          <span class="dollar-sign">$</span>
           <input type="text" id="tomorrowForecast" inputmode="decimal" placeholder="10">
         </div>
         <div class="dollar-hint" id="hintTomorrowForecast"></div>
@@ -330,21 +378,61 @@
     <div class="card">
       <div class="card-label">Current Dough Counts</div>
       <div class="input-grid-2">
-        <div class="input-group">
-          <label for="countIndi">Individual <span class="per-tray">11/tray</span></label>
+        <div class="input-group" id="group-indi">
+          <label for="countIndi">
+            Individual <span class="per-tray">11/tray</span>
+            <button type="button" class="tray-toggle" data-type="indi">count by trays?</button>
+          </label>
           <input type="text" id="countIndi" inputmode="numeric" placeholder="0">
+          <div class="tray-counter" id="tc-indi">
+            <div class="tc-row">
+              <div class="tc-group"><label>Full trays</label><input type="text" id="tcTrays-indi" inputmode="numeric" placeholder="0"></div>
+              <div class="tc-group"><label>Extra balls</label><input type="text" id="tcExtra-indi" inputmode="numeric" placeholder="0"></div>
+            </div>
+            <div class="tc-total" id="tcTotal-indi"></div>
+          </div>
         </div>
-        <div class="input-group">
-          <label for="countSmall">Small <span class="per-tray">8/tray</span></label>
+        <div class="input-group" id="group-small">
+          <label for="countSmall">
+            Small <span class="per-tray">8/tray</span>
+            <button type="button" class="tray-toggle" data-type="small">count by trays?</button>
+          </label>
           <input type="text" id="countSmall" inputmode="numeric" placeholder="0">
+          <div class="tray-counter" id="tc-small">
+            <div class="tc-row">
+              <div class="tc-group"><label>Full trays</label><input type="text" id="tcTrays-small" inputmode="numeric" placeholder="0"></div>
+              <div class="tc-group"><label>Extra balls</label><input type="text" id="tcExtra-small" inputmode="numeric" placeholder="0"></div>
+            </div>
+            <div class="tc-total" id="tcTotal-small"></div>
+          </div>
         </div>
-        <div class="input-group">
-          <label for="countLarge">Large <span class="per-tray">6/tray</span></label>
+        <div class="input-group" id="group-large">
+          <label for="countLarge">
+            Large <span class="per-tray">6/tray</span>
+            <button type="button" class="tray-toggle" data-type="large">count by trays?</button>
+          </label>
           <input type="text" id="countLarge" inputmode="numeric" placeholder="0">
+          <div class="tray-counter" id="tc-large">
+            <div class="tc-row">
+              <div class="tc-group"><label>Full trays</label><input type="text" id="tcTrays-large" inputmode="numeric" placeholder="0"></div>
+              <div class="tc-group"><label>Extra balls</label><input type="text" id="tcExtra-large" inputmode="numeric" placeholder="0"></div>
+            </div>
+            <div class="tc-total" id="tcTotal-large"></div>
+          </div>
         </div>
-        <div class="input-group">
-          <label for="countSic">Sicilian <span class="per-tray">3/tray</span></label>
+        <div class="input-group" id="group-sic">
+          <label for="countSic">
+            Sicilian <span class="per-tray">3/tray</span>
+            <button type="button" class="tray-toggle" data-type="sic">count by trays?</button>
+          </label>
           <input type="text" id="countSic" inputmode="numeric" placeholder="0">
+          <div class="tray-counter" id="tc-sic">
+            <div class="tc-row">
+              <div class="tc-group"><label>Full trays</label><input type="text" id="tcTrays-sic" inputmode="numeric" placeholder="0"></div>
+              <div class="tc-group"><label>Extra balls</label><input type="text" id="tcExtra-sic" inputmode="numeric" placeholder="0"></div>
+            </div>
+            <div class="tc-total" id="tcTotal-sic"></div>
+          </div>
         </div>
       </div>
     </div>
@@ -391,6 +479,9 @@
     const TYPE_COLORS = { indi: '#FF9800', small: '#2196F3', large: '#9C27B0', sic: '#4CAF50' };
     const TYPE_SHORT = { indi: 'Indi', small: 'Sm', large: 'Lg', sic: 'Sic' };
 
+    // Track which tray counters are active
+    const trayCounterActive = { indi: false, small: false, large: false, sic: false };
+
     function parseDollar(str) {
       return parseFloat(String(str).replace(/[$,\s]/g, '')) || 0;
     }
@@ -432,6 +523,51 @@
       if (n > 0) return 'positive';
       return '';
     }
+
+    // Tray counter logic
+    function updateTrayCount(type) {
+      var fullTrays = parseInt(document.getElementById('tcTrays-' + type).value) || 0;
+      var extra = parseInt(document.getElementById('tcExtra-' + type).value) || 0;
+      var total = (fullTrays * PER_TRAY[type]) + extra;
+      document.getElementById('tcTotal-' + type).innerHTML = '= <span>' + total + ' balls</span>';
+      document.getElementById('count' + type.charAt(0).toUpperCase() + type.slice(1)).value = total;
+      calculate();
+    }
+
+    function getCountId(type) {
+      var map = { indi: 'countIndi', small: 'countSmall', large: 'countLarge', sic: 'countSic' };
+      return map[type];
+    }
+
+    function toggleTrayCounter(type) {
+      var active = trayCounterActive[type] = !trayCounterActive[type];
+      var btn = document.querySelector('.tray-toggle[data-type="' + type + '"]');
+      var counter = document.getElementById('tc-' + type);
+      var directInput = document.getElementById(getCountId(type));
+
+      if (active) {
+        btn.textContent = 'type directly?';
+        btn.classList.add('active');
+        counter.classList.add('open');
+        directInput.style.display = 'none';
+        updateTrayCount(type);
+      } else {
+        btn.textContent = 'count by trays?';
+        btn.classList.remove('active');
+        counter.classList.remove('open');
+        directInput.style.display = '';
+        document.getElementById('tcTotal-' + type).innerHTML = '';
+      }
+    }
+
+    // Set up tray counter toggles and inputs
+    document.querySelectorAll('.tray-toggle').forEach(function(btn) {
+      btn.addEventListener('click', function() { toggleTrayCounter(this.dataset.type); });
+    });
+    TYPES.forEach(function(type) {
+      document.getElementById('tcTrays-' + type).addEventListener('input', function() { updateTrayCount(type); });
+      document.getElementById('tcExtra-' + type).addEventListener('input', function() { updateTrayCount(type); });
+    });
 
     function calculate() {
       // Update dollar hints
@@ -507,9 +643,10 @@
       resultsEl.innerHTML = html;
     }
 
-    // Live calculation on every input change
-    const allInputs = document.querySelectorAll('input[type="text"]');
-    allInputs.forEach(input => input.addEventListener('input', calculate));
+    // Live calculation on every input change (dollar + count inputs)
+    document.querySelectorAll('#currentSales, #todayForecast, #tomorrowForecast, #countIndi, #countSmall, #countLarge, #countSic').forEach(function(input) {
+      input.addEventListener('input', calculate);
+    });
 
     // Run once on load so results are always visible
     calculate();
