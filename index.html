@@ -3,178 +3,342 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Dough Bible 2026</title>
+  <title>Dough Tracker — Dough Bible 2026</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
+
     body {
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-      background: #f5f5f5;
-      color: #333;
-      font-size: 16px;
-      padding-bottom: 2rem;
+      font-family: 'Space Mono', monospace;
+      background: #0a0a0a;
+      color: #e0e0e0;
+      font-size: 14px;
+      line-height: 1.4;
+      -webkit-font-smoothing: antialiased;
     }
-    header {
-      background: #b71c1c;
-      color: #fff;
+
+    main {
+      max-width: 420px;
+      margin: 0 auto;
+      padding: 0 12px 120px;
+    }
+
+    /* ── Header ── */
+    .header {
+      background: linear-gradient(135deg, #b71c1c 0%, #d32f2f 50%, #e53935 100%);
+      padding: 1.25rem 1rem;
       text-align: center;
-      padding: 1rem;
+      margin-bottom: 16px;
     }
-    header h1 { font-size: 1.5rem; }
-    main { max-width: 480px; margin: 0 auto; padding: 1rem; }
-
-    .section-title {
-      font-size: 1.1rem;
+    .header h1 {
+      font-size: 1.6rem;
       font-weight: 700;
-      margin: 1rem 0 0.5rem;
-      color: #b71c1c;
+      letter-spacing: 4px;
+      text-transform: uppercase;
+      color: #fff;
+      margin-bottom: 2px;
+    }
+    .header .subtitle {
+      font-size: 0.75rem;
+      color: rgba(255,255,255,0.7);
+      letter-spacing: 2px;
+      text-transform: uppercase;
     }
 
-    .input-group { margin-bottom: 0.75rem; }
+    /* ── Cards ── */
+    .card {
+      background: #141414;
+      border-radius: 12px;
+      padding: 16px;
+      margin-bottom: 12px;
+    }
+    .card-label {
+      font-size: 0.65rem;
+      font-weight: 700;
+      letter-spacing: 2px;
+      text-transform: uppercase;
+      color: #666;
+      margin-bottom: 12px;
+    }
+
+    /* ── Inputs ── */
+    .input-grid-2 {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+    }
+    .input-group { margin-bottom: 10px; }
+    .input-group:last-child { margin-bottom: 0; }
     .input-group label {
       display: block;
-      font-weight: 600;
-      margin-bottom: 0.25rem;
-      font-size: 0.9rem;
+      font-size: 0.7rem;
+      font-weight: 700;
+      color: #999;
+      margin-bottom: 4px;
+      letter-spacing: 0.5px;
     }
-    .input-group input {
-      width: 100%;
-      padding: 0.6rem 0.75rem;
+    .input-group .per-tray {
+      font-size: 0.6rem;
+      color: #555;
+      font-weight: 400;
+    }
+    .dollar-wrap {
+      position: relative;
+      display: flex;
+      align-items: center;
+    }
+    .dollar-wrap .prefix {
+      position: absolute;
+      left: 12px;
+      color: #555;
       font-size: 1rem;
-      border: 1px solid #ccc;
-      border-radius: 6px;
-      background: #fff;
+      font-weight: 700;
+      pointer-events: none;
+      z-index: 1;
     }
-    .input-group input:focus {
+    .dollar-wrap input {
+      padding-left: 28px;
+    }
+    input[type="text"] {
+      width: 100%;
+      height: 48px;
+      padding: 0 12px;
+      font-family: 'Space Mono', monospace;
+      font-size: 1rem;
+      font-weight: 700;
+      color: #fff;
+      background: #1e1e1e;
+      border: 1px solid #333;
+      border-radius: 8px;
       outline: none;
-      border-color: #b71c1c;
-      box-shadow: 0 0 0 2px rgba(183,28,28,0.2);
+      transition: border-color 0.2s, box-shadow 0.2s;
+      -webkit-appearance: none;
+    }
+    input[type="text"]::placeholder {
+      color: #444;
+      font-weight: 400;
+    }
+    input[type="text"]:focus {
+      border-color: #d32f2f;
+      box-shadow: 0 0 0 3px rgba(211,47,47,0.2);
     }
 
-    .input-row {
+    /* ── Sales Left Banner ── */
+    .sales-left {
+      background: rgba(33,150,243,0.1);
+      border: 1px solid rgba(33,150,243,0.25);
+      border-radius: 8px;
+      padding: 10px;
+      text-align: center;
+      margin-top: 12px;
+    }
+    .sales-left .sl-label {
+      font-size: 0.6rem;
+      letter-spacing: 2px;
+      text-transform: uppercase;
+      color: #64B5F6;
+      margin-bottom: 2px;
+    }
+    .sales-left .sl-value {
+      font-size: 1.5rem;
+      font-weight: 700;
+      color: #90CAF9;
+    }
+
+    /* ── Results Grid ── */
+    #results { display: none; }
+    .results-grid {
       display: grid;
       grid-template-columns: 1fr 1fr;
-      gap: 0.5rem;
+      gap: 10px;
+      margin-bottom: 12px;
     }
+    .size-card {
+      background: #141414;
+      border-radius: 12px;
+      overflow: hidden;
+    }
+    .size-card .accent-bar {
+      height: 3px;
+    }
+    .size-card .sc-body {
+      padding: 12px;
+    }
+    .size-card .sc-name {
+      font-size: 0.75rem;
+      font-weight: 700;
+      letter-spacing: 1px;
+      margin-bottom: 10px;
+    }
+    .size-card .stats-row {
+      display: grid;
+      grid-template-columns: 1fr 1fr 1fr;
+      gap: 4px;
+      margin-bottom: 10px;
+    }
+    .size-card .stat {
+      text-align: center;
+    }
+    .size-card .stat .stat-label {
+      font-size: 0.55rem;
+      color: #666;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      margin-bottom: 2px;
+    }
+    .size-card .stat .stat-value {
+      font-size: 1rem;
+      font-weight: 700;
+      color: #ccc;
+    }
+    .stat-value.positive { color: #4CAF50; }
+    .stat-value.negative { color: #ef5350; }
 
-    button#calc-btn {
-      display: block;
-      width: 100%;
-      padding: 0.85rem;
+    .size-card .make-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding-top: 8px;
+      border-top: 1px solid #222;
+    }
+    .size-card .make-label {
+      font-size: 0.65rem;
+      color: #888;
+    }
+    .size-card .make-label strong {
+      color: #ccc;
+      font-size: 0.85rem;
+    }
+    .size-card .tray-badge {
+      width: 36px;
+      height: 36px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border-radius: 8px;
       font-size: 1.1rem;
       font-weight: 700;
       color: #fff;
-      background: #b71c1c;
-      border: none;
-      border-radius: 8px;
-      cursor: pointer;
-      margin-top: 1rem;
     }
-    button#calc-btn:active { background: #7f0000; }
 
-    #results { display: none; margin-top: 1.25rem; }
-
-    .result-card {
-      background: #fff;
-      border-radius: 8px;
-      padding: 0.75rem 1rem;
-      margin-bottom: 0.75rem;
-      box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+    /* ── Batch Hero ── */
+    .batch-card {
+      border-radius: 16px;
+      padding: 24px 16px 20px;
+      text-align: center;
+      overflow: hidden;
     }
-    .result-card h3 {
-      font-size: 1rem;
-      margin-bottom: 0.4rem;
-      color: #b71c1c;
+    .batch-card.has-batches {
+      background: linear-gradient(135deg, #b71c1c 0%, #d32f2f 50%, #e53935 100%);
     }
-    .result-card .row {
-      display: flex;
-      justify-content: space-between;
-      padding: 0.2rem 0;
-      font-size: 0.9rem;
+    .batch-card.zero-batches {
+      background: linear-gradient(135deg, #1b5e20 0%, #2e7d32 50%, #43a047 100%);
     }
-    .result-card .row .label { color: #666; }
-    .result-card .row .value { font-weight: 600; }
-    .negative { color: #b71c1c; }
-    .surplus { color: #2e7d32; }
-
-    .summary-card {
-      background: #b71c1c;
+    .batch-card .batch-label {
+      font-size: 0.65rem;
+      letter-spacing: 3px;
+      text-transform: uppercase;
+      color: rgba(255,255,255,0.7);
+      margin-bottom: 4px;
+    }
+    .batch-card .batch-number {
+      font-size: 80px;
+      font-weight: 700;
+      line-height: 1;
       color: #fff;
-      border-radius: 8px;
-      padding: 1rem;
+      margin-bottom: 4px;
+    }
+    .batch-card .batch-sub {
+      font-size: 0.8rem;
+      color: rgba(255,255,255,0.8);
+      margin-bottom: 16px;
+    }
+    .batch-card .tray-breakdown {
+      display: flex;
+      justify-content: center;
+      gap: 16px;
+    }
+    .batch-card .tb-item {
       text-align: center;
-      margin-bottom: 0.75rem;
-      box-shadow: 0 1px 3px rgba(0,0,0,0.15);
     }
-    .summary-card .big {
-      font-size: 2rem;
-      font-weight: 800;
-      line-height: 1.2;
+    .batch-card .tb-item .tb-count {
+      font-size: 1rem;
+      font-weight: 700;
+      color: #fff;
     }
-    .summary-card .label {
-      font-size: 0.85rem;
-      opacity: 0.85;
+    .batch-card .tb-item .tb-label {
+      font-size: 0.55rem;
+      color: rgba(255,255,255,0.6);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
     }
-    .summary-row {
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 0.75rem;
-    }
-
-    .sales-left-card {
-      background: #fff;
-      border-radius: 8px;
-      padding: 0.75rem 1rem;
-      margin-bottom: 0.75rem;
-      text-align: center;
-      box-shadow: 0 1px 3px rgba(0,0,0,0.1);
-    }
-    .sales-left-card .label { color: #666; font-size: 0.85rem; }
-    .sales-left-card .value { font-size: 1.5rem; font-weight: 700; color: #333; }
   </style>
 </head>
 <body>
-  <header>
-    <h1>Dough Bible 2026</h1>
-  </header>
+  <div class="header">
+    <h1>Dough Tracker</h1>
+    <div class="subtitle">Dough Bible 2026</div>
+  </div>
+
   <main>
-    <div class="section-title">Sales Info</div>
-    <div class="input-group">
-      <label for="currentSales">Current Sales ($)</label>
-      <input type="text" id="currentSales" inputmode="decimal" placeholder="$1,700">
-    </div>
-    <div class="input-group">
-      <label for="todayForecast">Today's Forecast ($)</label>
-      <input type="text" id="todayForecast" inputmode="decimal" placeholder="$10,000">
-    </div>
-    <div class="input-group">
-      <label for="tomorrowForecast">Tomorrow's Forecast ($)</label>
-      <input type="text" id="tomorrowForecast" inputmode="decimal" placeholder="$10,000">
-    </div>
-
-    <div class="section-title">Current Dough Counts</div>
-    <div class="input-row">
-      <div class="input-group">
-        <label for="countIndi">Individual</label>
-        <input type="text" id="countIndi" inputmode="numeric" placeholder="0">
+    <!-- Sales & Forecast -->
+    <div class="card">
+      <div class="card-label">Sales &amp; Forecast</div>
+      <div class="input-grid-2">
+        <div class="input-group">
+          <label for="currentSales">Current Sales</label>
+          <div class="dollar-wrap">
+            <span class="prefix">$</span>
+            <input type="text" id="currentSales" inputmode="decimal" placeholder="1,700">
+          </div>
+        </div>
+        <div class="input-group">
+          <label for="todayForecast">Today's Forecast</label>
+          <div class="dollar-wrap">
+            <span class="prefix">$</span>
+            <input type="text" id="todayForecast" inputmode="decimal" placeholder="10,000">
+          </div>
+        </div>
       </div>
       <div class="input-group">
-        <label for="countSmall">Small</label>
-        <input type="text" id="countSmall" inputmode="numeric" placeholder="0">
+        <label for="tomorrowForecast">Tomorrow's Forecast</label>
+        <div class="dollar-wrap">
+          <span class="prefix">$</span>
+          <input type="text" id="tomorrowForecast" inputmode="decimal" placeholder="10,000">
+        </div>
       </div>
-    </div>
-    <div class="input-row">
-      <div class="input-group">
-        <label for="countLarge">Large</label>
-        <input type="text" id="countLarge" inputmode="numeric" placeholder="0">
-      </div>
-      <div class="input-group">
-        <label for="countSic">Sicilian</label>
-        <input type="text" id="countSic" inputmode="numeric" placeholder="0">
+      <div class="sales-left" id="salesLeftBanner" style="display:none">
+        <div class="sl-label">Sales Left</div>
+        <div class="sl-value" id="salesLeftValue">$0</div>
       </div>
     </div>
 
-    <button id="calc-btn">Calculate</button>
+    <!-- Dough Counts -->
+    <div class="card">
+      <div class="card-label">Current Dough Counts</div>
+      <div class="input-grid-2">
+        <div class="input-group">
+          <label for="countIndi">Individual <span class="per-tray">11/tray</span></label>
+          <input type="text" id="countIndi" inputmode="numeric" placeholder="0">
+        </div>
+        <div class="input-group">
+          <label for="countSmall">Small <span class="per-tray">8/tray</span></label>
+          <input type="text" id="countSmall" inputmode="numeric" placeholder="0">
+        </div>
+        <div class="input-group">
+          <label for="countLarge">Large <span class="per-tray">6/tray</span></label>
+          <input type="text" id="countLarge" inputmode="numeric" placeholder="0">
+        </div>
+        <div class="input-group">
+          <label for="countSic">Sicilian <span class="per-tray">3/tray</span></label>
+          <input type="text" id="countSic" inputmode="numeric" placeholder="0">
+        </div>
+      </div>
+    </div>
 
+    <!-- Results -->
     <div id="results"></div>
   </main>
 
@@ -213,6 +377,8 @@
     const TRAYS_PER_BATCH = 11;
     const TYPES = ['indi', 'small', 'large', 'sic'];
     const TYPE_LABELS = { indi: 'Individual', small: 'Small', large: 'Large', sic: 'Sicilian' };
+    const TYPE_COLORS = { indi: '#FF9800', small: '#2196F3', large: '#9C27B0', sic: '#4CAF50' };
+    const TYPE_SHORT = { indi: 'Indi', small: 'Sm', large: 'Lg', sic: 'Sic' };
 
     function parseDollar(str) {
       return parseFloat(String(str).replace(/[$,\s]/g, '')) || 0;
@@ -233,6 +399,11 @@
 
     function formatDollar(n) {
       return '$' + n.toLocaleString('en-US');
+    }
+
+    function hasInput() {
+      const ids = ['currentSales', 'todayForecast', 'tomorrowForecast', 'countIndi', 'countSmall', 'countLarge', 'countSic'];
+      return ids.some(id => document.getElementById(id).value.trim() !== '');
     }
 
     function calculate() {
@@ -262,37 +433,66 @@
       const totalTrays = TYPES.reduce((sum, t) => sum + trays[t], 0);
       const batches = totalTrays === 0 ? 0 : Math.ceil(totalTrays / TRAYS_PER_BATCH);
 
-      // Render
-      let html = '';
-
-      html += '<div class="sales-left-card">';
-      html += '<div class="label">Sales Left</div>';
-      html += '<div class="value">' + formatDollar(salesLeft) + '</div>';
-      html += '</div>';
-
-      for (const t of TYPES) {
-        const leftClass = doughLeft[t] < 0 ? 'negative' : '';
-        html += '<div class="result-card">';
-        html += '<h3>' + TYPE_LABELS[t] + '</h3>';
-        html += '<div class="row"><span class="label">Dough Use</span><span class="value">' + doughUse[t] + '</span></div>';
-        html += '<div class="row"><span class="label">Dough Left</span><span class="value ' + leftClass + '">' + doughLeft[t] + '</span></div>';
-        html += '<div class="row"><span class="label">Tomorrow\'s Need</span><span class="value">' + tomorrowNeed[t] + '</span></div>';
-        html += '<div class="row"><span class="label">Balls to Make</span><span class="value">' + ballsToMake[t] + '</span></div>';
-        html += '<div class="row"><span class="label">Trays (' + ballsToMake[t] + ' &divide; ' + PER_TRAY[t] + ' &uarr;)</span><span class="value">' + trays[t] + '</span></div>';
-        html += '</div>';
+      // Sales Left banner
+      const slBanner = document.getElementById('salesLeftBanner');
+      const slValue = document.getElementById('salesLeftValue');
+      if (todayForecast > 0 || currentSales > 0) {
+        slBanner.style.display = 'block';
+        slValue.textContent = formatDollar(salesLeft);
+      } else {
+        slBanner.style.display = 'none';
       }
 
-      html += '<div class="summary-row">';
-      html += '<div class="summary-card"><div class="label">Total Trays</div><div class="big">' + totalTrays + '</div></div>';
-      html += '<div class="summary-card"><div class="label">Batches</div><div class="big">' + batches + '</div></div>';
+      // Show results only if user has entered something
+      const resultsEl = document.getElementById('results');
+      if (!hasInput()) {
+        resultsEl.style.display = 'none';
+        return;
+      }
+      resultsEl.style.display = 'block';
+
+      // Size cards
+      let html = '<div class="results-grid">';
+      for (const t of TYPES) {
+        const color = TYPE_COLORS[t];
+        const leftVal = doughLeft[t];
+        const leftClass = leftVal < 0 ? 'negative' : leftVal > 0 ? 'positive' : '';
+        html += '<div class="size-card">';
+        html += '<div class="accent-bar" style="background:' + color + '"></div>';
+        html += '<div class="sc-body">';
+        html += '<div class="sc-name" style="color:' + color + '">' + TYPE_LABELS[t] + '</div>';
+        html += '<div class="stats-row">';
+        html += '<div class="stat"><div class="stat-label">Tonight</div><div class="stat-value">' + doughUse[t] + '</div></div>';
+        html += '<div class="stat"><div class="stat-label">Left</div><div class="stat-value ' + leftClass + '">' + leftVal + '</div></div>';
+        html += '<div class="stat"><div class="stat-label">Need</div><div class="stat-value">' + tomorrowNeed[t] + '</div></div>';
+        html += '</div>';
+        html += '<div class="make-row">';
+        html += '<div class="make-label">Make <strong>' + ballsToMake[t] + '</strong> balls</div>';
+        html += '<div class="tray-badge" style="background:' + color + '">' + trays[t] + '</div>';
+        html += '</div>';
+        html += '</div></div>';
+      }
       html += '</div>';
 
-      const resultsEl = document.getElementById('results');
+      // Batch hero card
+      const batchClass = batches > 0 ? 'has-batches' : 'zero-batches';
+      html += '<div class="batch-card ' + batchClass + '">';
+      html += '<div class="batch-label">Batches</div>';
+      html += '<div class="batch-number">' + batches + '</div>';
+      html += '<div class="batch-sub">' + totalTrays + ' trays total</div>';
+      html += '<div class="tray-breakdown">';
+      for (const t of TYPES) {
+        html += '<div class="tb-item"><div class="tb-count">' + trays[t] + '</div><div class="tb-label">' + TYPE_SHORT[t] + '</div></div>';
+      }
+      html += '</div>';
+      html += '</div>';
+
       resultsEl.innerHTML = html;
-      resultsEl.style.display = 'block';
     }
 
-    document.getElementById('calc-btn').addEventListener('click', calculate);
+    // Live calculation on every input change
+    const allInputs = document.querySelectorAll('input[type="text"]');
+    allInputs.forEach(input => input.addEventListener('input', calculate));
   </script>
 </body>
 </html>
