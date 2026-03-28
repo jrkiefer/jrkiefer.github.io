@@ -12,8 +12,8 @@
 
     body {
       font-family: 'Space Mono', monospace;
-      background: #0a0a0a;
-      color: #e0e0e0;
+      background: #1e293b;
+      color: #e2e8f0;
       font-size: 14px;
       line-height: 1.4;
       -webkit-font-smoothing: antialiased;
@@ -49,7 +49,7 @@
 
     /* ── Cards ── */
     .card {
-      background: #141414;
+      background: #273548;
       border-radius: 12px;
       padding: 16px;
       margin-bottom: 12px;
@@ -59,7 +59,7 @@
       font-weight: 700;
       letter-spacing: 2px;
       text-transform: uppercase;
-      color: #666;
+      color: #94a3b8;
       margin-bottom: 12px;
     }
 
@@ -75,13 +75,13 @@
       display: block;
       font-size: 0.7rem;
       font-weight: 700;
-      color: #999;
+      color: #cbd5e1;
       margin-bottom: 4px;
       letter-spacing: 0.5px;
     }
     .input-group .per-tray {
       font-size: 0.6rem;
-      color: #555;
+      color: #64748b;
       font-weight: 400;
     }
     .dollar-wrap {
@@ -92,7 +92,7 @@
     .dollar-wrap .prefix {
       position: absolute;
       left: 12px;
-      color: #555;
+      color: #64748b;
       font-size: 1rem;
       font-weight: 700;
       pointer-events: none;
@@ -101,6 +101,15 @@
     .dollar-wrap input {
       padding-left: 28px;
     }
+    .dollar-hint {
+      font-size: 0.6rem;
+      color: #64748b;
+      margin-top: 3px;
+      height: 14px;
+    }
+    .dollar-hint span {
+      color: #94a3b8;
+    }
     input[type="text"] {
       width: 100%;
       height: 48px;
@@ -108,16 +117,16 @@
       font-family: 'Space Mono', monospace;
       font-size: 1rem;
       font-weight: 700;
-      color: #fff;
-      background: #1e1e1e;
-      border: 1px solid #333;
+      color: #f1f5f9;
+      background: #1a2535;
+      border: 1px solid #334155;
       border-radius: 8px;
       outline: none;
       transition: border-color 0.2s, box-shadow 0.2s;
       -webkit-appearance: none;
     }
     input[type="text"]::placeholder {
-      color: #444;
+      color: #475569;
       font-weight: 400;
     }
     input[type="text"]:focus {
@@ -148,7 +157,6 @@
     }
 
     /* ── Results Grid ── */
-    #results { display: none; }
     .results-grid {
       display: grid;
       grid-template-columns: 1fr 1fr;
@@ -156,7 +164,7 @@
       margin-bottom: 12px;
     }
     .size-card {
-      background: #141414;
+      background: #273548;
       border-radius: 12px;
       overflow: hidden;
     }
@@ -183,7 +191,7 @@
     }
     .size-card .stat .stat-label {
       font-size: 0.55rem;
-      color: #666;
+      color: #64748b;
       text-transform: uppercase;
       letter-spacing: 0.5px;
       margin-bottom: 2px;
@@ -191,24 +199,24 @@
     .size-card .stat .stat-value {
       font-size: 1rem;
       font-weight: 700;
-      color: #ccc;
+      color: #e2e8f0;
     }
-    .stat-value.positive { color: #4CAF50; }
-    .stat-value.negative { color: #ef5350; }
+    .stat-value.positive { color: #4ade80; }
+    .stat-value.negative { color: #ef4444; }
 
     .size-card .make-row {
       display: flex;
       align-items: center;
       justify-content: space-between;
       padding-top: 8px;
-      border-top: 1px solid #222;
+      border-top: 1px solid #334155;
     }
     .size-card .make-label {
       font-size: 0.65rem;
-      color: #888;
+      color: #94a3b8;
     }
     .size-card .make-label strong {
-      color: #ccc;
+      color: #e2e8f0;
       font-size: 0.85rem;
     }
     .size-card .tray-badge {
@@ -291,25 +299,28 @@
           <label for="currentSales">Current Sales</label>
           <div class="dollar-wrap">
             <span class="prefix">$</span>
-            <input type="text" id="currentSales" inputmode="decimal" placeholder="1,700">
+            <input type="text" id="currentSales" inputmode="decimal" placeholder="1.7">
           </div>
+          <div class="dollar-hint" id="hintCurrentSales"></div>
         </div>
         <div class="input-group">
           <label for="todayForecast">Today's Forecast</label>
           <div class="dollar-wrap">
             <span class="prefix">$</span>
-            <input type="text" id="todayForecast" inputmode="decimal" placeholder="10,000">
+            <input type="text" id="todayForecast" inputmode="decimal" placeholder="10">
           </div>
+          <div class="dollar-hint" id="hintTodayForecast"></div>
         </div>
       </div>
       <div class="input-group">
         <label for="tomorrowForecast">Tomorrow's Forecast</label>
         <div class="dollar-wrap">
           <span class="prefix">$</span>
-          <input type="text" id="tomorrowForecast" inputmode="decimal" placeholder="10,000">
+          <input type="text" id="tomorrowForecast" inputmode="decimal" placeholder="10">
         </div>
+        <div class="dollar-hint" id="hintTomorrowForecast"></div>
       </div>
-      <div class="sales-left" id="salesLeftBanner" style="display:none">
+      <div class="sales-left" id="salesLeftBanner">
         <div class="sl-label">Sales Left</div>
         <div class="sl-value" id="salesLeftValue">$0</div>
       </div>
@@ -384,6 +395,21 @@
       return parseFloat(String(str).replace(/[$,\s]/g, '')) || 0;
     }
 
+    function expandDollar(raw) {
+      var n = parseDollar(raw);
+      if (n === 0) return 0;
+      if (n < 100) return Math.round(n * 1000);
+      return n;
+    }
+
+    function updateHint(inputId, hintId) {
+      var raw = document.getElementById(inputId).value.trim();
+      var hint = document.getElementById(hintId);
+      if (!raw) { hint.innerHTML = ''; return; }
+      var val = expandDollar(raw);
+      hint.innerHTML = '= <span>' + formatDollar(val) + '</span>';
+    }
+
     function lookup(dollarAmount) {
       let closest = DOUGH_TABLE[0];
       let minDiff = Math.abs(dollarAmount - closest.threshold);
@@ -401,15 +427,21 @@
       return '$' + n.toLocaleString('en-US');
     }
 
-    function hasInput() {
-      const ids = ['currentSales', 'todayForecast', 'tomorrowForecast', 'countIndi', 'countSmall', 'countLarge', 'countSic'];
-      return ids.some(id => document.getElementById(id).value.trim() !== '');
+    function valClass(n) {
+      if (n < 0) return 'negative';
+      if (n > 0) return 'positive';
+      return '';
     }
 
     function calculate() {
-      const currentSales = parseDollar(document.getElementById('currentSales').value);
-      const todayForecast = parseDollar(document.getElementById('todayForecast').value);
-      const tomorrowForecast = parseDollar(document.getElementById('tomorrowForecast').value);
+      // Update dollar hints
+      updateHint('currentSales', 'hintCurrentSales');
+      updateHint('todayForecast', 'hintTodayForecast');
+      updateHint('tomorrowForecast', 'hintTomorrowForecast');
+
+      const currentSales = expandDollar(document.getElementById('currentSales').value);
+      const todayForecast = expandDollar(document.getElementById('todayForecast').value);
+      const tomorrowForecast = expandDollar(document.getElementById('tomorrowForecast').value);
       const counts = {
         indi: parseInt(document.getElementById('countIndi').value) || 0,
         small: parseInt(document.getElementById('countSmall').value) || 0,
@@ -434,36 +466,21 @@
       const batches = totalTrays === 0 ? 0 : Math.ceil(totalTrays / TRAYS_PER_BATCH);
 
       // Sales Left banner
-      const slBanner = document.getElementById('salesLeftBanner');
-      const slValue = document.getElementById('salesLeftValue');
-      if (todayForecast > 0 || currentSales > 0) {
-        slBanner.style.display = 'block';
-        slValue.textContent = formatDollar(salesLeft);
-      } else {
-        slBanner.style.display = 'none';
-      }
+      document.getElementById('salesLeftValue').textContent = formatDollar(salesLeft);
 
-      // Show results only if user has entered something
+      // Size cards — always visible
       const resultsEl = document.getElementById('results');
-      if (!hasInput()) {
-        resultsEl.style.display = 'none';
-        return;
-      }
-      resultsEl.style.display = 'block';
-
-      // Size cards
       let html = '<div class="results-grid">';
       for (const t of TYPES) {
         const color = TYPE_COLORS[t];
         const leftVal = doughLeft[t];
-        const leftClass = leftVal < 0 ? 'negative' : leftVal > 0 ? 'positive' : '';
         html += '<div class="size-card">';
         html += '<div class="accent-bar" style="background:' + color + '"></div>';
         html += '<div class="sc-body">';
         html += '<div class="sc-name" style="color:' + color + '">' + TYPE_LABELS[t] + '</div>';
         html += '<div class="stats-row">';
         html += '<div class="stat"><div class="stat-label">Tonight</div><div class="stat-value">' + doughUse[t] + '</div></div>';
-        html += '<div class="stat"><div class="stat-label">Left</div><div class="stat-value ' + leftClass + '">' + leftVal + '</div></div>';
+        html += '<div class="stat"><div class="stat-label">Left</div><div class="stat-value ' + valClass(leftVal) + '">' + leftVal + '</div></div>';
         html += '<div class="stat"><div class="stat-label">Need</div><div class="stat-value">' + tomorrowNeed[t] + '</div></div>';
         html += '</div>';
         html += '<div class="make-row">';
@@ -493,6 +510,9 @@
     // Live calculation on every input change
     const allInputs = document.querySelectorAll('input[type="text"]');
     allInputs.forEach(input => input.addEventListener('input', calculate));
+
+    // Run once on load so results are always visible
+    calculate();
   </script>
 </body>
 </html>
