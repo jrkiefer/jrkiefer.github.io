@@ -17,25 +17,6 @@
       font-size: 14px;
       line-height: 1.4;
       -webkit-font-smoothing: antialiased;
-      min-height: 100vh;
-    }
-
-    /* ── Background image + overlay ── */
-    body::before {
-      content: '';
-      position: fixed;
-      top: 0; left: 0;
-      width: 100%; height: 100%;
-      background: url('Background.jpeg') center/cover no-repeat fixed;
-      z-index: -2;
-    }
-    body::after {
-      content: '';
-      position: fixed;
-      top: 0; left: 0;
-      width: 100%; height: 100%;
-      background: rgba(15, 23, 42, 0.85);
-      z-index: -1;
     }
 
     main {
@@ -414,11 +395,7 @@
         </div>
         <div class="input-group">
           <label>Sicilian <span class="per-tray">3/tray</span></label>
-          <div class="tc-row">
-            <div class="tc-group"><label>Trays</label><input type="text" id="tcTrays-sic" inputmode="numeric" placeholder="0"></div>
-            <div class="tc-group"><label>Singles</label><input type="text" id="tcExtra-sic" inputmode="numeric" placeholder="0"></div>
-          </div>
-          <div class="tc-total" id="tcTotal-sic">= <span>0 balls</span></div>
+          <input type="text" id="countSic" inputmode="numeric" placeholder="0">
         </div>
       </div>
     </div>
@@ -508,6 +485,9 @@
     }
 
     function getCount(type) {
+      if (type === 'sic') {
+        return parseInt(document.getElementById('countSic').value) || 0;
+      }
       var fullTrays = parseInt(document.getElementById('tcTrays-' + type).value) || 0;
       var extra = parseInt(document.getElementById('tcExtra-' + type).value) || 0;
       var total = (fullTrays * PER_TRAY[type]) + extra;
@@ -567,7 +547,9 @@
         html += '</div>';
         html += '<div class="make-row">';
         html += '<div class="make-label">Make <strong>' + ballsToMake[t] + '</strong> balls</div>';
-        html += '<div class="tray-badge" style="background:' + color + '">' + trays[t] + '</div>';
+        if (t !== 'sic') {
+          html += '<div class="tray-badge" style="background:' + color + '">' + trays[t] + '</div>';
+        }
         html += '</div>';
         html += '</div></div>';
       }
@@ -580,9 +562,10 @@
       html += '<div class="batch-number">' + batches + '</div>';
       html += '<div class="batch-sub">' + totalTrays + ' trays total</div>';
       html += '<div class="tray-breakdown">';
-      for (const t of TYPES) {
+      for (const t of ['indi', 'small', 'large']) {
         html += '<div class="tb-item"><div class="tb-count">' + trays[t] + '</div><div class="tb-label">' + TYPE_SHORT[t] + '</div></div>';
       }
+      html += '<div class="tb-item"><div class="tb-count">' + ballsToMake.sic + '</div><div class="tb-label">Sic balls</div></div>';
       html += '</div>';
       html += '</div>';
 
