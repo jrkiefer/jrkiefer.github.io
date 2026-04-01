@@ -924,7 +924,7 @@
     saveBtn.addEventListener('click', function() {
       if (saveBtn.disabled) return;
       var now = new Date();
-      var date = (now.getMonth()+1).toString().padStart(2,'0') + '/' + now.getDate().toString().padStart(2,'0') + '/' + now.getFullYear();
+      var date = (now.getMonth()+1) + '/' + now.getDate() + '/' + now.getFullYear();
       var data = {
         date: date,
         todayForecast: expandDollar(document.getElementById('todayForecast').value),
@@ -1001,7 +1001,13 @@
 
     function getTodayDate() {
       var now = new Date();
-      return (now.getMonth()+1).toString().padStart(2,'0') + '/' + now.getDate().toString().padStart(2,'0') + '/' + now.getFullYear();
+      return (now.getMonth()+1) + '/' + now.getDate() + '/' + now.getFullYear();
+    }
+
+    function normalizeDate(str) {
+      var parts = str.split('/');
+      if (parts.length !== 3) return str;
+      return parseInt(parts[0]) + '/' + parseInt(parts[1]) + '/' + parts[2];
     }
 
     // Default date to today
@@ -1050,26 +1056,41 @@
 
     // Load button — fetch batch count for a date
     document.getElementById('tempLoadBtn').addEventListener('click', function() {
-      var date = document.getElementById('tempDate').value.trim();
-      if (!date) return;
+      var rawDate = document.getElementById('tempDate').value.trim();
+      if (!rawDate) return;
+      var date = normalizeDate(rawDate);
+      document.getElementById('tempDate').value = date;
       var status = document.getElementById('tempStatus');
       var override = document.getElementById('tempOverrideArea');
+      var loadBtn = document.getElementById('tempLoadBtn');
       status.innerHTML = '<div class="temp-message">Loading...</div>';
       override.innerHTML = '';
+      loadBtn.disabled = true;
+      loadBtn.textContent = '...';
       renderTempInputs(0);
 
-      fetch(SCRIPT_URL + '?date=' + encodeURIComponent(date))
+      var url = SCRIPT_URL + '?date=' + encodeURIComponent(date);
+      console.log('[Temp Load] GET ' + url);
+
+      fetch(url)
         .then(function(r) { return r.json(); })
         .then(function(data) {
+          console.log('[Temp Load] Response:', data);
+          loadBtn.disabled = false;
+          loadBtn.textContent = 'Load';
           var batches = 0;
           if (data && typeof data === 'object' && !Array.isArray(data)) {
-            batches = parseInt(data['Batches'] || data['batches']) || 0;
+            if (data.status === 'found' && data.data) {
+              batches = parseInt(data.data['Batches'] || data.data['batches']) || 0;
+            } else {
+              batches = parseInt(data['Batches'] || data['batches']) || 0;
+            }
           } else if (Array.isArray(data)) {
-            // Search rows for matching date
             for (var i = 0; i < data.length; i++) {
               var rd = data[i]['Date'] || data[i]['date'] || '';
               if (rd && rd.indexOf('T') > -1) rd = new Date(rd).toLocaleDateString('en-US');
-              if (rd === date) {
+              var rdNorm = normalizeDate(rd);
+              if (rdNorm === date) {
                 batches = parseInt(data[i]['Batches'] || data[i]['batches']) || 0;
               }
             }
@@ -1086,8 +1107,10 @@
             document.getElementById('tempOverrideBtn').addEventListener('click', showTempOverride);
           }
         })
-        .catch(function() {
-          // CORS fallback — let user type batch count manually
+        .catch(function(err) {
+          console.log('[Temp Load] Error:', err);
+          loadBtn.disabled = false;
+          loadBtn.textContent = 'Load';
           status.innerHTML = '<div class="temp-message error">Could not load data \u2014 enter batch count manually</div>';
           showTempOverride();
         });
@@ -1123,7 +1146,7 @@
     document.getElementById('tempSaveBtn').addEventListener('click', function() {
       var btn = document.getElementById('tempSaveBtn');
       if (btn.disabled) return;
-      var date = document.getElementById('tempDate').value.trim();
+      var date = normalizeDate(document.getElementById('tempDate').value.trim());
       var temps = [];
       for (var i = 1; i <= tempBatchCount; i++) {
         var wEl = document.getElementById('tempWater-' + i);
