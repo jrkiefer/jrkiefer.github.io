@@ -1070,8 +1070,18 @@
     }
 
     function getField(row, sheetName, camelName) {
+      // Try exact names first, then case-insensitive search
       var v = row[sheetName];
       if (v === undefined || v === null) v = row[camelName];
+      if (v === undefined || v === null) {
+        var lower = sheetName.toLowerCase();
+        for (var k in row) {
+          if (row.hasOwnProperty(k) && k.toLowerCase() === lower) {
+            v = row[k];
+            break;
+          }
+        }
+      }
       if (v === undefined || v === null) v = 0;
       return v;
     }
@@ -1087,6 +1097,8 @@
     }
 
     function fillFieldsFromData(row) {
+      console.log('[Load] Row keys:', Object.keys(row));
+      console.log('[Load] Row data:', JSON.stringify(row));
       // Fill dollar fields with shorthand
       document.getElementById('currentSales').value = toShorthand(getField(row, 'Current Sales', 'currentSales'));
       document.getElementById('todayForecast').value = toShorthand(getField(row, "Today's Forecast", 'todayForecast'));
