@@ -941,10 +941,11 @@
       saveBtn.disabled = true;
       saveBtn.textContent = 'Saving...';
       saveBtn.classList.remove('error', 'success');
+      console.log('[Dough Save] Sending:', JSON.stringify(data));
       fetch(SCRIPT_URL, {
         method: 'POST',
         mode: 'no-cors',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'text/plain' },
         body: JSON.stringify(data)
       }).then(function() {
         saveBtn.textContent = 'Saved!';
@@ -1201,26 +1202,57 @@
         date: date,
         temps: temps
       };
+      console.log('[Temp Save] Sending:', JSON.stringify(data));
       btn.disabled = true;
       btn.textContent = 'Saving...';
       btn.classList.remove('error', 'success');
+
+      // Try with cors first so we can read the response
       fetch(SCRIPT_URL, {
         method: 'POST',
-        mode: 'no-cors',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'text/plain' },
         body: JSON.stringify(data)
-      }).then(function() {
-        btn.textContent = 'Saved!';
-        btn.classList.add('success');
+      }).then(function(r) {
+        console.log('[Temp Save] Response status:', r.status, r.type);
+        if (r.type === 'opaque' || r.status === 0) {
+          // no-cors opaque response — assume success
+          console.log('[Temp Save] Opaque response, assuming success');
+          btn.textContent = 'Saved!';
+          btn.classList.add('success');
+        } else {
+          return r.text().then(function(txt) {
+            console.log('[Temp Save] Response body:', txt);
+            btn.textContent = 'Saved!';
+            btn.classList.add('success');
+          });
+        }
         setTimeout(function() {
           btn.textContent = 'Save Temperatures';
           btn.disabled = false;
           btn.classList.remove('success');
         }, 3000);
-      }).catch(function() {
-        btn.textContent = 'Error \u2014 tap to retry';
-        btn.classList.add('error');
-        btn.disabled = false;
+      }).catch(function(err) {
+        console.log('[Temp Save] CORS failed, retrying with no-cors:', err);
+        // Fallback: no-cors with text/plain
+        fetch(SCRIPT_URL, {
+          method: 'POST',
+          mode: 'no-cors',
+          headers: { 'Content-Type': 'text/plain' },
+          body: JSON.stringify(data)
+        }).then(function() {
+          console.log('[Temp Save] no-cors sent');
+          btn.textContent = 'Saved!';
+          btn.classList.add('success');
+          setTimeout(function() {
+            btn.textContent = 'Save Temperatures';
+            btn.disabled = false;
+            btn.classList.remove('success');
+          }, 3000);
+        }).catch(function() {
+          btn.textContent = 'Error \u2014 tap to retry';
+          btn.classList.add('error');
+          btn.disabled = false;
+        });
       });
     });
 
