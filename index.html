@@ -616,16 +616,11 @@
     }
 
     function lookup(dollarAmount) {
-      let closest = DOUGH_TABLE[0];
-      let minDiff = Math.abs(dollarAmount - closest.threshold);
+      // Find smallest threshold >= dollarAmount; cap at highest row
       for (const entry of DOUGH_TABLE) {
-        const diff = Math.abs(dollarAmount - entry.threshold);
-        if (diff < minDiff || (diff === minDiff && entry.threshold > closest.threshold)) {
-          closest = entry;
-          minDiff = diff;
-        }
+        if (entry.threshold >= dollarAmount) return entry;
       }
-      return closest;
+      return DOUGH_TABLE[DOUGH_TABLE.length - 1];
     }
 
     function formatDollar(n) {
