@@ -270,6 +270,57 @@
       color: #fff;
     }
 
+    /* ── Boil Dough Card ── */
+    .boil-card {
+      background: rgba(39, 53, 72, 0.75);
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+      border: 1px solid rgba(148, 163, 184, 0.1);
+      border-radius: 12px;
+      overflow: hidden;
+      margin-bottom: 12px;
+    }
+    .boil-card .accent-bar { height: 4px; background: #f59e0b; }
+    .boil-card .sc-body { padding: 14px; }
+    .boil-card .sc-name {
+      font-size: 0.85rem;
+      font-weight: 700;
+      letter-spacing: 1px;
+      color: #f59e0b;
+      margin-bottom: 10px;
+    }
+    .boil-card .boil-stats {
+      display: flex;
+      justify-content: center;
+      gap: 24px;
+      margin-bottom: 10px;
+    }
+    .boil-card .boil-stat { text-align: center; }
+    .boil-card .boil-stat .stat-label {
+      font-size: 0.55rem;
+      color: #64748b;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      margin-bottom: 2px;
+    }
+    .boil-card .boil-stat .stat-value {
+      font-size: 1.1rem;
+      font-weight: 700;
+      color: #e2e8f0;
+    }
+    .boil-card .boil-make {
+      text-align: center;
+      padding-top: 10px;
+      border-top: 1px solid #334155;
+      font-size: 1rem;
+      font-weight: 700;
+      color: #e2e8f0;
+    }
+    .boil-card .boil-make.stocked { color: #4ade80; }
+    .boil-input-full {
+      grid-column: 1 / -1;
+    }
+
     /* ── Batch Hero ── */
     .batch-card {
       border-radius: 16px;
@@ -480,6 +531,14 @@
             <div class="tc-group"><label>Balls</label><input type="text" id="countSic" inputmode="numeric" placeholder="0"></div>
           </div>
         </div>
+        <div class="input-group boil-input-full">
+          <label>Boil Dough <span class="per-tray">Target: 36 balls | 6/tray</span></label>
+          <div class="tc-row">
+            <div class="tc-group"><label>Trays</label><input type="text" id="tcTrays-boil" inputmode="numeric" placeholder="0"></div>
+            <div class="tc-group"><label>Singles</label><input type="text" id="tcExtra-boil" inputmode="numeric" placeholder="0"></div>
+          </div>
+          <div class="tc-total" id="tcTotal-boil">= <span>0 balls</span></div>
+        </div>
       </div>
     </div>
 
@@ -590,6 +649,17 @@
       return total;
     }
 
+    const BOIL_TARGET = 36;
+    const BOIL_PER_TRAY = 6;
+
+    function getBoilCount() {
+      var fullTrays = parseInt(document.getElementById('tcTrays-boil').value) || 0;
+      var extra = parseInt(document.getElementById('tcExtra-boil').value) || 0;
+      var total = (fullTrays * BOIL_PER_TRAY) + extra;
+      document.getElementById('tcTotal-boil').innerHTML = '= <span>' + total + ' balls</span>';
+      return total;
+    }
+
     function calculate() {
       // Update dollar hints
       updateHint('currentSales', 'hintCurrentSales');
@@ -620,7 +690,12 @@
         trays[t] = ballsToMake[t] <= 0 ? 0 : Math.ceil(ballsToMake[t] / PER_TRAY[t]);
       }
 
-      const totalTrays = TYPES.reduce((sum, t) => sum + trays[t], 0);
+      // Boil Dough — fixed target, not from lookup
+      const boilCount = getBoilCount();
+      const boilMake = Math.max(0, BOIL_TARGET - boilCount);
+      const boilTrays = boilMake === 0 ? 0 : Math.ceil(boilMake / BOIL_PER_TRAY);
+
+      const totalTrays = TYPES.reduce((sum, t) => sum + trays[t], 0) + boilTrays;
       const batches = totalTrays === 0 ? 0 : Math.ceil(totalTrays / TRAYS_PER_BATCH);
 
       // Sales Left banner
@@ -651,6 +726,25 @@
       }
       html += '</div>';
 
+      // Boil Dough card — full width
+      var boilTraysDisplay = Math.floor(boilMake / BOIL_PER_TRAY);
+      var boilSingles = boilMake % BOIL_PER_TRAY;
+      html += '<div class="boil-card">';
+      html += '<div class="accent-bar"></div>';
+      html += '<div class="sc-body">';
+      html += '<div class="sc-name">Boil Dough</div>';
+      html += '<div class="boil-stats">';
+      html += '<div class="boil-stat"><div class="stat-label">Have</div><div class="stat-value">' + boilCount + '</div></div>';
+      html += '<div class="boil-stat"><div class="stat-label">Target</div><div class="stat-value">' + BOIL_TARGET + '</div></div>';
+      html += '<div class="boil-stat"><div class="stat-label">Make</div><div class="stat-value">' + boilMake + '</div></div>';
+      html += '</div>';
+      if (boilMake > 0) {
+        html += '<div class="boil-make">Make ' + boilTraysDisplay + ' trays and ' + boilSingles + ' singles</div>';
+      } else {
+        html += '<div class="boil-make stocked">Fully stocked!</div>';
+      }
+      html += '</div></div>';
+
       // Batch hero card
       const batchClass = batches > 0 ? 'has-batches' : 'zero-batches';
       html += '<div class="batch-card ' + batchClass + '">';
@@ -662,6 +756,7 @@
         html += '<div class="tb-item"><div class="tb-count">' + trays[t] + '</div><div class="tb-label">' + TYPE_SHORT[t] + '</div></div>';
       }
       html += '<div class="tb-item"><div class="tb-count">' + ballsToMake.sic + '</div><div class="tb-label">Sic balls</div></div>';
+      html += '<div class="tb-item"><div class="tb-count">' + boilTrays + '</div><div class="tb-label">Boil</div></div>';
       html += '</div>';
       html += '</div>';
 
@@ -692,6 +787,7 @@
         smallCount: getCount('small'),
         largeCount: getCount('large'),
         sicCount: getCount('sic'),
+        boilCount: getBoilCount(),
         batches: parseInt(document.querySelector('.batch-number') ? document.querySelector('.batch-number').textContent : '0') || 0
       };
       saveBtn.disabled = true;
