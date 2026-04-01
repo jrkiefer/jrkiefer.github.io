@@ -452,6 +452,143 @@
       letter-spacing: 1px;
     }
     .reset-btn:active { color: #fff; }
+
+    /* ── Temperature Section ── */
+    .temp-section {
+      margin-top: 24px;
+      padding-top: 20px;
+      border-top: 2px solid rgba(245, 158, 11, 0.3);
+    }
+    .temp-title {
+      font-size: 0.65rem;
+      font-weight: 700;
+      letter-spacing: 2px;
+      text-transform: uppercase;
+      color: #f59e0b;
+      margin-bottom: 12px;
+    }
+    .temp-date-row {
+      display: flex;
+      gap: 8px;
+      margin-bottom: 12px;
+      align-items: flex-end;
+    }
+    .temp-date-row .input-group { flex: 1; margin-bottom: 0; }
+    .temp-date-row input[type="text"] {
+      border-color: rgba(245, 158, 11, 0.3);
+    }
+    .temp-date-row input[type="text"]:focus {
+      border-color: #f59e0b;
+      box-shadow: 0 0 0 3px rgba(245, 158, 11, 0.2);
+    }
+    .temp-load-btn {
+      height: 48px;
+      padding: 0 16px;
+      font-family: 'Space Mono', monospace;
+      font-size: 0.75rem;
+      font-weight: 700;
+      color: #1e293b;
+      background: #f59e0b;
+      border: none;
+      border-radius: 8px;
+      cursor: pointer;
+      flex-shrink: 0;
+      -webkit-appearance: none;
+    }
+    .temp-load-btn:active { background: #d97706; }
+    .temp-load-btn:disabled { opacity: 0.6; cursor: not-allowed; }
+    .temp-message {
+      font-size: 0.7rem;
+      color: #94a3b8;
+      text-align: center;
+      padding: 12px;
+      margin-bottom: 12px;
+    }
+    .temp-message.error { color: #fbbf24; }
+    .temp-override {
+      display: block;
+      text-align: center;
+      font-family: 'Space Mono', monospace;
+      font-size: 0.6rem;
+      color: #f59e0b;
+      background: none;
+      border: none;
+      cursor: pointer;
+      text-decoration: underline;
+      text-decoration-style: dotted;
+      margin-bottom: 12px;
+    }
+    .temp-override:active { color: #fbbf24; }
+    .temp-manual-row {
+      display: flex;
+      gap: 8px;
+      align-items: flex-end;
+      margin-bottom: 12px;
+    }
+    .temp-manual-row .input-group { flex: 1; margin-bottom: 0; }
+    .temp-manual-row input[type="text"] {
+      border-color: rgba(245, 158, 11, 0.3);
+    }
+    .temp-manual-row input[type="text"]:focus {
+      border-color: #f59e0b;
+      box-shadow: 0 0 0 3px rgba(245, 158, 11, 0.2);
+    }
+    .temp-batch-pair {
+      background: rgba(39, 53, 72, 0.75);
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+      border: 1px solid rgba(245, 158, 11, 0.15);
+      border-radius: 10px;
+      padding: 12px;
+      margin-bottom: 8px;
+    }
+    .temp-batch-pair .tb-label {
+      font-size: 0.65rem;
+      font-weight: 700;
+      color: #f59e0b;
+      letter-spacing: 1px;
+      margin-bottom: 8px;
+    }
+    .temp-batch-pair .tb-inputs {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+    }
+    .temp-batch-pair .tb-inputs label {
+      display: block;
+      font-size: 0.55rem;
+      color: #94a3b8;
+      margin-bottom: 2px;
+    }
+    .temp-batch-pair .tb-inputs input[type="text"] {
+      height: 44px;
+      font-size: 0.95rem;
+      border-color: rgba(245, 158, 11, 0.3);
+    }
+    .temp-batch-pair .tb-inputs input[type="text"]:focus {
+      border-color: #f59e0b;
+      box-shadow: 0 0 0 3px rgba(245, 158, 11, 0.2);
+    }
+    .temp-save-btn {
+      display: block;
+      width: 100%;
+      height: 52px;
+      margin-top: 12px;
+      font-family: 'Space Mono', monospace;
+      font-size: 0.9rem;
+      font-weight: 700;
+      color: #1e293b;
+      background: #f59e0b;
+      border: none;
+      border-radius: 12px;
+      cursor: pointer;
+      transition: background 0.2s, opacity 0.2s;
+      -webkit-appearance: none;
+    }
+    .temp-save-btn:active { background: #d97706; }
+    .temp-save-btn:disabled { opacity: 0.6; cursor: not-allowed; }
+    .temp-save-btn.error { background: #ef4444; color: #fff; }
+    .temp-save-btn.success { background: #d97706; }
   </style>
 </head>
 <body>
@@ -547,6 +684,22 @@
 
     <!-- Save Button -->
     <button type="button" class="save-btn" id="saveBtn">Save Today's Count</button>
+
+    <!-- Temperature Tracking -->
+    <div class="temp-section">
+      <div class="temp-title">Batch Temperatures</div>
+      <div class="temp-date-row">
+        <div class="input-group">
+          <label>Date</label>
+          <input type="text" id="tempDate" inputmode="text" placeholder="MM/DD/YYYY">
+        </div>
+        <button type="button" class="temp-load-btn" id="tempLoadBtn">Load</button>
+      </div>
+      <div id="tempStatus"></div>
+      <div id="tempOverrideArea"></div>
+      <div id="tempInputs"></div>
+      <button type="button" class="temp-save-btn" id="tempSaveBtn" style="display:none">Save Temperatures</button>
+    </div>
 
     <!-- History -->
     <div class="history-section">
@@ -843,9 +996,180 @@
     }
     loadHistory();
 
+    // ── Temperature Tracking ──
+    var tempBatchCount = 0;
+
+    function getTodayDate() {
+      var now = new Date();
+      return (now.getMonth()+1).toString().padStart(2,'0') + '/' + now.getDate().toString().padStart(2,'0') + '/' + now.getFullYear();
+    }
+
+    // Default date to today
+    document.getElementById('tempDate').value = getTodayDate();
+
+    function renderTempInputs(n) {
+      n = Math.min(Math.max(0, n), 10);
+      tempBatchCount = n;
+      var container = document.getElementById('tempInputs');
+      var saveBtn = document.getElementById('tempSaveBtn');
+      if (n === 0) {
+        container.innerHTML = '';
+        saveBtn.style.display = 'none';
+        return;
+      }
+      var html = '';
+      for (var i = 1; i <= n; i++) {
+        html += '<div class="temp-batch-pair">';
+        html += '<div class="tb-label">Batch ' + i + '</div>';
+        html += '<div class="tb-inputs">';
+        html += '<div><label>Water \u00B0F</label><input type="text" id="tempWater-' + i + '" inputmode="decimal" placeholder="0"></div>';
+        html += '<div><label>Dough \u00B0F</label><input type="text" id="tempDough-' + i + '" inputmode="decimal" placeholder="0"></div>';
+        html += '</div></div>';
+      }
+      container.innerHTML = html;
+      saveBtn.style.display = 'block';
+    }
+
+    function showTempOverride() {
+      var area = document.getElementById('tempOverrideArea');
+      area.innerHTML = '<div class="temp-manual-row">' +
+        '<div class="input-group"><label>Number of batches</label>' +
+        '<input type="text" id="tempManualCount" inputmode="numeric" placeholder="1-10"></div>' +
+        '<button type="button" class="temp-load-btn" id="tempManualGo">Set</button></div>';
+      document.getElementById('tempManualGo').addEventListener('click', function() {
+        var n = parseInt(document.getElementById('tempManualCount').value) || 0;
+        if (n < 1 || n > 10) {
+          document.getElementById('tempStatus').innerHTML = '<div class="temp-message error">Enter a number between 1 and 10</div>';
+          return;
+        }
+        document.getElementById('tempStatus').innerHTML = '<div class="temp-message">' + n + ' batch' + (n > 1 ? 'es' : '') + ' — enter temps below</div>';
+        area.innerHTML = '';
+        renderTempInputs(n);
+      });
+    }
+
+    // Load button — fetch batch count for a date
+    document.getElementById('tempLoadBtn').addEventListener('click', function() {
+      var date = document.getElementById('tempDate').value.trim();
+      if (!date) return;
+      var status = document.getElementById('tempStatus');
+      var override = document.getElementById('tempOverrideArea');
+      status.innerHTML = '<div class="temp-message">Loading...</div>';
+      override.innerHTML = '';
+      renderTempInputs(0);
+
+      fetch(SCRIPT_URL + '?date=' + encodeURIComponent(date))
+        .then(function(r) { return r.json(); })
+        .then(function(data) {
+          var batches = 0;
+          if (data && typeof data === 'object' && !Array.isArray(data)) {
+            batches = parseInt(data['Batches'] || data['batches']) || 0;
+          } else if (Array.isArray(data)) {
+            // Search rows for matching date
+            for (var i = 0; i < data.length; i++) {
+              var rd = data[i]['Date'] || data[i]['date'] || '';
+              if (rd && rd.indexOf('T') > -1) rd = new Date(rd).toLocaleDateString('en-US');
+              if (rd === date) {
+                batches = parseInt(data[i]['Batches'] || data[i]['batches']) || 0;
+              }
+            }
+          }
+          if (batches > 0) {
+            batches = Math.min(batches, 10);
+            status.innerHTML = '<div class="temp-message">' + batches + ' batch' + (batches > 1 ? 'es' : '') + ' found for ' + date + '</div>';
+            override.innerHTML = '<button type="button" class="temp-override" id="tempOverrideBtn">Change batch count</button>';
+            document.getElementById('tempOverrideBtn').addEventListener('click', showTempOverride);
+            renderTempInputs(batches);
+          } else {
+            status.innerHTML = '<div class="temp-message error">No dough count saved for this date \u2014 count dough first</div>';
+            override.innerHTML = '<button type="button" class="temp-override" id="tempOverrideBtn">Enter batch count manually</button>';
+            document.getElementById('tempOverrideBtn').addEventListener('click', showTempOverride);
+          }
+        })
+        .catch(function() {
+          // CORS fallback — let user type batch count manually
+          status.innerHTML = '<div class="temp-message error">Could not load data \u2014 enter batch count manually</div>';
+          showTempOverride();
+        });
+    });
+
+    // Auto-sync: when calculate() runs and batch count changes, update temp inputs if date is today
+    var lastAutoBatches = 0;
+    var originalCalculate = calculate;
+    calculate = function() {
+      originalCalculate();
+      var batchEl = document.querySelector('.batch-number');
+      var currentBatches = batchEl ? parseInt(batchEl.textContent) || 0 : 0;
+      currentBatches = Math.min(currentBatches, 10);
+      var dateField = document.getElementById('tempDate');
+      if (dateField.value.trim() === getTodayDate() && currentBatches !== lastAutoBatches) {
+        lastAutoBatches = currentBatches;
+        var status = document.getElementById('tempStatus');
+        var override = document.getElementById('tempOverrideArea');
+        if (currentBatches > 0) {
+          status.innerHTML = '<div class="temp-message">' + currentBatches + ' batch' + (currentBatches > 1 ? 'es' : '') + ' from current count</div>';
+          override.innerHTML = '<button type="button" class="temp-override" id="tempOverrideBtn">Change batch count</button>';
+          document.getElementById('tempOverrideBtn').addEventListener('click', showTempOverride);
+          renderTempInputs(currentBatches);
+        } else {
+          status.innerHTML = '';
+          override.innerHTML = '';
+          renderTempInputs(0);
+        }
+      }
+    };
+
+    // Save Temps
+    document.getElementById('tempSaveBtn').addEventListener('click', function() {
+      var btn = document.getElementById('tempSaveBtn');
+      if (btn.disabled) return;
+      var date = document.getElementById('tempDate').value.trim();
+      var temps = [];
+      for (var i = 1; i <= tempBatchCount; i++) {
+        var wEl = document.getElementById('tempWater-' + i);
+        var dEl = document.getElementById('tempDough-' + i);
+        temps.push({
+          water: parseFloat(wEl ? wEl.value : '') || 0,
+          dough: parseFloat(dEl ? dEl.value : '') || 0
+        });
+      }
+      var data = {
+        type: 'temps',
+        date: date,
+        temps: temps
+      };
+      btn.disabled = true;
+      btn.textContent = 'Saving...';
+      btn.classList.remove('error', 'success');
+      fetch(SCRIPT_URL, {
+        method: 'POST',
+        mode: 'no-cors',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data)
+      }).then(function() {
+        btn.textContent = 'Saved!';
+        btn.classList.add('success');
+        setTimeout(function() {
+          btn.textContent = 'Save Temperatures';
+          btn.disabled = false;
+          btn.classList.remove('success');
+        }, 3000);
+      }).catch(function() {
+        btn.textContent = 'Error \u2014 tap to retry';
+        btn.classList.add('error');
+        btn.disabled = false;
+      });
+    });
+
     // ── Reset ──
     document.getElementById('resetBtn').addEventListener('click', function() {
       document.querySelectorAll('input[type="text"]').forEach(function(input) { input.value = ''; });
+      // Reset temp section
+      document.getElementById('tempDate').value = getTodayDate();
+      document.getElementById('tempStatus').innerHTML = '';
+      document.getElementById('tempOverrideArea').innerHTML = '';
+      renderTempInputs(0);
+      lastAutoBatches = 0;
       calculate();
     });
   </script>
