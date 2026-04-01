@@ -1055,21 +1055,7 @@
       });
     }
 
-    function showTempResult(batches, date, status, override) {
-      if (batches > 0) {
-        batches = Math.min(batches, 10);
-        status.innerHTML = '<div class="temp-message">' + batches + ' batch' + (batches > 1 ? 'es' : '') + ' found for ' + date + '</div>';
-        override.innerHTML = '<button type="button" class="temp-override" id="tempOverrideBtn">Change batch count</button>';
-        document.getElementById('tempOverrideBtn').addEventListener('click', showTempOverride);
-        renderTempInputs(batches);
-      } else {
-        status.innerHTML = '<div class="temp-message error">No dough count saved for this date \u2014 count dough first</div>';
-        override.innerHTML = '<button type="button" class="temp-override" id="tempOverrideBtn">Enter batch count manually</button>';
-        document.getElementById('tempOverrideBtn').addEventListener('click', showTempOverride);
-      }
-    }
-
-    function searchRowsForBatches(rows, date) {
+    function searchRowForDate(rows, date) {
       for (var i = 0; i < rows.length; i++) {
         var rd = rows[i]['Date'] || rows[i]['date'] || '';
         if (rd instanceof Date || (typeof rd === 'string' && rd.indexOf('T') > -1)) {
@@ -1077,10 +1063,95 @@
           rd = (rd.getMonth()+1) + '/' + rd.getDate() + '/' + rd.getFullYear();
         }
         if (normalizeDate(String(rd)) === date) {
-          return parseInt(rows[i]['Batches'] || rows[i]['batches']) || 0;
+          return rows[i];
         }
       }
-      return 0;
+      return null;
+    }
+
+    function getField(row, sheetName, camelName) {
+      var v = row[sheetName];
+      if (v === undefined || v === null) v = row[camelName];
+      if (v === undefined || v === null) v = 0;
+      return v;
+    }
+
+    function toShorthand(n) {
+      n = Number(n) || 0;
+      if (n === 0) return '';
+      if (n >= 1000 && n % 1000 === 0) return String(n / 1000);
+      if (n >= 1000 && n % 100 === 0) return String(n / 1000);
+      if (n >= 1000 && n % 10 === 0) return String(n / 1000);
+      if (n >= 1000) return String(n / 1000);
+      return String(n);
+    }
+
+    function fillFieldsFromData(row) {
+      // Fill dollar fields with shorthand
+      document.getElementById('currentSales').value = toShorthand(getField(row, 'Current Sales', 'currentSales'));
+      document.getElementById('todayForecast').value = toShorthand(getField(row, "Today's Forecast", 'todayForecast'));
+      document.getElementById('tomorrowForecast').value = toShorthand(getField(row, "Tomorrow's Forecast", 'tomorrowForecast'));
+
+      // Fill dough counts — put total as singles, 0 trays
+      var indi = Number(getField(row, 'Indi Count', 'indiCount')) || 0;
+      document.getElementById('tcTrays-indi').value = '0';
+      document.getElementById('tcExtra-indi').value = indi ? String(indi) : '';
+
+      var small = Number(getField(row, 'Small Count', 'smallCount')) || 0;
+      document.getElementById('tcTrays-small').value = '0';
+      document.getElementById('tcExtra-small').value = small ? String(small) : '';
+
+      var large = Number(getField(row, 'Large Count', 'largeCount')) || 0;
+      document.getElementById('tcTrays-large').value = '0';
+      document.getElementById('tcExtra-large').value = large ? String(large) : '';
+
+      var sic = Number(getField(row, 'Sic Count', 'sicCount')) || 0;
+      document.getElementById('countSic').value = sic ? String(sic) : '';
+
+      var boil = Number(getField(row, 'Boil Count', 'boilCount')) || 0;
+      document.getElementById('tcTrays-boil').value = '0';
+      document.getElementById('tcExtra-boil').value = boil ? String(boil) : '';
+
+      // Trigger recalculation
+      calculate();
+    }
+
+    function fillTempFields(row, batchCount) {
+      for (var i = 1; i <= batchCount; i++) {
+        var wEl = document.getElementById('tempWater-' + i);
+        var dEl = document.getElementById('tempDough-' + i);
+        if (!wEl || !dEl) continue;
+        // Try sheet headers like "Water 1", "Dough 1" or "water1", "dough1"
+        var w = row['Water ' + i] || row['water' + i] || '';
+        var d = row['Dough ' + i] || row['dough' + i] || '';
+        if (w) wEl.value = String(w);
+        if (d) dEl.value = String(d);
+      }
+    }
+
+    function handleLoadedData(rowData, date, status, override) {
+      if (!rowData) {
+        status.innerHTML = '<div class="temp-message error">No dough count saved for this date \u2014 count dough first</div>';
+        override.innerHTML = '<button type="button" class="temp-override" id="tempOverrideBtn">Enter batch count manually</button>';
+        document.getElementById('tempOverrideBtn').addEventListener('click', showTempOverride);
+        return;
+      }
+      // Fill all fields from saved data
+      fillFieldsFromData(rowData);
+
+      var batches = parseInt(getField(rowData, 'Batches', 'batches')) || 0;
+      batches = Math.min(batches, 10);
+      if (batches > 0) {
+        status.innerHTML = '<div class="temp-message">' + batches + ' batch' + (batches > 1 ? 'es' : '') + ' found for ' + date + ' \u2014 fields restored</div>';
+        override.innerHTML = '<button type="button" class="temp-override" id="tempOverrideBtn">Change batch count</button>';
+        document.getElementById('tempOverrideBtn').addEventListener('click', showTempOverride);
+        renderTempInputs(batches);
+        fillTempFields(rowData, batches);
+      } else {
+        status.innerHTML = '<div class="temp-message error">No batch count for this date</div>';
+        override.innerHTML = '<button type="button" class="temp-override" id="tempOverrideBtn">Enter batch count manually</button>';
+        document.getElementById('tempOverrideBtn').addEventListener('click', showTempOverride);
+      }
     }
 
     // Load button — fetch batch count for a date
@@ -1104,49 +1175,44 @@
       fetch(url)
         .then(function(r) { return r.json(); })
         .then(function(data) {
-          console.log('[Temp Load] Response:', JSON.stringify(data));
+          console.log('[Load] Response:', JSON.stringify(data));
           loadBtn.disabled = false;
           loadBtn.textContent = 'Load';
-          var batches = 0;
 
           // Handle {status: "found", data: {...}} response
           if (data && data.status === 'found' && data.data) {
-            batches = parseInt(data.data['Batches'] || data.data['batches']) || 0;
-            console.log('[Temp Load] Found via ?date= lookup, batches=' + batches);
-            showTempResult(batches, date, status, override);
+            console.log('[Load] Found via ?date= lookup');
+            handleLoadedData(data.data, date, status, override);
             return;
           }
 
           // Handle array response (search client-side)
           if (Array.isArray(data)) {
-            batches = searchRowsForBatches(data, date);
-            console.log('[Temp Load] Found via array search, batches=' + batches);
-            showTempResult(batches, date, status, override);
+            var rowData = searchRowForDate(data, date);
+            console.log('[Load] Array search result:', rowData ? 'found' : 'not found');
+            handleLoadedData(rowData, date, status, override);
             return;
           }
 
-          // {status: "not_found"} or unrecognized — fallback: fetch ALL rows and search
-          console.log('[Temp Load] Date not found via ?date= param, fetching all rows...');
+          // {status: "not_found"} or unrecognized — fallback: fetch ALL rows
+          console.log('[Load] Not found via ?date=, fetching all rows...');
           return fetch(SCRIPT_URL)
             .then(function(r2) { return r2.json(); })
             .then(function(rows) {
-              console.log('[Temp Load] Fallback got ' + rows.length + ' rows');
-              batches = searchRowsForBatches(rows, date);
-              console.log('[Temp Load] Fallback search, batches=' + batches);
-              showTempResult(batches, date, status, override);
+              var rowData = searchRowForDate(rows, date);
+              console.log('[Load] Fallback search:', rowData ? 'found' : 'not found');
+              handleLoadedData(rowData, date, status, override);
             });
         })
         .catch(function(err) {
-          console.log('[Temp Load] Error:', err, '— trying fallback fetch...');
-          // Fallback: fetch all rows without ?date= param
+          console.log('[Load] Error:', err, '— trying fallback...');
           fetch(SCRIPT_URL)
             .then(function(r) { return r.json(); })
             .then(function(rows) {
               loadBtn.disabled = false;
               loadBtn.textContent = 'Load';
-              var batches = searchRowsForBatches(rows, date);
-              console.log('[Temp Load] Fallback batches=' + batches);
-              showTempResult(batches, date, status, override);
+              var rowData = searchRowForDate(rows, date);
+              handleLoadedData(rowData, date, status, override);
             })
             .catch(function() {
               loadBtn.disabled = false;
