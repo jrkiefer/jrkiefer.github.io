@@ -769,7 +769,8 @@
     </div>
 
     <!-- Save Button -->
-    <button type="button" class="save-btn" id="saveBtn">Save Today's Count</button>
+    <button type="button" class="save-btn" id="saveBtn" disabled>Save Today's Count</button>
+    <div id="saveHint" style="text-align:center;font-size:0.6rem;color:#64748b;margin-top:6px">Enter dough counts first</div>
 
     <!-- Temperature Tracking -->
     <div class="temp-section">
@@ -991,10 +992,51 @@
     // Run once on load so results are always visible
     calculate();
 
-    // ── Save Entry ──
+    // ── Save Validation ──
     var saveBtn = document.getElementById('saveBtn');
+    var saveHint = document.getElementById('saveHint');
+    var isSaving = false;
+
+    function updateSaveButtons() {
+      // Dough save: disable if all counts are zero and no forecasts
+      if (!isSaving) {
+        var hasData = getCount('indi') > 0 || getCount('small') > 0 ||
+          getCount('large') > 0 || getCount('sic') > 0 || getBoilCount() > 0 ||
+          expandDollar(document.getElementById('todayForecast').value) > 0;
+        saveBtn.disabled = !hasData;
+        saveHint.style.display = hasData ? 'none' : 'block';
+      }
+      // Temp save: disable if no temp values entered
+      var tempSaveBtn = document.getElementById('tempSaveBtn');
+      if (tempSaveBtn.style.display !== 'none' && !tempSaveBtn._isSaving) {
+        var hasTemps = false;
+        for (var i = 1; i <= tempBatchCount; i++) {
+          var wEl = document.getElementById('tempWater-' + i);
+          var dEl = document.getElementById('tempDough-' + i);
+          if ((wEl && wEl.value.trim()) || (dEl && dEl.value.trim())) { hasTemps = true; break; }
+        }
+        tempSaveBtn.disabled = !hasTemps;
+      }
+    }
+
+    // Re-check save buttons after every calculate
+    var _baseCalculate = calculate;
+    calculate = function() { _baseCalculate(); updateSaveButtons(); };
+
+    function resetSaveBtn(btn, label, delay) {
+      setTimeout(function() {
+        btn.textContent = label;
+        btn.disabled = false;
+        btn.classList.remove('success');
+        if (btn === saveBtn) { isSaving = false; updateSaveButtons(); }
+        else { btn._isSaving = false; updateSaveButtons(); }
+      }, delay || 3000);
+    }
+
+    // ── Save Entry ──
     saveBtn.addEventListener('click', function() {
       if (saveBtn.disabled) return;
+      isSaving = true;
       var now = new Date();
       var date = (now.getMonth()+1) + '/' + now.getDate() + '/' + now.getFullYear();
       var data = {
@@ -1008,30 +1050,55 @@
         largeCount: getCount('large'),
         sicCount: getCount('sic'),
         boilCount: getBoilCount(),
-        batches: parseInt(document.querySelector('.batch-number') ? document.querySelector('.batch-number').textContent : '0') || 0
+        batches: parseInt(document.getElementById('batch-number').textContent) || 0
       };
       saveBtn.disabled = true;
       saveBtn.textContent = 'Saving...';
       saveBtn.classList.remove('error', 'success');
       console.log('[Dough Save] Sending:', JSON.stringify(data));
+
       fetch(SCRIPT_URL, {
         method: 'POST',
-        mode: 'no-cors',
         headers: { 'Content-Type': 'text/plain' },
         body: JSON.stringify(data)
-      }).then(function() {
-        saveBtn.textContent = 'Saved!';
-        saveBtn.classList.add('success');
-        setTimeout(function() {
-          saveBtn.textContent = 'Save Today\'s Count';
-          saveBtn.disabled = false;
-          saveBtn.classList.remove('success');
+      }).then(function(r) {
+        if (r.type === 'opaque' || r.status === 0) {
+          saveBtn.textContent = 'Sent! (verify in sheet)';
+          saveBtn.classList.add('success');
+          resetSaveBtn(saveBtn, 'Save Today\'s Count');
           loadHistory();
-        }, 3000);
-      }).catch(function() {
-        saveBtn.textContent = 'Error \u2014 tap to retry';
-        saveBtn.classList.add('error');
-        saveBtn.disabled = false;
+          return;
+        }
+        return r.text().then(function(txt) {
+          console.log('[Dough Save] Response:', txt);
+          try { var json = JSON.parse(txt); } catch(e) {}
+          if (json && json.status === 'ok') {
+            saveBtn.textContent = 'Saved!';
+          } else {
+            saveBtn.textContent = 'Sent! (verify in sheet)';
+          }
+          saveBtn.classList.add('success');
+          resetSaveBtn(saveBtn, 'Save Today\'s Count');
+          loadHistory();
+        });
+      }).catch(function(err) {
+        console.log('[Dough Save] CORS failed, retrying no-cors:', err);
+        fetch(SCRIPT_URL, {
+          method: 'POST',
+          mode: 'no-cors',
+          headers: { 'Content-Type': 'text/plain' },
+          body: JSON.stringify(data)
+        }).then(function() {
+          saveBtn.textContent = 'Sent! (verify in sheet)';
+          saveBtn.classList.add('success');
+          resetSaveBtn(saveBtn, 'Save Today\'s Count');
+          loadHistory();
+        }).catch(function() {
+          saveBtn.textContent = 'Error \u2014 tap to retry';
+          saveBtn.classList.add('error');
+          isSaving = false;
+          saveBtn.disabled = false;
+        });
       });
     });
 
@@ -1107,7 +1174,13 @@
       }
       container.innerHTML = html;
       saveBtn.style.display = 'block';
+      updateSaveButtons();
     }
+
+    // Delegated listener for dynamic temp inputs — update save button state
+    document.getElementById('tempInputs').addEventListener('input', function() {
+      updateSaveButtons();
+    });
 
     function showTempOverride() {
       var area = document.getElementById('tempOverrideArea');
@@ -1367,6 +1440,7 @@
     document.getElementById('tempSaveBtn').addEventListener('click', function() {
       var btn = document.getElementById('tempSaveBtn');
       if (btn.disabled) return;
+      btn._isSaving = true;
       var date = normalizeDate(document.getElementById('tempDate').value.trim());
       var temps = [];
       for (var i = 1; i <= tempBatchCount; i++) {
@@ -1387,50 +1461,43 @@
       btn.textContent = 'Saving...';
       btn.classList.remove('error', 'success');
 
-      // Try with cors first so we can read the response
       fetch(SCRIPT_URL, {
         method: 'POST',
         headers: { 'Content-Type': 'text/plain' },
         body: JSON.stringify(data)
       }).then(function(r) {
-        console.log('[Temp Save] Response status:', r.status, r.type);
         if (r.type === 'opaque' || r.status === 0) {
-          // no-cors opaque response — assume success
-          console.log('[Temp Save] Opaque response, assuming success');
-          btn.textContent = 'Saved!';
+          btn.textContent = 'Sent! (verify in sheet)';
           btn.classList.add('success');
-        } else {
-          return r.text().then(function(txt) {
-            console.log('[Temp Save] Response body:', txt);
-            btn.textContent = 'Saved!';
-            btn.classList.add('success');
-          });
+          resetSaveBtn(btn, 'Save Temperatures');
+          return;
         }
-        setTimeout(function() {
-          btn.textContent = 'Save Temperatures';
-          btn.disabled = false;
-          btn.classList.remove('success');
-        }, 3000);
+        return r.text().then(function(txt) {
+          console.log('[Temp Save] Response:', txt);
+          try { var json = JSON.parse(txt); } catch(e) {}
+          if (json && json.status === 'ok') {
+            btn.textContent = 'Saved!';
+          } else {
+            btn.textContent = 'Sent! (verify in sheet)';
+          }
+          btn.classList.add('success');
+          resetSaveBtn(btn, 'Save Temperatures');
+        });
       }).catch(function(err) {
-        console.log('[Temp Save] CORS failed, retrying with no-cors:', err);
-        // Fallback: no-cors with text/plain
+        console.log('[Temp Save] CORS failed, retrying no-cors:', err);
         fetch(SCRIPT_URL, {
           method: 'POST',
           mode: 'no-cors',
           headers: { 'Content-Type': 'text/plain' },
           body: JSON.stringify(data)
         }).then(function() {
-          console.log('[Temp Save] no-cors sent');
-          btn.textContent = 'Saved!';
+          btn.textContent = 'Sent! (verify in sheet)';
           btn.classList.add('success');
-          setTimeout(function() {
-            btn.textContent = 'Save Temperatures';
-            btn.disabled = false;
-            btn.classList.remove('success');
-          }, 3000);
+          resetSaveBtn(btn, 'Save Temperatures');
         }).catch(function() {
           btn.textContent = 'Error \u2014 tap to retry';
           btn.classList.add('error');
+          btn._isSaving = false;
           btn.disabled = false;
         });
       });
