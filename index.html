@@ -680,7 +680,93 @@
     </div>
 
     <!-- Results -->
-    <div id="results"></div>
+    <div id="results">
+      <div class="results-grid">
+        <div class="size-card">
+          <div class="accent-bar" style="background:#FF9800"></div>
+          <div class="sc-body">
+            <div class="sc-name" style="color:#FF9800">Individual</div>
+            <div class="stats-row">
+              <div class="stat"><div class="stat-label">Tonight</div><div class="stat-value" id="indi-tonight">0</div></div>
+              <div class="stat"><div class="stat-label">Left</div><div class="stat-value" id="indi-left">0</div></div>
+              <div class="stat"><div class="stat-label">Need</div><div class="stat-value" id="indi-need">0</div></div>
+            </div>
+            <div class="make-row">
+              <div class="make-label">Make <strong id="indi-make">0</strong> balls</div>
+              <div class="tray-badge" style="background:#FF9800" id="indi-trays">0</div>
+            </div>
+          </div>
+        </div>
+        <div class="size-card">
+          <div class="accent-bar" style="background:#2196F3"></div>
+          <div class="sc-body">
+            <div class="sc-name" style="color:#2196F3">Small</div>
+            <div class="stats-row">
+              <div class="stat"><div class="stat-label">Tonight</div><div class="stat-value" id="small-tonight">0</div></div>
+              <div class="stat"><div class="stat-label">Left</div><div class="stat-value" id="small-left">0</div></div>
+              <div class="stat"><div class="stat-label">Need</div><div class="stat-value" id="small-need">0</div></div>
+            </div>
+            <div class="make-row">
+              <div class="make-label">Make <strong id="small-make">0</strong> balls</div>
+              <div class="tray-badge" style="background:#2196F3" id="small-trays">0</div>
+            </div>
+          </div>
+        </div>
+        <div class="size-card">
+          <div class="accent-bar" style="background:#9C27B0"></div>
+          <div class="sc-body">
+            <div class="sc-name" style="color:#9C27B0">Large</div>
+            <div class="stats-row">
+              <div class="stat"><div class="stat-label">Tonight</div><div class="stat-value" id="large-tonight">0</div></div>
+              <div class="stat"><div class="stat-label">Left</div><div class="stat-value" id="large-left">0</div></div>
+              <div class="stat"><div class="stat-label">Need</div><div class="stat-value" id="large-need">0</div></div>
+            </div>
+            <div class="make-row">
+              <div class="make-label">Make <strong id="large-make">0</strong> balls</div>
+              <div class="tray-badge" style="background:#9C27B0" id="large-trays">0</div>
+            </div>
+          </div>
+        </div>
+        <div class="size-card">
+          <div class="accent-bar" style="background:#4CAF50"></div>
+          <div class="sc-body">
+            <div class="sc-name" style="color:#4CAF50">Sicilian</div>
+            <div class="stats-row">
+              <div class="stat"><div class="stat-label">Tonight</div><div class="stat-value" id="sic-tonight">0</div></div>
+              <div class="stat"><div class="stat-label">Left</div><div class="stat-value" id="sic-left">0</div></div>
+              <div class="stat"><div class="stat-label">Need</div><div class="stat-value" id="sic-need">0</div></div>
+            </div>
+            <div class="make-row">
+              <div class="make-label">Make <strong id="sic-make">0</strong> balls</div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="boil-card">
+        <div class="accent-bar"></div>
+        <div class="sc-body">
+          <div class="sc-name">Boil Dough</div>
+          <div class="boil-stats">
+            <div class="boil-stat"><div class="stat-label">Have</div><div class="stat-value" id="boil-have">0</div></div>
+            <div class="boil-stat"><div class="stat-label">Target</div><div class="stat-value" id="boil-target">36</div></div>
+            <div class="boil-stat"><div class="stat-label">Make</div><div class="stat-value" id="boil-make-val">0</div></div>
+          </div>
+          <div class="boil-make" id="boil-make-text">Fully stocked!</div>
+        </div>
+      </div>
+      <div class="batch-card has-batches" id="batch-card">
+        <div class="batch-label">Batches</div>
+        <div class="batch-number" id="batch-number">0</div>
+        <div class="batch-sub" id="batch-sub">0 trays total</div>
+        <div class="tray-breakdown">
+          <div class="tb-item"><div class="tb-count" id="tb-indi">0</div><div class="tb-label">Indi</div></div>
+          <div class="tb-item"><div class="tb-count" id="tb-small">0</div><div class="tb-label">Sm</div></div>
+          <div class="tb-item"><div class="tb-count" id="tb-large">0</div><div class="tb-label">Lg</div></div>
+          <div class="tb-item"><div class="tb-count" id="tb-sic">0</div><div class="tb-label">Sic balls</div></div>
+          <div class="tb-item"><div class="tb-count" id="tb-boil">0</div><div class="tb-label">Boil</div></div>
+        </div>
+      </div>
+    </div>
 
     <!-- Save Button -->
     <button type="button" class="save-btn" id="saveBtn">Save Today's Count</button>
@@ -851,71 +937,55 @@
       // Sales Left banner
       document.getElementById('salesLeftValue').textContent = formatDollar(salesLeft);
 
-      // Size cards — always visible
-      const resultsEl = document.getElementById('results');
-      let html = '<div class="results-grid">';
+      // Update size cards in-place
       for (const t of TYPES) {
-        const color = TYPE_COLORS[t];
-        const leftVal = doughLeft[t];
-        html += '<div class="size-card">';
-        html += '<div class="accent-bar" style="background:' + color + '"></div>';
-        html += '<div class="sc-body">';
-        html += '<div class="sc-name" style="color:' + color + '">' + TYPE_LABELS[t] + '</div>';
-        html += '<div class="stats-row">';
-        html += '<div class="stat"><div class="stat-label">Tonight</div><div class="stat-value">' + doughUse[t] + '</div></div>';
-        html += '<div class="stat"><div class="stat-label">Left</div><div class="stat-value ' + valClass(leftVal) + '">' + leftVal + '</div></div>';
-        html += '<div class="stat"><div class="stat-label">Need</div><div class="stat-value">' + tomorrowNeed[t] + '</div></div>';
-        html += '</div>';
-        html += '<div class="make-row">';
-        html += '<div class="make-label">Make <strong>' + ballsToMake[t] + '</strong> balls</div>';
-        if (t !== 'sic') {
-          html += '<div class="tray-badge" style="background:' + color + '">' + trays[t] + '</div>';
-        }
-        html += '</div>';
-        html += '</div></div>';
+        var leftEl = document.getElementById(t + '-left');
+        document.getElementById(t + '-tonight').textContent = doughUse[t];
+        leftEl.textContent = doughLeft[t];
+        leftEl.className = 'stat-value ' + valClass(doughLeft[t]);
+        document.getElementById(t + '-need').textContent = tomorrowNeed[t];
+        document.getElementById(t + '-make').textContent = ballsToMake[t];
+        var trayEl = document.getElementById(t + '-trays');
+        if (trayEl) trayEl.textContent = trays[t];
       }
-      html += '</div>';
 
-      // Boil Dough card — full width
+      // Boil card
       var boilTraysDisplay = Math.floor(boilMake / BOIL_PER_TRAY);
       var boilSingles = boilMake % BOIL_PER_TRAY;
-      html += '<div class="boil-card">';
-      html += '<div class="accent-bar"></div>';
-      html += '<div class="sc-body">';
-      html += '<div class="sc-name">Boil Dough</div>';
-      html += '<div class="boil-stats">';
-      html += '<div class="boil-stat"><div class="stat-label">Have</div><div class="stat-value">' + boilCount + '</div></div>';
-      html += '<div class="boil-stat"><div class="stat-label">Target</div><div class="stat-value">' + BOIL_TARGET + '</div></div>';
-      html += '<div class="boil-stat"><div class="stat-label">Make</div><div class="stat-value">' + boilMake + '</div></div>';
-      html += '</div>';
+      document.getElementById('boil-have').textContent = boilCount;
+      document.getElementById('boil-target').textContent = BOIL_TARGET;
+      document.getElementById('boil-make-val').textContent = boilMake;
+      var boilText = document.getElementById('boil-make-text');
       if (boilMake > 0) {
-        html += '<div class="boil-make">Make ' + boilTraysDisplay + ' trays and ' + boilSingles + ' singles</div>';
+        boilText.textContent = 'Make ' + boilTraysDisplay + ' trays and ' + boilSingles + ' singles';
+        boilText.className = 'boil-make';
       } else {
-        html += '<div class="boil-make stocked">Fully stocked!</div>';
+        boilText.textContent = 'Fully stocked!';
+        boilText.className = 'boil-make stocked';
       }
-      html += '</div></div>';
 
       // Batch hero card
-      const batchClass = batches > 0 ? 'has-batches' : 'zero-batches';
-      html += '<div class="batch-card ' + batchClass + '">';
-      html += '<div class="batch-label">Batches</div>';
-      html += '<div class="batch-number">' + batches + '</div>';
-      html += '<div class="batch-sub">' + totalTrays + ' trays total</div>';
-      html += '<div class="tray-breakdown">';
-      for (const t of ['indi', 'small', 'large']) {
-        html += '<div class="tb-item"><div class="tb-count">' + trays[t] + '</div><div class="tb-label">' + TYPE_SHORT[t] + '</div></div>';
-      }
-      html += '<div class="tb-item"><div class="tb-count">' + ballsToMake.sic + '</div><div class="tb-label">Sic balls</div></div>';
-      html += '<div class="tb-item"><div class="tb-count">' + boilTrays + '</div><div class="tb-label">Boil</div></div>';
-      html += '</div>';
-      html += '</div>';
-
-      resultsEl.innerHTML = html;
+      var batchCard = document.getElementById('batch-card');
+      batchCard.className = 'batch-card ' + (batches > 0 ? 'has-batches' : 'zero-batches');
+      document.getElementById('batch-number').textContent = batches;
+      document.getElementById('batch-sub').textContent = totalTrays + ' trays total';
+      document.getElementById('tb-indi').textContent = trays.indi;
+      document.getElementById('tb-small').textContent = trays.small;
+      document.getElementById('tb-large').textContent = trays.large;
+      document.getElementById('tb-sic').textContent = ballsToMake.sic;
+      document.getElementById('tb-boil').textContent = boilTrays;
     }
 
-    // Live calculation on every input change
+    // Debounced calculation for input events
+    var calcTimer;
+    function debouncedCalculate() {
+      clearTimeout(calcTimer);
+      calcTimer = setTimeout(calculate, 100);
+    }
+
+    // Live calculation on every input change (debounced)
     document.querySelectorAll('input[type="text"]').forEach(function(input) {
-      input.addEventListener('input', calculate);
+      input.addEventListener('input', debouncedCalculate);
     });
 
     // Run once on load so results are always visible
