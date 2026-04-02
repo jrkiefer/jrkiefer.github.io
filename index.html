@@ -1070,15 +1070,30 @@
     }
 
     function getField(row, sheetName, camelName) {
-      // Try exact names first, then case-insensitive search
+      // Try exact names first
       var v = row[sheetName];
       if (v === undefined || v === null) v = row[camelName];
+      // Case-insensitive exact match
       if (v === undefined || v === null) {
-        var lower = sheetName.toLowerCase();
+        var lower = sheetName.toLowerCase().replace(/\s+/g, '');
         for (var k in row) {
-          if (row.hasOwnProperty(k) && k.toLowerCase() === lower) {
+          if (row.hasOwnProperty(k) && k.toLowerCase().replace(/\s+/g, '') === lower) {
             v = row[k];
             break;
+          }
+        }
+      }
+      // Partial keyword match — find key containing both words
+      if (v === undefined || v === null) {
+        var words = sheetName.toLowerCase().split(/\s+/);
+        for (var k in row) {
+          if (row.hasOwnProperty(k)) {
+            var kl = k.toLowerCase();
+            var allMatch = true;
+            for (var w = 0; w < words.length; w++) {
+              if (kl.indexOf(words[w]) === -1) { allMatch = false; break; }
+            }
+            if (allMatch) { v = row[k]; break; }
           }
         }
       }
@@ -1113,7 +1128,9 @@
       document.getElementById('tcTrays-small').value = '0';
       document.getElementById('tcExtra-small').value = small ? String(small) : '';
 
-      var large = Number(getField(row, 'Large Count', 'largeCount')) || 0;
+      var largeRaw = getField(row, 'Large Count', 'largeCount');
+      console.log('[Load] Large raw value:', largeRaw, 'type:', typeof largeRaw);
+      var large = Number(largeRaw) || 0;
       document.getElementById('tcTrays-large').value = '0';
       document.getElementById('tcExtra-large').value = large ? String(large) : '';
 
