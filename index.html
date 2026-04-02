@@ -1055,8 +1055,6 @@
       saveBtn.disabled = true;
       saveBtn.textContent = 'Saving...';
       saveBtn.classList.remove('error', 'success');
-      console.log('[Dough Save] Sending:', JSON.stringify(data));
-
       fetch(SCRIPT_URL, {
         method: 'POST',
         headers: { 'Content-Type': 'text/plain' },
@@ -1070,7 +1068,6 @@
           return;
         }
         return r.text().then(function(txt) {
-          console.log('[Dough Save] Response:', txt);
           try { var json = JSON.parse(txt); } catch(e) {}
           if (json && json.status === 'ok') {
             saveBtn.textContent = 'Saved!';
@@ -1081,8 +1078,7 @@
           resetSaveBtn(saveBtn, 'Save Today\'s Count');
           loadHistory();
         });
-      }).catch(function(err) {
-        console.log('[Dough Save] CORS failed, retrying no-cors:', err);
+      }).catch(function() {
         fetch(SCRIPT_URL, {
           method: 'POST',
           mode: 'no-cors',
@@ -1228,20 +1224,6 @@
           }
         }
       }
-      // Partial keyword match — find key containing both words
-      if (v === undefined || v === null) {
-        var words = sheetName.toLowerCase().split(/\s+/);
-        for (var k in row) {
-          if (row.hasOwnProperty(k)) {
-            var kl = k.toLowerCase();
-            var allMatch = true;
-            for (var w = 0; w < words.length; w++) {
-              if (kl.indexOf(words[w]) === -1) { allMatch = false; break; }
-            }
-            if (allMatch) { v = row[k]; break; }
-          }
-        }
-      }
       if (v === undefined || v === null) v = 0;
       return v;
     }
@@ -1249,16 +1231,11 @@
     function toShorthand(n) {
       n = Number(n) || 0;
       if (n === 0) return '';
-      if (n >= 1000 && n % 1000 === 0) return String(n / 1000);
-      if (n >= 1000 && n % 100 === 0) return String(n / 1000);
-      if (n >= 1000 && n % 10 === 0) return String(n / 1000);
       if (n >= 1000) return String(n / 1000);
       return String(n);
     }
 
     function fillFieldsFromData(row) {
-      console.log('[Load] Row keys:', Object.keys(row));
-      console.log('[Load] Row data:', JSON.stringify(row));
       // Fill dollar fields with shorthand
       document.getElementById('currentSales').value = toShorthand(getField(row, 'Current Sales', 'currentSales'));
       document.getElementById('todayForecast').value = toShorthand(getField(row, "Today's Forecast", 'todayForecast'));
@@ -1273,9 +1250,7 @@
       document.getElementById('tcTrays-small').value = '0';
       document.getElementById('tcExtra-small').value = small ? String(small) : '';
 
-      var largeRaw = getField(row, 'Large Count', 'largeCount');
-      console.log('[Load] Large raw value:', largeRaw, 'type:', typeof largeRaw);
-      var large = Number(largeRaw) || 0;
+      var large = Number(getField(row, 'Large Count', 'largeCount')) || 0;
       document.getElementById('tcTrays-large').value = '0';
       document.getElementById('tcExtra-large').value = large ? String(large) : '';
 
@@ -1356,18 +1331,14 @@
       renderTempInputs(0);
 
       var url = SCRIPT_URL + '?date=' + encodeURIComponent(date);
-      console.log('[Temp Load] GET ' + url);
-
       fetch(url)
         .then(function(r) { return r.json(); })
         .then(function(data) {
-          console.log('[Load] Response:', JSON.stringify(data));
           loadBtn.disabled = false;
           loadBtn.textContent = 'Load';
 
           // Handle {status: "found", data: {...}} response
           if (data && data.status === 'found' && data.data) {
-            console.log('[Load] Found via ?date= lookup');
             handleLoadedData(data.data, date, status, override);
             return;
           }
@@ -1375,23 +1346,19 @@
           // Handle array response (search client-side)
           if (Array.isArray(data)) {
             var rowData = searchRowForDate(data, date);
-            console.log('[Load] Array search result:', rowData ? 'found' : 'not found');
             handleLoadedData(rowData, date, status, override);
             return;
           }
 
           // {status: "not_found"} or unrecognized — fallback: fetch ALL rows
-          console.log('[Load] Not found via ?date=, fetching all rows...');
           return fetch(SCRIPT_URL)
             .then(function(r2) { return r2.json(); })
             .then(function(rows) {
               var rowData = searchRowForDate(rows, date);
-              console.log('[Load] Fallback search:', rowData ? 'found' : 'not found');
               handleLoadedData(rowData, date, status, override);
             });
         })
-        .catch(function(err) {
-          console.log('[Load] Error:', err, '— trying fallback...');
+        .catch(function() {
           fetch(SCRIPT_URL)
             .then(function(r) { return r.json(); })
             .then(function(rows) {
@@ -1456,7 +1423,6 @@
         date: date,
         temps: temps
       };
-      console.log('[Temp Save] Sending:', JSON.stringify(data));
       btn.disabled = true;
       btn.textContent = 'Saving...';
       btn.classList.remove('error', 'success');
@@ -1473,7 +1439,6 @@
           return;
         }
         return r.text().then(function(txt) {
-          console.log('[Temp Save] Response:', txt);
           try { var json = JSON.parse(txt); } catch(e) {}
           if (json && json.status === 'ok') {
             btn.textContent = 'Saved!';
@@ -1483,8 +1448,7 @@
           btn.classList.add('success');
           resetSaveBtn(btn, 'Save Temperatures');
         });
-      }).catch(function(err) {
-        console.log('[Temp Save] CORS failed, retrying no-cors:', err);
+      }).catch(function() {
         fetch(SCRIPT_URL, {
           method: 'POST',
           mode: 'no-cors',
