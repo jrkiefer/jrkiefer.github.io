@@ -117,7 +117,8 @@
       color: #94a3b8;
     }
 
-    input[type="text"] {
+    input[type="text"],
+    input[type="date"] {
       width: 100%;
       height: 48px;
       padding: 0 12px;
@@ -136,9 +137,13 @@
       color: #475569;
       font-weight: 400;
     }
-    input[type="text"]:focus {
+    input[type="text"]:focus,
+    input[type="date"]:focus {
       border-color: #d32f2f;
       box-shadow: 0 0 0 3px rgba(211,47,47,0.2);
+    }
+    input[type="date"]::-webkit-calendar-picker-indicator {
+      filter: invert(1);
     }
 
     /* ── Tray Counter ── */
@@ -474,10 +479,12 @@
       align-items: flex-end;
     }
     .temp-date-row .input-group { flex: 1; margin-bottom: 0; }
-    .temp-date-row input[type="text"] {
+    .temp-date-row input[type="text"],
+    .temp-date-row input[type="date"] {
       border-color: rgba(245, 158, 11, 0.3);
     }
-    .temp-date-row input[type="text"]:focus {
+    .temp-date-row input[type="text"]:focus,
+    .temp-date-row input[type="date"]:focus {
       border-color: #f59e0b;
       box-shadow: 0 0 0 3px rgba(245, 158, 11, 0.2);
     }
@@ -778,7 +785,7 @@
       <div class="temp-date-row">
         <div class="input-group">
           <label>Date</label>
-          <input type="text" id="tempDate" inputmode="text" placeholder="MM/DD/YYYY">
+          <input type="date" id="tempDate">
         </div>
         <button type="button" class="temp-load-btn" id="tempLoadBtn">Load</button>
       </div>
@@ -1000,6 +1007,40 @@
       input.addEventListener('input', debouncedCalculate);
     });
 
+    // Input sanitization — strip invalid characters as user types
+    function sanitize(el, allowed) {
+      var pos = el.selectionStart;
+      var before = el.value;
+      el.value = el.value.replace(allowed, '');
+      if (el.value !== before) {
+        var diff = before.length - el.value.length;
+        el.selectionStart = el.selectionEnd = Math.max(0, pos - diff);
+      }
+    }
+
+    // Dollar fields: allow digits, decimal, comma, dollar sign
+    ['currentSales', 'todayForecast', 'tomorrowForecast'].forEach(function(id) {
+      document.getElementById(id).addEventListener('input', function() {
+        sanitize(this, /[^0-9.,$]/g);
+      });
+    });
+
+    // Integer fields: allow digits only
+    ['tcTrays-indi', 'tcExtra-indi', 'tcTrays-small', 'tcExtra-small',
+     'tcTrays-large', 'tcExtra-large', 'countSic',
+     'tcTrays-boil', 'tcExtra-boil'].forEach(function(id) {
+      document.getElementById(id).addEventListener('input', function() {
+        sanitize(this, /[^0-9]/g);
+      });
+    });
+
+    // Temperature fields (dynamic) — delegated listener
+    document.getElementById('tempInputs').addEventListener('input', function(e) {
+      if (e.target.tagName === 'INPUT') {
+        sanitize(e.target, /[^0-9.]/g);
+      }
+    });
+
     // Initial calculate() call is below, after all dependencies are defined
 
     // ── Save Validation ──
@@ -1160,10 +1201,18 @@
 
     function getTodayDate() {
       var now = new Date();
-      return (now.getMonth()+1) + '/' + now.getDate() + '/' + now.getFullYear();
+      var m = String(now.getMonth()+1).padStart(2, '0');
+      var d = String(now.getDate()).padStart(2, '0');
+      return now.getFullYear() + '-' + m + '-' + d;
     }
 
     function normalizeDate(str) {
+      // Handle YYYY-MM-DD from date input
+      if (/^\d{4}-\d{2}-\d{2}$/.test(str)) {
+        var p = str.split('-');
+        return parseInt(p[1]) + '/' + parseInt(p[2]) + '/' + p[0];
+      }
+      // Handle M/D/YYYY from sheet data
       var parts = str.split('/');
       if (parts.length !== 3) return str;
       return parseInt(parts[0]) + '/' + parseInt(parts[1]) + '/' + parts[2];
@@ -1344,7 +1393,6 @@
       var rawDate = document.getElementById('tempDate').value.trim();
       if (!rawDate) return;
       var date = normalizeDate(rawDate);
-      document.getElementById('tempDate').value = date;
       var status = document.getElementById('tempStatus');
       var override = document.getElementById('tempOverrideArea');
       var loadBtn = document.getElementById('tempLoadBtn');
