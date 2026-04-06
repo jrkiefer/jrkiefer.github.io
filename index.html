@@ -875,24 +875,32 @@
       return '';
     }
 
-    function getCount(type) {
-      if (type === 'sic') {
-        return parseInt(document.getElementById('countSic').value) || 0;
-      }
+    function getCountValue(type) {
+      if (type === 'sic') return parseInt(document.getElementById('countSic').value) || 0;
       var fullTrays = parseInt(document.getElementById('tcTrays-' + type).value) || 0;
       var extra = parseInt(document.getElementById('tcExtra-' + type).value) || 0;
-      var total = (fullTrays * PER_TRAY[type]) + extra;
-      document.getElementById('tcTotal-' + type).innerHTML = '= <span>' + total + ' balls</span>';
+      return (fullTrays * PER_TRAY[type]) + extra;
+    }
+
+    function getCount(type) {
+      var total = getCountValue(type);
+      if (type !== 'sic') {
+        document.getElementById('tcTotal-' + type).innerHTML = '= <span>' + total + ' balls</span>';
+      }
       return total;
     }
 
     const BOIL_TARGET = 36;
     const BOIL_PER_TRAY = 6;
 
-    function getBoilCount() {
+    function getBoilCountValue() {
       var fullTrays = parseInt(document.getElementById('tcTrays-boil').value) || 0;
       var extra = parseInt(document.getElementById('tcExtra-boil').value) || 0;
-      var total = (fullTrays * BOIL_PER_TRAY) + extra;
+      return (fullTrays * BOIL_PER_TRAY) + extra;
+    }
+
+    function getBoilCount() {
+      var total = getBoilCountValue();
       document.getElementById('tcTotal-boil').innerHTML = '= <span>' + total + ' balls</span>';
       return total;
     }
@@ -975,6 +983,9 @@
       document.getElementById('tb-large').textContent = trays.large;
       document.getElementById('tb-sic').textContent = ballsToMake.sic;
       document.getElementById('tb-boil').textContent = boilTrays;
+
+      updateSaveButtons();
+      syncTempBatches();
     }
 
     // Debounced calculation for input events
@@ -989,8 +1000,7 @@
       input.addEventListener('input', debouncedCalculate);
     });
 
-    // Run once on load so results are always visible
-    calculate();
+    // Initial calculate() call is below, after all dependencies are defined
 
     // ── Save Validation ──
     var saveBtn = document.getElementById('saveBtn');
@@ -1000,8 +1010,8 @@
     function updateSaveButtons() {
       // Dough save: disable if all counts are zero and no forecasts
       if (!isSaving) {
-        var hasData = getCount('indi') > 0 || getCount('small') > 0 ||
-          getCount('large') > 0 || getCount('sic') > 0 || getBoilCount() > 0 ||
+        var hasData = getCountValue('indi') > 0 || getCountValue('small') > 0 ||
+          getCountValue('large') > 0 || getCountValue('sic') > 0 || getBoilCountValue() > 0 ||
           expandDollar(document.getElementById('todayForecast').value) > 0;
         saveBtn.disabled = !hasData;
         saveHint.style.display = hasData ? 'none' : 'block';
@@ -1018,10 +1028,6 @@
         tempSaveBtn.disabled = !hasTemps;
       }
     }
-
-    // Re-check save buttons after every calculate
-    var _baseCalculate = calculate;
-    calculate = function() { _baseCalculate(); updateSaveButtons(); };
 
     function resetSaveBtn(btn, label, delay) {
       setTimeout(function() {
@@ -1089,11 +1095,11 @@
         currentSales: expandDollar(document.getElementById('currentSales').value),
         salesLeft: expandDollar(document.getElementById('todayForecast').value) - expandDollar(document.getElementById('currentSales').value),
         tomorrowForecast: expandDollar(document.getElementById('tomorrowForecast').value),
-        indiCount: getCount('indi'),
-        smallCount: getCount('small'),
-        largeCount: getCount('large'),
-        sicCount: getCount('sic'),
-        boilCount: getBoilCount(),
+        indiCount: getCountValue('indi'),
+        smallCount: getCountValue('small'),
+        largeCount: getCountValue('large'),
+        sicCount: getCountValue('sic'),
+        boilCount: getBoilCountValue(),
         batches: parseInt(document.getElementById('batch-number').textContent) || 0
       };
       postToSheet(data, saveBtn, 'Save Today\'s Count', loadHistory, function() { isSaving = false; });
@@ -1396,9 +1402,7 @@
 
     // Auto-sync: when calculate() runs and batch count changes, update temp inputs if date is today
     var lastAutoBatches = 0;
-    var originalCalculate = calculate;
-    calculate = function() {
-      originalCalculate();
+    function syncTempBatches() {
       if (isLoading) return;
       var batchEl = document.querySelector('.batch-number');
       var currentBatches = batchEl ? parseInt(batchEl.textContent) || 0 : 0;
@@ -1419,7 +1423,10 @@
           renderTempInputs(0);
         }
       }
-    };
+    }
+
+    // Run once on load so results are always visible
+    calculate();
 
     // Save Temps
     document.getElementById('tempSaveBtn').addEventListener('click', function() {
