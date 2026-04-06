@@ -1033,6 +1033,50 @@
       }, delay || 3000);
     }
 
+    function postToSheet(data, btn, successLabel, onSuccess, onError) {
+      btn.disabled = true;
+      btn.textContent = 'Saving...';
+      btn.classList.remove('error', 'success');
+      fetch(SCRIPT_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'text/plain' },
+        body: JSON.stringify(data)
+      }).then(function(r) {
+        if (r.type === 'opaque' || r.status === 0) {
+          btn.textContent = 'Sent! (verify in sheet)';
+          btn.classList.add('success');
+          resetSaveBtn(btn, successLabel);
+          if (onSuccess) onSuccess();
+          return;
+        }
+        return r.text().then(function(txt) {
+          var json;
+          try { json = JSON.parse(txt); } catch(e) {}
+          btn.textContent = (json && json.status === 'ok') ? 'Saved!' : 'Sent! (verify in sheet)';
+          btn.classList.add('success');
+          resetSaveBtn(btn, successLabel);
+          if (onSuccess) onSuccess();
+        });
+      }).catch(function() {
+        fetch(SCRIPT_URL, {
+          method: 'POST',
+          mode: 'no-cors',
+          headers: { 'Content-Type': 'text/plain' },
+          body: JSON.stringify(data)
+        }).then(function() {
+          btn.textContent = 'Sent! (verify in sheet)';
+          btn.classList.add('success');
+          resetSaveBtn(btn, successLabel);
+          if (onSuccess) onSuccess();
+        }).catch(function() {
+          btn.textContent = 'Error \u2014 tap to retry';
+          btn.classList.add('error');
+          btn.disabled = false;
+          if (onError) onError();
+        });
+      });
+    }
+
     // ── Save Entry ──
     saveBtn.addEventListener('click', function() {
       if (saveBtn.disabled) return;
@@ -1052,50 +1096,7 @@
         boilCount: getBoilCount(),
         batches: parseInt(document.getElementById('batch-number').textContent) || 0
       };
-      saveBtn.disabled = true;
-      saveBtn.textContent = 'Saving...';
-      saveBtn.classList.remove('error', 'success');
-      fetch(SCRIPT_URL, {
-        method: 'POST',
-        headers: { 'Content-Type': 'text/plain' },
-        body: JSON.stringify(data)
-      }).then(function(r) {
-        if (r.type === 'opaque' || r.status === 0) {
-          saveBtn.textContent = 'Sent! (verify in sheet)';
-          saveBtn.classList.add('success');
-          resetSaveBtn(saveBtn, 'Save Today\'s Count');
-          loadHistory();
-          return;
-        }
-        return r.text().then(function(txt) {
-          try { var json = JSON.parse(txt); } catch(e) {}
-          if (json && json.status === 'ok') {
-            saveBtn.textContent = 'Saved!';
-          } else {
-            saveBtn.textContent = 'Sent! (verify in sheet)';
-          }
-          saveBtn.classList.add('success');
-          resetSaveBtn(saveBtn, 'Save Today\'s Count');
-          loadHistory();
-        });
-      }).catch(function() {
-        fetch(SCRIPT_URL, {
-          method: 'POST',
-          mode: 'no-cors',
-          headers: { 'Content-Type': 'text/plain' },
-          body: JSON.stringify(data)
-        }).then(function() {
-          saveBtn.textContent = 'Sent! (verify in sheet)';
-          saveBtn.classList.add('success');
-          resetSaveBtn(saveBtn, 'Save Today\'s Count');
-          loadHistory();
-        }).catch(function() {
-          saveBtn.textContent = 'Error \u2014 tap to retry';
-          saveBtn.classList.add('error');
-          isSaving = false;
-          saveBtn.disabled = false;
-        });
-      });
+      postToSheet(data, saveBtn, 'Save Today\'s Count', loadHistory, function() { isSaving = false; });
     });
 
     // ── History ──
@@ -1215,8 +1216,9 @@
     function searchRowForDate(rows, date) {
       for (var i = 0; i < rows.length; i++) {
         var rd = rows[i]['Date'] || rows[i]['date'] || '';
-        if (rd instanceof Date || (typeof rd === 'string' && rd.indexOf('T') > -1)) {
-          rd = new Date(rd);
+        if (typeof rd === 'string' && /^\d{4}-\d{2}-\d{2}/.test(rd)) {
+          rd = new Date(rd + 'T00:00:00').toLocaleDateString('en-US');
+        } else if (rd instanceof Date) {
           rd = (rd.getMonth()+1) + '/' + rd.getDate() + '/' + rd.getFullYear();
         }
         if (normalizeDate(String(rd)) === date) {
@@ -1434,53 +1436,8 @@
           dough: parseFloat(dEl ? dEl.value : '') || 0
         });
       }
-      var data = {
-        type: 'temps',
-        date: date,
-        temps: temps
-      };
-      btn.disabled = true;
-      btn.textContent = 'Saving...';
-      btn.classList.remove('error', 'success');
-
-      fetch(SCRIPT_URL, {
-        method: 'POST',
-        headers: { 'Content-Type': 'text/plain' },
-        body: JSON.stringify(data)
-      }).then(function(r) {
-        if (r.type === 'opaque' || r.status === 0) {
-          btn.textContent = 'Sent! (verify in sheet)';
-          btn.classList.add('success');
-          resetSaveBtn(btn, 'Save Temperatures');
-          return;
-        }
-        return r.text().then(function(txt) {
-          try { var json = JSON.parse(txt); } catch(e) {}
-          if (json && json.status === 'ok') {
-            btn.textContent = 'Saved!';
-          } else {
-            btn.textContent = 'Sent! (verify in sheet)';
-          }
-          btn.classList.add('success');
-          resetSaveBtn(btn, 'Save Temperatures');
-        });
-      }).catch(function() {
-        fetch(SCRIPT_URL, {
-          method: 'POST',
-          mode: 'no-cors',
-          headers: { 'Content-Type': 'text/plain' },
-          body: JSON.stringify(data)
-        }).then(function() {
-          btn.textContent = 'Sent! (verify in sheet)';
-          btn.classList.add('success');
-          resetSaveBtn(btn, 'Save Temperatures');
-        }).catch(function() {
-          btn.textContent = 'Error \u2014 tap to retry';
-          btn.classList.add('error');
-          btn._isSaving = false;
-          btn.disabled = false;
-        });
-      });
+      var data = { type: 'temps', date: date, temps: temps };
+      postToSheet(data, btn, 'Save Temperatures', null, function() { btn._isSaving = false; });
     });
 
     // ── Reset ──
