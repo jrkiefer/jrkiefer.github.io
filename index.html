@@ -1109,22 +1109,38 @@
             return;
           }
           var recent = rows.slice(-10).reverse();
-          var html = '';
+          list.innerHTML = '';
           for (var i = 0; i < recent.length; i++) {
             var r = recent[i];
             var date = r['Date'] || r['date'] || '';
-            if (date && date.indexOf('T') > -1) date = new Date(date).toLocaleDateString('en-US');
+            if (date && /^\d{4}-\d{2}-\d{2}/.test(date)) date = new Date(date + 'T00:00:00').toLocaleDateString('en-US');
             var forecast = r["Today's Forecast"] || r['todayForecast'] || 0;
             var sales = r['Current Sales'] || r['currentSales'] || 0;
             var batches = r['Batches'] || r['batches'] || 0;
-            html += '<div class="history-card">';
-            html += '<div><div class="hc-date">' + date + '</div>';
-            html += '<div class="hc-details">Forecast: $' + Number(forecast).toLocaleString() + ' &middot; Sales: $' + Number(sales).toLocaleString() + '</div></div>';
-            html += '<div class="hc-batches">' + batches + '</div>';
-            html += '</div>';
+            var card = document.createElement('div');
+            card.className = 'history-card';
+            var left = document.createElement('div');
+            var dateEl = document.createElement('div');
+            dateEl.className = 'hc-date';
+            dateEl.textContent = date;
+            var details = document.createElement('div');
+            details.className = 'hc-details';
+            details.textContent = 'Forecast: $' + Number(forecast).toLocaleString() + ' \u00b7 Sales: $' + Number(sales).toLocaleString();
+            left.appendChild(dateEl);
+            left.appendChild(details);
+            var batchEl = document.createElement('div');
+            batchEl.className = 'hc-batches';
+            batchEl.textContent = batches;
+            card.appendChild(left);
+            card.appendChild(batchEl);
+            list.appendChild(card);
           }
-          html += '<a class="history-link" href="' + SHEET_URL + '" target="_blank">View Full History</a>';
-          list.innerHTML = html;
+          var link = document.createElement('a');
+          link.className = 'history-link';
+          link.href = SHEET_URL;
+          link.target = '_blank';
+          link.textContent = 'View Full History';
+          list.appendChild(link);
         })
         .catch(function() {
           list.innerHTML = '<a class="history-link" href="' + SHEET_URL + '" target="_blank">View Full History</a>';
