@@ -1136,7 +1136,10 @@
           for (var i = 0; i < recent.length; i++) {
             var r = recent[i];
             var date = r['Date'] || r['date'] || '';
-            if (date && /^\d{4}-\d{2}-\d{2}/.test(date)) date = new Date(date + 'T00:00:00').toLocaleDateString('en-US');
+            if (date && /^\d{4}-\d{2}-\d{2}/.test(date)) {
+              var ds = date.indexOf('T') === -1 ? date + 'T00:00:00' : date;
+              date = new Date(ds).toLocaleDateString('en-US');
+            }
             var forecast = r["Today's Forecast"] || r['todayForecast'] || 0;
             var sales = r['Current Sales'] || r['currentSales'] || 0;
             var batches = r['Batches'] || r['batches'] || 0;
@@ -1254,7 +1257,8 @@
       for (var i = 0; i < rows.length; i++) {
         var rd = rows[i]['Date'] || rows[i]['date'] || '';
         if (typeof rd === 'string' && /^\d{4}-\d{2}-\d{2}/.test(rd)) {
-          rd = new Date(rd + 'T00:00:00').toLocaleDateString('en-US');
+          var ds = rd.indexOf('T') === -1 ? rd + 'T00:00:00' : rd;
+          rd = new Date(ds).toLocaleDateString('en-US');
         } else if (rd instanceof Date) {
           rd = (rd.getMonth()+1) + '/' + rd.getDate() + '/' + rd.getFullYear();
         }
