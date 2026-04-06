@@ -1009,11 +1009,12 @@
       });
     });
 
-    // Temperature fields (dynamic) — delegated listener
+    // Temperature fields (dynamic) — delegated listener for sanitization + recalculation
     document.getElementById('tempInputs').addEventListener('input', function(e) {
       if (e.target.tagName === 'INPUT') {
         sanitize(e.target, /[^0-9.]/g);
       }
+      debouncedCalculate();
     });
 
     // Initial calculate() call is below, after all dependencies are defined
@@ -1151,7 +1152,7 @@
             dateEl.textContent = date;
             var details = document.createElement('div');
             details.className = 'hc-details';
-            details.textContent = 'Forecast: $' + Number(forecast).toLocaleString() + ' \u00b7 Sales: $' + Number(sales).toLocaleString();
+            details.textContent = 'Forecast: $' + (Number(forecast) || 0).toLocaleString() + ' \u00b7 Sales: $' + (Number(sales) || 0).toLocaleString();
             left.appendChild(dateEl);
             left.appendChild(details);
             var batchEl = document.createElement('div');
@@ -1247,11 +1248,6 @@
       saveBtn.style.display = n > 0 ? 'block' : 'none';
       updateSaveButtons();
     }
-
-    // Delegated listener for dynamic temp inputs — update save button state
-    document.getElementById('tempInputs').addEventListener('input', function() {
-      updateSaveButtons();
-    });
 
     function searchRowForDate(rows, date) {
       for (var i = 0; i < rows.length; i++) {
@@ -1363,7 +1359,7 @@
       }
 
       // Sync lastAutoBatches so auto-sync doesn't re-trigger on next keystroke
-      var batchEl = document.querySelector('.batch-number');
+      var batchEl = document.getElementById('batch-number');
       lastAutoBatches = batchEl ? Math.min(parseInt(batchEl.textContent) || 0, 10) : 0;
 
       // Unblock auto-sync
@@ -1432,7 +1428,7 @@
     function syncTempBatches() {
       if (isLoading) return;
       if (tempBatchManuallySet) return;
-      var batchEl = document.querySelector('.batch-number');
+      var batchEl = document.getElementById('batch-number');
       var currentBatches = batchEl ? parseInt(batchEl.textContent) || 0 : 0;
       currentBatches = Math.min(currentBatches, 10);
       var dateField = document.getElementById('tempDate');
@@ -1474,6 +1470,13 @@
     // ── Reset ──
     document.getElementById('resetBtn').addEventListener('click', function() {
       document.querySelectorAll('input[type="text"]').forEach(function(input) { input.value = ''; });
+      // Reset save states
+      isSaving = false;
+      saveBtn.disabled = false;
+      saveBtn.textContent = 'Save Today\'s Count';
+      saveBtn.classList.remove('error', 'success');
+      var tempSaveBtnEl = document.getElementById('tempSaveBtn');
+      tempSaveBtnEl._isSaving = false;
       // Reset temp section
       document.getElementById('tempDate').value = getTodayDate();
       document.getElementById('tempBatchField').value = '0';
