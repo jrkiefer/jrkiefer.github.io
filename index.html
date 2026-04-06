@@ -512,34 +512,6 @@
       margin-bottom: 12px;
     }
     .temp-message.error { color: #fbbf24; }
-    .temp-override {
-      display: block;
-      text-align: center;
-      font-family: 'Space Mono', monospace;
-      font-size: 0.6rem;
-      color: #f59e0b;
-      background: none;
-      border: none;
-      cursor: pointer;
-      text-decoration: underline;
-      text-decoration-style: dotted;
-      margin-bottom: 12px;
-    }
-    .temp-override:active { color: #fbbf24; }
-    .temp-manual-row {
-      display: flex;
-      gap: 8px;
-      align-items: flex-end;
-      margin-bottom: 12px;
-    }
-    .temp-manual-row .input-group { flex: 1; margin-bottom: 0; }
-    .temp-manual-row input[type="text"] {
-      border-color: rgba(245, 158, 11, 0.3);
-    }
-    .temp-manual-row input[type="text"]:focus {
-      border-color: #f59e0b;
-      box-shadow: 0 0 0 3px rgba(245, 158, 11, 0.2);
-    }
     .temp-batch-pair {
       background: rgba(39, 53, 72, 0.75);
       backdrop-filter: blur(12px);
@@ -787,10 +759,13 @@
           <label>Date</label>
           <input type="date" id="tempDate">
         </div>
+        <div class="input-group" style="max-width:100px">
+          <label>Batches</label>
+          <input type="text" id="tempBatchField" inputmode="numeric" placeholder="0" value="0">
+        </div>
         <button type="button" class="temp-load-btn" id="tempLoadBtn">Load</button>
       </div>
       <div id="tempStatus"></div>
-      <div id="tempOverrideArea"></div>
       <div id="tempInputs"></div>
       <button type="button" class="temp-save-btn" id="tempSaveBtn" style="display:none">Save Temperatures</button>
     </div>
@@ -1198,6 +1173,7 @@
 
     // ── Temperature Tracking ──
     var tempBatchCount = 0;
+    var tempBatchManuallySet = false;
 
     function getTodayDate() {
       var now = new Date();
@@ -1221,27 +1197,51 @@
     // Default date to today
     document.getElementById('tempDate').value = getTodayDate();
 
+    // Batch count field — user edits set manual flag, auto-renders temp rows
+    document.getElementById('tempBatchField').addEventListener('input', function() {
+      sanitize(this, /[^0-9]/g);
+      tempBatchManuallySet = true;
+      var n = parseInt(this.value) || 0;
+      renderTempInputs(n);
+    });
+
     function renderTempInputs(n) {
       n = Math.min(Math.max(0, n), 10);
       tempBatchCount = n;
       var container = document.getElementById('tempInputs');
       var saveBtn = document.getElementById('tempSaveBtn');
-      if (n === 0) {
-        container.innerHTML = '';
-        saveBtn.style.display = 'none';
-        return;
+      // Remove excess rows from the end (preserves earlier rows)
+      while (container.children.length > n) {
+        container.removeChild(container.lastChild);
       }
-      var html = '';
-      for (var i = 1; i <= n; i++) {
-        html += '<div class="temp-batch-pair">';
-        html += '<div class="tb-label">Batch ' + i + '</div>';
-        html += '<div class="tb-inputs">';
-        html += '<div><label>Water \u00B0F</label><input type="text" id="tempWater-' + i + '" inputmode="decimal" placeholder="0"></div>';
-        html += '<div><label>Dough \u00B0F</label><input type="text" id="tempDough-' + i + '" inputmode="decimal" placeholder="0"></div>';
-        html += '</div></div>';
+      // Add missing rows (preserves existing rows with their values)
+      for (var i = container.children.length + 1; i <= n; i++) {
+        var pair = document.createElement('div');
+        pair.className = 'temp-batch-pair';
+        var label = document.createElement('div');
+        label.className = 'tb-label';
+        label.textContent = 'Batch ' + i;
+        var inputs = document.createElement('div');
+        inputs.className = 'tb-inputs';
+        var wDiv = document.createElement('div');
+        var wLabel = document.createElement('label');
+        wLabel.textContent = 'Water \u00B0F';
+        var wInput = document.createElement('input');
+        wInput.type = 'text'; wInput.id = 'tempWater-' + i;
+        wInput.inputMode = 'decimal'; wInput.placeholder = '0';
+        wDiv.appendChild(wLabel); wDiv.appendChild(wInput);
+        var dDiv = document.createElement('div');
+        var dLabel = document.createElement('label');
+        dLabel.textContent = 'Dough \u00B0F';
+        var dInput = document.createElement('input');
+        dInput.type = 'text'; dInput.id = 'tempDough-' + i;
+        dInput.inputMode = 'decimal'; dInput.placeholder = '0';
+        dDiv.appendChild(dLabel); dDiv.appendChild(dInput);
+        inputs.appendChild(wDiv); inputs.appendChild(dDiv);
+        pair.appendChild(label); pair.appendChild(inputs);
+        container.appendChild(pair);
       }
-      container.innerHTML = html;
-      saveBtn.style.display = 'block';
+      saveBtn.style.display = n > 0 ? 'block' : 'none';
       updateSaveButtons();
     }
 
@@ -1249,24 +1249,6 @@
     document.getElementById('tempInputs').addEventListener('input', function() {
       updateSaveButtons();
     });
-
-    function showTempOverride() {
-      var area = document.getElementById('tempOverrideArea');
-      area.innerHTML = '<div class="temp-manual-row">' +
-        '<div class="input-group"><label>Number of batches</label>' +
-        '<input type="text" id="tempManualCount" inputmode="numeric" placeholder="1-10"></div>' +
-        '<button type="button" class="temp-load-btn" id="tempManualGo">Set</button></div>';
-      document.getElementById('tempManualGo').addEventListener('click', function() {
-        var n = parseInt(document.getElementById('tempManualCount').value) || 0;
-        if (n < 1 || n > 10) {
-          document.getElementById('tempStatus').innerHTML = '<div class="temp-message error">Enter a number between 1 and 10</div>';
-          return;
-        }
-        document.getElementById('tempStatus').innerHTML = '<div class="temp-message">' + n + ' batch' + (n > 1 ? 'es' : '') + ' — enter temps below</div>';
-        area.innerHTML = '';
-        renderTempInputs(n);
-      });
-    }
 
     function searchRowForDate(rows, date) {
       for (var i = 0; i < rows.length; i++) {
@@ -1351,33 +1333,29 @@
       }
     }
 
-    function handleLoadedData(rowData, date, status, override) {
+    function handleLoadedData(rowData, date, status) {
       if (!rowData) {
-        status.innerHTML = '<div class="temp-message error">No dough count saved for this date \u2014 count dough first</div>';
-        override.innerHTML = '<button type="button" class="temp-override" id="tempOverrideBtn">Enter batch count manually</button>';
-        document.getElementById('tempOverrideBtn').addEventListener('click', showTempOverride);
+        status.innerHTML = '<div class="temp-message error">No dough count saved for this date \u2014 enter batch count manually</div>';
         return;
       }
 
       // Block auto-sync while we fill everything
       isLoading = true;
+      tempBatchManuallySet = false;
 
       // Fill all dough/sales fields and recalculate
       fillFieldsFromData(rowData);
 
       var batches = parseInt(getField(rowData, 'Batches', 'batches')) || 0;
       batches = Math.min(batches, 10);
+      document.getElementById('tempBatchField').value = batches;
       if (batches > 0) {
         status.innerHTML = '<div class="temp-message">' + batches + ' batch' + (batches > 1 ? 'es' : '') + ' found for ' + date + ' \u2014 fields restored</div>';
-        override.innerHTML = '<button type="button" class="temp-override" id="tempOverrideBtn">Change batch count</button>';
-        document.getElementById('tempOverrideBtn').addEventListener('click', showTempOverride);
-        // Render temp inputs once, then fill saved temp values
         renderTempInputs(batches);
         fillTempFields(rowData, batches);
       } else {
         status.innerHTML = '<div class="temp-message error">No batch count for this date</div>';
-        override.innerHTML = '<button type="button" class="temp-override" id="tempOverrideBtn">Enter batch count manually</button>';
-        document.getElementById('tempOverrideBtn').addEventListener('click', showTempOverride);
+        renderTempInputs(0);
       }
 
       // Sync lastAutoBatches so auto-sync doesn't re-trigger on next keystroke
@@ -1394,10 +1372,8 @@
       if (!rawDate) return;
       var date = normalizeDate(rawDate);
       var status = document.getElementById('tempStatus');
-      var override = document.getElementById('tempOverrideArea');
       var loadBtn = document.getElementById('tempLoadBtn');
       status.innerHTML = '<div class="temp-message">Loading...</div>';
-      override.innerHTML = '';
       loadBtn.disabled = true;
       loadBtn.textContent = '...';
       renderTempInputs(0);
@@ -1411,14 +1387,14 @@
 
           // Handle {status: "found", data: {...}} response
           if (data && data.status === 'found' && data.data) {
-            handleLoadedData(data.data, date, status, override);
+            handleLoadedData(data.data, date, status);
             return;
           }
 
           // Handle array response (search client-side)
           if (Array.isArray(data)) {
             var rowData = searchRowForDate(data, date);
-            handleLoadedData(rowData, date, status, override);
+            handleLoadedData(rowData, date, status);
             return;
           }
 
@@ -1427,7 +1403,7 @@
             .then(function(r2) { return r2.json(); })
             .then(function(rows) {
               var rowData = searchRowForDate(rows, date);
-              handleLoadedData(rowData, date, status, override);
+              handleLoadedData(rowData, date, status);
             });
         })
         .catch(function() {
@@ -1437,38 +1413,34 @@
               loadBtn.disabled = false;
               loadBtn.textContent = 'Load';
               var rowData = searchRowForDate(rows, date);
-              handleLoadedData(rowData, date, status, override);
+              handleLoadedData(rowData, date, status);
             })
             .catch(function() {
               loadBtn.disabled = false;
               loadBtn.textContent = 'Load';
-              status.innerHTML = '<div class="temp-message error">Could not load data \u2014 enter batch count manually</div>';
-              showTempOverride();
+              status.innerHTML = '<div class="temp-message error">Could not load data</div>';
             });
         });
     });
 
-    // Auto-sync: when calculate() runs and batch count changes, update temp inputs if date is today
+    // Auto-sync: when calculate() runs and batch count changes, update temp batch field if date is today
     var lastAutoBatches = 0;
     function syncTempBatches() {
       if (isLoading) return;
+      if (tempBatchManuallySet) return;
       var batchEl = document.querySelector('.batch-number');
       var currentBatches = batchEl ? parseInt(batchEl.textContent) || 0 : 0;
       currentBatches = Math.min(currentBatches, 10);
       var dateField = document.getElementById('tempDate');
       if (dateField.value.trim() === getTodayDate() && currentBatches !== lastAutoBatches) {
         lastAutoBatches = currentBatches;
+        document.getElementById('tempBatchField').value = currentBatches;
+        renderTempInputs(currentBatches);
         var status = document.getElementById('tempStatus');
-        var override = document.getElementById('tempOverrideArea');
         if (currentBatches > 0) {
           status.innerHTML = '<div class="temp-message">' + currentBatches + ' batch' + (currentBatches > 1 ? 'es' : '') + ' from current count</div>';
-          override.innerHTML = '<button type="button" class="temp-override" id="tempOverrideBtn">Change batch count</button>';
-          document.getElementById('tempOverrideBtn').addEventListener('click', showTempOverride);
-          renderTempInputs(currentBatches);
         } else {
           status.innerHTML = '';
-          override.innerHTML = '';
-          renderTempInputs(0);
         }
       }
     }
@@ -1500,8 +1472,9 @@
       document.querySelectorAll('input[type="text"]').forEach(function(input) { input.value = ''; });
       // Reset temp section
       document.getElementById('tempDate').value = getTodayDate();
+      document.getElementById('tempBatchField').value = '0';
       document.getElementById('tempStatus').innerHTML = '';
-      document.getElementById('tempOverrideArea').innerHTML = '';
+      tempBatchManuallySet = false;
       renderTempInputs(0);
       lastAutoBatches = 0;
       calculate();
