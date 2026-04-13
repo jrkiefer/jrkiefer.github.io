@@ -3,14 +3,108 @@
     var saveHint = document.getElementById('saveHint');
     var isSaving = false;
 
+    function validateDollarFields() {
+      var errors = {};
+      var warnings = {};
+
+      var currentSalesRaw = document.getElementById('currentSales').value.trim();
+      var todayRaw = document.getElementById('todayForecast').value.trim();
+      var tomorrowRaw = document.getElementById('tomorrowForecast').value.trim();
+
+      var currentSales = expandDollar(currentSalesRaw);
+      var today = expandDollar(todayRaw);
+      var tomorrow = expandDollar(tomorrowRaw);
+
+      // Today's Forecast
+      if (!todayRaw) {
+        errors.todayForecast = "Enter Today's Forecast before saving";
+      } else if (today < 1000) {
+        errors.todayForecast = "Today's Forecast must be at least $1,000";
+      } else if (today > 22000) {
+        errors.todayForecast = "Today's Forecast must be at most $22,000";
+      } else if (today < 3750) {
+        warnings.todayForecast = "Today's Forecast is below the Dough Bible range \u2014 the calculation will use the lowest row";
+      } else if (today > 20750) {
+        warnings.todayForecast = "Today's Forecast is above the Dough Bible range \u2014 the calculation will use the highest row";
+      }
+
+      // Tomorrow's Forecast
+      if (!tomorrowRaw) {
+        errors.tomorrowForecast = "Enter Tomorrow's Forecast before saving";
+      } else if (tomorrow < 1000) {
+        errors.tomorrowForecast = "Tomorrow's Forecast must be at least $1,000";
+      } else if (tomorrow > 22000) {
+        errors.tomorrowForecast = "Tomorrow's Forecast must be at most $22,000";
+      } else if (tomorrow < 3750) {
+        warnings.tomorrowForecast = "Tomorrow's Forecast is below the Dough Bible range \u2014 the calculation will use the lowest row";
+      } else if (tomorrow > 20750) {
+        warnings.tomorrowForecast = "Tomorrow's Forecast is above the Dough Bible range \u2014 the calculation will use the highest row";
+      }
+
+      // Current Sales
+      if (currentSalesRaw) {
+        if (currentSales < 0) {
+          errors.currentSales = "Current Sales cannot be negative";
+        } else if (currentSales > 22000) {
+          errors.currentSales = "Current Sales must be at most $22,000";
+        } else if (todayRaw && currentSales > today) {
+          errors.currentSales = "Current Sales cannot exceed Today's Forecast";
+        }
+      }
+
+      var hasErrors = Object.keys(errors).length > 0;
+      var hasWarnings = Object.keys(warnings).length > 0;
+      return { hasErrors: hasErrors, hasWarnings: hasWarnings, errors: errors, warnings: warnings };
+    }
+
+    function applyValidationToDOM(validation) {
+      var fields = ['currentSales', 'todayForecast', 'tomorrowForecast'];
+      for (var i = 0; i < fields.length; i++) {
+        var fieldId = fields[i];
+        var input = document.getElementById(fieldId);
+        var msgEl = document.getElementById('msg' + fieldId.charAt(0).toUpperCase() + fieldId.slice(1));
+        if (!input || !msgEl) continue;
+
+        input.classList.remove('field-invalid', 'field-warning');
+        msgEl.classList.remove('error', 'warning');
+        msgEl.textContent = '';
+
+        if (validation.errors[fieldId]) {
+          input.classList.add('field-invalid');
+          msgEl.classList.add('error');
+          msgEl.textContent = validation.errors[fieldId];
+        } else if (validation.warnings[fieldId]) {
+          input.classList.add('field-warning');
+          msgEl.classList.add('warning');
+          msgEl.textContent = validation.warnings[fieldId];
+        }
+      }
+    }
+
     function updateSaveButtons() {
-      // Dough save: disable if all counts are zero and no forecasts
       if (!isSaving) {
+        var validation = validateDollarFields();
+        applyValidationToDOM(validation);
+
         var hasData = getCountValue('indi') > 0 || getCountValue('small') > 0 ||
           getCountValue('large') > 0 || getCountValue('sic') > 0 || getBoilCountValue() > 0 ||
           expandDollar(document.getElementById('todayForecast').value) > 0;
-        saveBtn.disabled = !hasData;
-        saveHint.style.display = hasData ? 'none' : 'block';
+
+        if (validation.hasErrors) {
+          saveBtn.disabled = true;
+          saveHint.textContent = 'Fix errors above before saving';
+          saveHint.classList.add('error');
+          saveHint.style.display = 'block';
+        } else if (!hasData) {
+          saveBtn.disabled = true;
+          saveHint.textContent = 'Enter dough counts first';
+          saveHint.classList.remove('error');
+          saveHint.style.display = 'block';
+        } else {
+          saveBtn.disabled = false;
+          saveHint.classList.remove('error');
+          saveHint.style.display = 'none';
+        }
       }
       // Temp save: disable if no temp values entered
       var tempSaveBtn = document.getElementById('tempSaveBtn');
@@ -82,6 +176,13 @@
     // ── Save Entry ──
     saveBtn.addEventListener('click', function() {
       if (saveBtn.disabled) return;
+      // Defensive: re-validate before saving in case button state is stale
+      var validation = validateDollarFields();
+      if (validation.hasErrors) {
+        applyValidationToDOM(validation);
+        updateSaveButtons();
+        return;
+      }
       isSaving = true;
       var now = new Date();
       var date = (now.getMonth()+1) + '/' + now.getDate() + '/' + now.getFullYear();
