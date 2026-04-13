@@ -20,6 +20,8 @@ Dough Tracker is a mobile-first web calculator used by a pizza shop. In the firs
   - `history.js` — loadHistory function and initial call (52 lines)
   - `temps.js` — temperature tracking state, UI, load/sync/save handlers (246 lines)
   - `main.js` — event wiring, initial calculate() call, reset handler (53 lines)
+- `apps-script/`
+  - `Code.gs` — version-controlled copy of the Google Apps Script backend; deploy by manually copying into the Apps Script editor
 
 ## The five dough sizes
 
@@ -55,7 +57,8 @@ The 9-step calculation chain inside `calculate()`:
 
 `SCRIPT_URL` points to a Google Apps Script web app that acts as the database API.
 
-- **Save (POST)**: `postToSheet()` sends a POST with a JSON body (`Content-Type: text/plain` to avoid CORS preflight). On CORS failure, retries with `mode: 'no-cors'`. One row per day in the sheet; a second save on the same day overwrites the existing row.
+- **Save (POST)**: `postToSheet()` sends a POST with a JSON body (`Content-Type: text/plain` to avoid CORS preflight). On CORS failure, retries with `mode: 'no-cors'`. One row per day in the sheet; a second save on the same day overwrites the existing row. The backend returns `{status: "ok", action, row, date}` on success, or `{status: "error", message}` on failure (e.g., empty save rejected). The frontend shows "Saved row N" or "Updated row N" for confirmed saves, "Sent! (verify in sheet)" only for unverifiable opaque responses.
+- **Backend source**: `Code.gs` is tracked in the repo under `apps-script/`. Deploy flow: edit the file via PR, merge, then manually copy into the Apps Script editor and deploy as a new version.
 - **History (GET)**: `loadHistory()` fetches `SCRIPT_URL` with no parameters, receives an array of all rows, takes the last 10, and displays them newest-first.
 - **Load by date (GET)**: Fetches `SCRIPT_URL?date=<date>` and expects either `{status: "found", data: {...}}` or `{status: "not_found"}`. Falls back to fetching all rows and searching client-side if the endpoint returns an array instead.
 
@@ -77,9 +80,9 @@ Sheet column names use spaces and title case:
 
 ## Known issues (to be fixed in Phase 2)
 
-- **Blind save**: `postToSheet()` shows "Sent! (verify in sheet)" on opaque fetch responses — no real confirmation the row landed.
+- ~~**Blind save**~~: ✅ Fixed — backend now returns `{status: "ok", action, row, date}` and frontend shows "Saved row N" or "Updated row N" for confirmed saves.
 - ~~**No input validation on dollar fields**~~: ✅ Fixed — dollar fields now have inline error/warning messages with range validation and cross-field checks.
-- **Empty saves**: Empty or partial entries can create garbage rows in the sheet.
+- ~~**Empty saves**~~: ✅ Fixed — backend `doPost` now rejects payloads with no date, no dough counts, and no forecast with `{status: "error", message: "..."}`. Frontend shows the error message on the save button.
 - ~~**Backdrop-blur performance**~~: ✅ Fixed — removed decorative `backdrop-filter` from 6 rules; kept only on `.header` where visually load-bearing.
 - ~~**Reset button incomplete cleanup**~~: ✅ Fixed — reset handler now fully restores temp save button (`disabled`, `textContent`, `classList`).
 
@@ -101,13 +104,15 @@ Sheet column names use spaces and title case:
 
 ### Phase 2 — Known bug fixes
 
-- Step 2.1 — Real save confirmation (pending, needs Code.gs changes)
+- Step 2.1 — Real save confirmation ✅ complete
 - Step 2.2 — Dollar field input validation ✅ complete
-- Step 2.3 — Empty save backend guard (pending, needs Code.gs changes)
+- Step 2.3 — Empty save backend guard ✅ complete
 - Step 2.4 — Fix reset handler for temp save button ✅ complete
 - Step 2.5 — Remove decorative backdrop-blur for mobile performance ✅ complete
 - Step 2.6a — Dough card layout and text changes ✅ complete
 - Step 2.6b — Set-out logic for negative Left values ✅ complete
+
+**Phase 2 complete.** All known Phase 2 fixes landed.
 
 ### Phase 3 — New feature work
 

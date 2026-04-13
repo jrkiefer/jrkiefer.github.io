@@ -148,10 +148,26 @@
         return r.text().then(function(txt) {
           var json;
           try { json = JSON.parse(txt); } catch(e) {}
-          btn.textContent = (json && json.status === 'ok') ? 'Saved!' : 'Sent! (verify in sheet)';
-          btn.classList.add('success');
-          resetSaveBtn(btn, successLabel);
-          if (onSuccess) onSuccess();
+          if (json && json.status === 'ok') {
+            var actionText = 'Saved!';
+            if (json.action === 'updated') actionText = 'Updated row ' + json.row;
+            else if (json.action === 'created') actionText = 'Saved row ' + json.row;
+            else if (json.action === 'temps_saved') actionText = 'Temps saved!';
+            btn.textContent = actionText;
+            btn.classList.add('success');
+            resetSaveBtn(btn, successLabel);
+            if (onSuccess) onSuccess();
+          } else if (json && json.status === 'error') {
+            btn.textContent = 'Error: ' + (json.message || 'save failed');
+            btn.classList.add('error');
+            btn.disabled = false;
+            if (onError) onError();
+          } else {
+            btn.textContent = 'Sent! (verify in sheet)';
+            btn.classList.add('success');
+            resetSaveBtn(btn, successLabel);
+            if (onSuccess) onSuccess();
+          }
         });
       }).catch(function() {
         fetch(SCRIPT_URL, {

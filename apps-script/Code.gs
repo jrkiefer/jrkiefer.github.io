@@ -41,10 +41,27 @@ function doPost(e) {
       sheet.getRange(row, 12 + (j * 2)).setValue(data.temps[j].water);
       sheet.getRange(row, 13 + (j * 2)).setValue(data.temps[j].dough);
     }
-    return ContentService.createTextOutput(JSON.stringify({status: "ok"}))
+    return ContentService.createTextOutput(JSON.stringify({status: "ok", action: "temps_saved", row: row, date: data.date}))
       .setMimeType(ContentService.MimeType.JSON);
 
   } else {
+    // Empty-save guard: reject payloads with no meaningful data
+    if (!data.date) {
+      return ContentService.createTextOutput(JSON.stringify({status: "error", message: "Missing date"}))
+        .setMimeType(ContentService.MimeType.JSON);
+    }
+    var hasDough = (Number(data.indiCount) || 0) > 0 ||
+                   (Number(data.smallCount) || 0) > 0 ||
+                   (Number(data.largeCount) || 0) > 0 ||
+                   (Number(data.sicCount) || 0) > 0 ||
+                   (Number(data.boilCount) || 0) > 0;
+    var hasForecast = (Number(data.todayForecast) || 0) > 0 ||
+                      (Number(data.tomorrowForecast) || 0) > 0;
+    if (!hasDough && !hasForecast) {
+      return ContentService.createTextOutput(JSON.stringify({status: "error", message: "Empty save rejected — no dough counts or forecast"}))
+        .setMimeType(ContentService.MimeType.JSON);
+    }
+
     // Check if today already has an entry — update instead of adding new row
     var existingRow = findRowByDate(sheet, data.date);
     var rowData = [
@@ -58,13 +75,15 @@ function doPost(e) {
       for (var i = 0; i < rowData.length; i++) {
         sheet.getRange(existingRow, i + 1).setValue(rowData[i]);
       }
+      return ContentService.createTextOutput(JSON.stringify({status: "ok", action: "updated", row: existingRow, date: data.date}))
+        .setMimeType(ContentService.MimeType.JSON);
     } else {
       // New date — append
       sheet.appendRow(rowData);
+      var newRow = sheet.getLastRow();
+      return ContentService.createTextOutput(JSON.stringify({status: "ok", action: "created", row: newRow, date: data.date}))
+        .setMimeType(ContentService.MimeType.JSON);
     }
-
-    return ContentService.createTextOutput(JSON.stringify({status: "ok"}))
-      .setMimeType(ContentService.MimeType.JSON);
   }
 }
 
