@@ -42,6 +42,9 @@
       saveBtn.classList.remove('error', 'success');
       var tempSaveBtnEl = document.getElementById('tempSaveBtn');
       tempSaveBtnEl._isSaving = false;
+      tempSaveBtnEl.disabled = false;
+      tempSaveBtnEl.textContent = 'Save Temperatures';
+      tempSaveBtnEl.classList.remove('error', 'success');
       // Reset temp section
       document.getElementById('tempDate').value = getTodayDate();
       document.getElementById('tempBatchField').value = '0';

@@ -79,8 +79,8 @@ Sheet column names use spaces and title case:
 - **Blind save**: `postToSheet()` shows "Sent! (verify in sheet)" on opaque fetch responses — no real confirmation the row landed.
 - **No input validation on dollar fields**: Users can submit nonsensical values.
 - **Empty saves**: Empty or partial entries can create garbage rows in the sheet.
-- **Backdrop-blur performance**: `backdrop-filter: blur(12px)` on multiple elements may slow older phones.
-- **Reset button incomplete cleanup**: The reset handler does not fully clear the temperature save button's `disabled`, `textContent`, or `classList` (error/success) state — only `_isSaving` is reset.
+- ~~**Backdrop-blur performance**~~: ✅ Fixed — removed decorative `backdrop-filter` from 6 rules; kept only on `.header` where visually load-bearing.
+- ~~**Reset button incomplete cleanup**~~: ✅ Fixed — reset handler now fully restores temp save button (`disabled`, `textContent`, `classList`).
 
 ## Refactor plan
 
@@ -98,9 +98,13 @@ Sheet column names use spaces and title case:
 - Step 1.9 — Split app.js → temps.js ✅ complete
 - Step 1.10 — Create main.js, delete app.js ✅ complete
 
-### Phase 2 — Known bug fixes (6 steps)
+### Phase 2 — Known bug fixes
 
-Pending. Held until Phase 1 is tested in production.
+- Step 2.1 — Real save confirmation (pending, needs Code.gs changes)
+- Step 2.2 — Dollar field input validation (pending)
+- Step 2.3 — Empty save backend guard (pending, needs Code.gs changes)
+- Step 2.4 — Fix reset handler for temp save button ✅ complete
+- Step 2.5 — Remove decorative backdrop-blur for mobile performance ✅ complete
 
 ### Phase 3 — New feature work
 
