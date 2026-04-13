@@ -570,3 +570,19 @@
       color: #fca5a5;
       font-weight: 700;
     }
+
+    /* ── Set Out Row ── */
+    .set-out-row {
+      font-size: 0.7rem;
+      color: #fbbf24;
+      font-weight: 700;
+      margin-top: 6px;
+      padding-top: 6px;
+      border-top: 1px dashed rgba(251, 191, 36, 0.3);
+      text-align: center;
+      letter-spacing: 0.3px;
+    }
+    .set-out-row strong {
+      font-size: 0.85rem;
+      color: #fde68a;
+    }

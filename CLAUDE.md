@@ -73,6 +73,7 @@ Sheet column names use spaces and title case:
 - **Debounce**: Calculation is debounced at 100ms on input events via `debouncedCalculate()`.
 - **Date handling**: Dates use local browser time (not UTC). `normalizeDate()` converts between `YYYY-MM-DD` and `M/D/YYYY` formats for matching.
 - **Duplicate row prevention**: Lives in the Apps Script backend, not in the frontend. The frontend does not check whether a row already exists before saving.
+- **Set-out logic**: When End of Night Count goes negative for Indi/Small/Large, the card shows "Set out X trays" (computed as `ceil(-doughLeft / perTray)`). Sicilian clamps (no set-out shown) because same-day Sicilian dough can't be used. Boil has no set-out.
 
 ## Known issues (to be fixed in Phase 2)
 
@@ -106,7 +107,7 @@ Sheet column names use spaces and title case:
 - Step 2.4 — Fix reset handler for temp save button ✅ complete
 - Step 2.5 — Remove decorative backdrop-blur for mobile performance ✅ complete
 - Step 2.6a — Dough card layout and text changes ✅ complete
-- Step 2.6b — Set-out logic for negative Left values (pending)
+- Step 2.6b — Set-out logic for negative Left values ✅ complete
 
 ### Phase 3 — New feature work
 
