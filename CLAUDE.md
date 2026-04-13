@@ -13,10 +13,10 @@ Dough Tracker is a mobile-first web calculator used by a pizza shop. In the firs
 - `css/`
   - `styles.css` — all CSS extracted from index.html
 - `js/`
-  - `app.js` — all JavaScript extracted from index.html
-  - `config.js` — placeholder (populated in Step 1.4)
-  - `utils.js` — placeholder (populated in Step 1.5)
-  - `calculate.js` — placeholder (populated in Step 1.6)
+  - `app.js` — save, history, temps, and wiring code (pending Steps 1.7–1.10)
+  - `config.js` — all constants (SCRIPT_URL, DOUGH_TABLE, PER_TRAY, etc.)
+  - `utils.js` — utility functions (parseDollar, expandDollar, sanitize, etc.)
+  - `calculate.js` — calculation pipeline (lookup, calculate, debouncedCalculate, etc.)
   - `save.js` — placeholder (populated in Step 1.7)
   - `history.js` — placeholder (populated in Step 1.8)
   - `temps.js` — placeholder (populated in Step 1.9)
@@ -91,10 +91,10 @@ Sheet column names use spaces and title case:
 - Step 1.1 — Create folder structure and empty files ✅ complete
 - Step 1.2 — Extract CSS to css/styles.css ✅ complete
 - Step 1.3 — Extract JS to js/app.js (single-file checkpoint) ✅ complete
-- Step 1.4 — Split app.js → config.js ⬅ NEXT
-- Step 1.5 — Split app.js → utils.js
-- Step 1.6 — Split app.js → calculate.js
-- Step 1.7 — Split app.js → save.js
+- Step 1.4 — Split app.js → config.js ✅ complete
+- Step 1.5 — Split app.js → utils.js ✅ complete
+- Step 1.6 — Split app.js → calculate.js ✅ complete
+- Step 1.7 — Split app.js → save.js ⬅ NEXT
 - Step 1.8 — Split app.js → history.js
 - Step 1.9 — Split app.js → temps.js
 - Step 1.10 — Create main.js, delete app.js
