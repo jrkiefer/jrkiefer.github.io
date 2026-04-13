@@ -186,8 +186,8 @@
     /* ── Results Grid ── */
     .results-grid {
       display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 10px;
+      grid-template-columns: 1fr;
+      gap: 12px;
       margin-bottom: 12px;
     }
     .size-card {
@@ -211,7 +211,7 @@
     .size-card .stats-row {
       display: grid;
       grid-template-columns: 1fr 1fr 1fr;
-      gap: 4px;
+      gap: 8px;
       margin-bottom: 10px;
     }
     .size-card .stat {
@@ -247,18 +247,6 @@
       color: #e2e8f0;
       font-size: 0.85rem;
     }
-    .size-card .tray-badge {
-      width: 36px;
-      height: 36px;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      border-radius: 8px;
-      font-size: 1.1rem;
-      font-weight: 700;
-      color: #fff;
-    }
-
     /* ── Boil Dough Card ── */
     .boil-card {
       background: rgba(39, 53, 72, 0.75);
