@@ -6,20 +6,20 @@ Dough Tracker is a mobile-first web calculator used by a pizza shop. In the firs
 
 ## Current file structure
 
-- `index.html` — HTML markup only (230 lines)
+- `index.html` — HTML markup only (250 lines)
 - `README.md` — repo readme
 - `qr-code.png` — QR code image for scanning
 - `CLAUDE.md` — this file (project context for the refactor)
 - `css/`
-  - `styles.css` — all CSS (584 lines)
+  - `styles.css` — all CSS (602 lines)
 - `js/` — loaded in this order via `<script>` tags (no modules, shared global scope)
   - `config.js` — all constants: SCRIPT_URL, DOUGH_TABLE, PER_TRAY, etc. (42 lines)
   - `utils.js` — utility functions: parseDollar, expandDollar, sanitize, etc. (83 lines)
   - `calculate.js` — calculation pipeline: lookup, calculate, debouncedCalculate (124 lines)
-  - `save.js` — dollar field validation, save validation, postToSheet, save click handler (203 lines)
+  - `save.js` — dollar field validation, save validation, postToSheet, save click handler (219 lines)
   - `history.js` — loadHistory function and initial call (52 lines)
-  - `temps.js` — temperature tracking state, UI, load/sync/save handlers (246 lines)
-  - `main.js` — event wiring, initial calculate() call, reset handler (53 lines)
+  - `temps.js` — temperature tracking state, UI, active date load/sync/save handlers (281 lines)
+  - `main.js` — event wiring, initial calculate() call, reset handler (57 lines)
 - `apps-script/`
   - `Code.gs` — version-controlled copy of the Google Apps Script backend; deploy by manually copying into the Apps Script editor
 
@@ -74,6 +74,7 @@ Sheet column names use spaces and title case:
 - **Boil display**: The UI shows "Make X trays and Y singles" (full trays plus remainder), but the batch math uses the rounded-up tray count (`ceil(boilMake / 6)`).
 - **Dollar shorthand**: `expandDollar()` multiplies numbers under 100 by 1000, so `1.7` becomes `1700` and `10` becomes `10000`. Numbers ≥ 100 are taken literally.
 - **Debounce**: Calculation is debounced at 100ms on input events via `debouncedCalculate()`.
+- **Unified active date**: A single `#activeDate` date picker at the top of the page drives both the dough save and the temperature save. The Load button fetches saved data for the selected date and populates all fields (with a confirmation dialog if fields already have data). The save click handler reads from `#activeDate` (falling back to today if empty). Auto-sync of batch count only fires when the active date matches today.
 - **Date handling**: Dates use local browser time (not UTC). `normalizeDate()` converts between `YYYY-MM-DD` and `M/D/YYYY` formats for matching.
 - **Duplicate row prevention**: Lives in the Apps Script backend, not in the frontend. The frontend does not check whether a row already exists before saving.
 - **Set-out logic**: When End of Night Count goes negative for Indi/Small/Large, the card shows "Set out X trays" (computed as `ceil(-doughLeft / perTray)`). Sicilian clamps (no set-out shown) because same-day Sicilian dough can't be used. Boil has no set-out.
@@ -116,7 +117,7 @@ Sheet column names use spaces and title case:
 
 ### Phase 3 — New feature work
 
-Reserved for future feature additions after Phase 2 is complete.
+- Step 3.1 — Unify date handling with top-level active date picker ✅ complete
 
 ## Rules for future prompts
 

@@ -17,6 +17,18 @@
   </div>
 
   <main>
+    <!-- Active Date -->
+    <div class="active-date-card">
+      <div class="card-label">Active Date</div>
+      <div class="active-date-row">
+        <div class="input-group">
+          <input type="date" id="activeDate">
+        </div>
+        <button type="button" class="active-load-btn" id="activeLoadBtn">Load</button>
+      </div>
+      <div id="activeDateStatus"></div>
+    </div>
+
     <!-- Sales & Forecast -->
     <div class="card">
       <div class="card-label">Sales &amp; Forecast</div>
@@ -209,16 +221,11 @@
     <!-- Temperature Tracking -->
     <div class="temp-section">
       <div class="temp-title">Batch Temperatures</div>
-      <div class="temp-date-row">
+      <div class="temp-batches-row">
         <div class="input-group">
-          <label>Date</label>
-          <input type="date" id="tempDate">
-        </div>
-        <div class="input-group" style="max-width:100px">
           <label>Batches</label>
           <input type="text" id="tempBatchField" inputmode="numeric" placeholder="0" value="0">
         </div>
-        <button type="button" class="temp-load-btn" id="tempLoadBtn">Load</button>
       </div>
       <div id="tempStatus"></div>
       <div id="tempInputs"></div>

@@ -440,38 +440,18 @@
       color: #f59e0b;
       margin-bottom: 12px;
     }
-    .temp-date-row {
-      display: flex;
-      gap: 8px;
+    .temp-batches-row {
       margin-bottom: 12px;
-      align-items: flex-end;
+      max-width: 120px;
     }
-    .temp-date-row .input-group { flex: 1; margin-bottom: 0; }
-    .temp-date-row input[type="text"],
-    .temp-date-row input[type="date"] {
+    .temp-batches-row .input-group { margin-bottom: 0; }
+    .temp-batches-row input[type="text"] {
       border-color: rgba(245, 158, 11, 0.3);
     }
-    .temp-date-row input[type="text"]:focus,
-    .temp-date-row input[type="date"]:focus {
+    .temp-batches-row input[type="text"]:focus {
       border-color: #f59e0b;
       box-shadow: 0 0 0 3px rgba(245, 158, 11, 0.2);
     }
-    .temp-load-btn {
-      height: 48px;
-      padding: 0 16px;
-      font-family: 'Space Mono', monospace;
-      font-size: 0.75rem;
-      font-weight: 700;
-      color: #1e293b;
-      background: #f59e0b;
-      border: none;
-      border-radius: 8px;
-      cursor: pointer;
-      flex-shrink: 0;
-      -webkit-appearance: none;
-    }
-    .temp-load-btn:active { background: #d97706; }
-    .temp-load-btn:disabled { opacity: 0.6; cursor: not-allowed; }
     .temp-message {
       font-size: 0.7rem;
       color: #94a3b8;
@@ -586,3 +566,37 @@
       font-size: 0.85rem;
       color: #fde68a;
     }
+
+    /* ── Active Date Card ── */
+    .active-date-card {
+      background: rgba(39, 53, 72, 0.75);
+      border: 1px solid rgba(148, 163, 184, 0.1);
+      border-radius: 12px;
+      padding: 16px;
+      margin-bottom: 12px;
+    }
+    .active-date-row {
+      display: flex;
+      gap: 8px;
+      align-items: flex-end;
+    }
+    .active-date-row .input-group {
+      flex: 1;
+      margin-bottom: 0;
+    }
+    .active-load-btn {
+      height: 48px;
+      padding: 0 16px;
+      font-family: 'Space Mono', monospace;
+      font-size: 0.75rem;
+      font-weight: 700;
+      color: #fff;
+      background: #10b981;
+      border: none;
+      border-radius: 8px;
+      cursor: pointer;
+      flex-shrink: 0;
+      -webkit-appearance: none;
+    }
+    .active-load-btn:active { background: #059669; }
+    .active-load-btn:disabled { opacity: 0.6; cursor: not-allowed; }

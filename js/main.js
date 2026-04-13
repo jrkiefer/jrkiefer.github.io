@@ -45,8 +45,9 @@
       tempSaveBtnEl.disabled = false;
       tempSaveBtnEl.textContent = 'Save Temperatures';
       tempSaveBtnEl.classList.remove('error', 'success');
-      // Reset temp section
-      document.getElementById('tempDate').value = getTodayDate();
+      // Reset active date and temp section
+      document.getElementById('activeDate').value = getTodayDate();
+      document.getElementById('activeDateStatus').innerHTML = '';
       document.getElementById('tempBatchField').value = '0';
       document.getElementById('tempStatus').innerHTML = '';
       tempBatchManuallySet = false;

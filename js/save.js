@@ -200,8 +200,8 @@
         return;
       }
       isSaving = true;
-      var now = new Date();
-      var date = (now.getMonth()+1) + '/' + now.getDate() + '/' + now.getFullYear();
+      var dateEl = document.getElementById('activeDate');
+      var date = dateEl && dateEl.value.trim() ? normalizeDate(dateEl.value.trim()) : normalizeDate(getTodayDate());
       var data = {
         date: date,
         todayForecast: expandDollar(document.getElementById('todayForecast').value),
