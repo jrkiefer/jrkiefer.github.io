@@ -86,6 +86,25 @@
         if (trayEl) trayEl.textContent = trays[t];
       }
 
+      // Set-out logic: show "Set out X trays" when End of Night Count is negative
+      // Applies only to indi, small, large. Sicilian clamps (no set-out display).
+      for (const t of TYPES) {
+        var setoutEl = document.getElementById(t + '-setout');
+        var setoutValEl = document.getElementById(t + '-setout-val');
+        if (!setoutEl || !setoutValEl) continue;
+        if (t === 'sic') {
+          setoutEl.style.display = 'none';
+          continue;
+        }
+        if (doughLeft[t] < 0) {
+          var setoutTrays = Math.ceil((-doughLeft[t]) / PER_TRAY[t]);
+          setoutValEl.textContent = setoutTrays;
+          setoutEl.style.display = '';
+        } else {
+          setoutEl.style.display = 'none';
+        }
+      }
+
       // Boil card
       var boilTraysDisplay = Math.floor(boilMake / BOIL_PER_TRAY);
       var boilSingles = boilMake % BOIL_PER_TRAY;
