@@ -42,8 +42,6 @@
     /* ── Cards ── */
     .card {
       background: rgba(39, 53, 72, 0.75);
-      backdrop-filter: blur(12px);
-      -webkit-backdrop-filter: blur(12px);
       border: 1px solid rgba(148, 163, 184, 0.1);
       border-radius: 12px;
       padding: 16px;
@@ -166,8 +164,6 @@
     /* ── Sales Left Banner ── */
     .sales-left {
       background: rgba(33,150,243,0.15);
-      backdrop-filter: blur(8px);
-      -webkit-backdrop-filter: blur(8px);
       border: 1px solid rgba(33,150,243,0.25);
       border-radius: 8px;
       padding: 10px;
@@ -196,8 +192,6 @@
     }
     .size-card {
       background: rgba(39, 53, 72, 0.75);
-      backdrop-filter: blur(12px);
-      -webkit-backdrop-filter: blur(12px);
       border: 1px solid rgba(148, 163, 184, 0.1);
       border-radius: 12px;
       overflow: hidden;
@@ -268,8 +262,6 @@
     /* ── Boil Dough Card ── */
     .boil-card {
       background: rgba(39, 53, 72, 0.75);
-      backdrop-filter: blur(12px);
-      -webkit-backdrop-filter: blur(12px);
       border: 1px solid rgba(148, 163, 184, 0.1);
       border-radius: 12px;
       overflow: hidden;
@@ -394,8 +386,6 @@
     .history-section { margin-top: 16px; }
     .history-card {
       background: rgba(39, 53, 72, 0.75);
-      backdrop-filter: blur(12px);
-      -webkit-backdrop-filter: blur(12px);
       border: 1px solid rgba(148, 163, 184, 0.1);
       border-radius: 10px;
       padding: 10px 12px;
@@ -504,8 +494,6 @@
     .temp-message.error { color: #fbbf24; }
     .temp-batch-pair {
       background: rgba(39, 53, 72, 0.75);
-      backdrop-filter: blur(12px);
-      -webkit-backdrop-filter: blur(12px);
       border: 1px solid rgba(245, 158, 11, 0.15);
       border-radius: 10px;
       padding: 12px;
