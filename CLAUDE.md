@@ -10,6 +10,17 @@ Dough Tracker is a mobile-first web calculator used by a pizza shop. In the firs
 - `README.md` — repo readme
 - `qr-code.png` — QR code image for scanning
 - `CLAUDE.md` — this file (project context for the refactor)
+- `css/`
+  - `styles.css` — placeholder (populated in Step 1.2)
+- `js/`
+  - `app.js` — placeholder (populated in Step 1.3)
+  - `config.js` — placeholder (populated in Step 1.4)
+  - `utils.js` — placeholder (populated in Step 1.5)
+  - `calculate.js` — placeholder (populated in Step 1.6)
+  - `save.js` — placeholder (populated in Step 1.7)
+  - `history.js` — placeholder (populated in Step 1.8)
+  - `temps.js` — placeholder (populated in Step 1.9)
+  - `main.js` — placeholder (populated in Step 1.10)
 
 ## The five dough sizes
 
@@ -77,8 +88,8 @@ Sheet column names use spaces and title case:
 ### Phase 1 — Multi-file split (pure refactor, no behavior changes)
 
 - Step 0 — Create CLAUDE.md from real index.html ✅ complete
-- Step 1.1 — Create folder structure and empty files ⬅ NEXT
-- Step 1.2 — Extract CSS to css/styles.css
+- Step 1.1 — Create folder structure and empty files ✅ complete
+- Step 1.2 — Extract CSS to css/styles.css ⬅ NEXT
 - Step 1.3 — Extract JS to js/app.js (single-file checkpoint)
 - Step 1.4 — Split app.js → config.js
 - Step 1.5 — Split app.js → utils.js
