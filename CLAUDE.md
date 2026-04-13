@@ -105,6 +105,8 @@ Sheet column names use spaces and title case:
 - Step 2.3 — Empty save backend guard (pending, needs Code.gs changes)
 - Step 2.4 — Fix reset handler for temp save button ✅ complete
 - Step 2.5 — Remove decorative backdrop-blur for mobile performance ✅ complete
+- Step 2.6a — Dough card layout and text changes ✅ complete
+- Step 2.6b — Set-out logic for negative Left values (pending)
 
 ### Phase 3 — New feature work
 
