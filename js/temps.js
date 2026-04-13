@@ -4,8 +4,8 @@
     var tempBatchCount = 0;
     var tempBatchManuallySet = false;
 
-    // Default date to today
-    document.getElementById('tempDate').value = getTodayDate();
+    // Default active date to today
+    document.getElementById('activeDate').value = getTodayDate();
 
     // Batch count field — user edits set manual flag, auto-renders temp rows
     document.getElementById('tempBatchField').addEventListener('input', function() {
@@ -114,9 +114,33 @@
       }
     }
 
-    function handleLoadedData(rowData, date, status) {
+    function clearAllFields() {
+      // Clear dollar fields
+      document.getElementById('currentSales').value = '';
+      document.getElementById('todayForecast').value = '';
+      document.getElementById('tomorrowForecast').value = '';
+      // Clear dough count fields
+      document.getElementById('tcTrays-indi').value = '';
+      document.getElementById('tcExtra-indi').value = '';
+      document.getElementById('tcTrays-small').value = '';
+      document.getElementById('tcExtra-small').value = '';
+      document.getElementById('tcTrays-large').value = '';
+      document.getElementById('tcExtra-large').value = '';
+      document.getElementById('countSic').value = '';
+      document.getElementById('tcTrays-boil').value = '';
+      document.getElementById('tcExtra-boil').value = '';
+      // Clear temp inputs
+      document.getElementById('tempBatchField').value = '0';
+      renderTempInputs(0);
+      tempBatchManuallySet = false;
+      lastAutoBatches = 0;
+      // Recalculate
+      calculate();
+    }
+
+    function activeHandleLoadedData(rowData, date, status) {
       if (!rowData) {
-        status.innerHTML = '<div class="temp-message error">No dough count saved for this date \u2014 enter batch count manually</div>';
+        status.innerHTML = '<div class="temp-message error">No data saved for ' + date + '</div>';
         return;
       }
 
@@ -131,11 +155,11 @@
       batches = Math.min(batches, 10);
       document.getElementById('tempBatchField').value = batches;
       if (batches > 0) {
-        status.innerHTML = '<div class="temp-message">' + batches + ' batch' + (batches > 1 ? 'es' : '') + ' found for ' + date + ' \u2014 fields restored</div>';
+        status.innerHTML = '<div class="temp-message">Loaded ' + date + ' \u2014 ' + batches + ' batch' + (batches > 1 ? 'es' : '') + '</div>';
         renderTempInputs(batches);
         fillTempFields(rowData, batches);
       } else {
-        status.innerHTML = '<div class="temp-message error">No batch count for this date</div>';
+        status.innerHTML = '<div class="temp-message">Loaded ' + date + ' \u2014 no batches</div>';
         renderTempInputs(0);
       }
 
@@ -147,17 +171,28 @@
       isLoading = false;
     }
 
-    // Load button — fetch batch count for a date
-    document.getElementById('tempLoadBtn').addEventListener('click', function() {
-      var rawDate = document.getElementById('tempDate').value.trim();
+    // Load button — fetch saved data for the active date
+    document.getElementById('activeLoadBtn').addEventListener('click', function() {
+      var rawDate = document.getElementById('activeDate').value.trim();
       if (!rawDate) return;
       var date = normalizeDate(rawDate);
-      var status = document.getElementById('tempStatus');
-      var loadBtn = document.getElementById('tempLoadBtn');
+      var status = document.getElementById('activeDateStatus');
+      var loadBtn = document.getElementById('activeLoadBtn');
+
+      // Confirm before overwriting if fields have data
+      var hasData = getCountValue('indi') > 0 || getCountValue('small') > 0 ||
+        getCountValue('large') > 0 || getCountValue('sic') > 0 || getBoilCountValue() > 0 ||
+        expandDollar(document.getElementById('todayForecast').value) > 0;
+      if (hasData && !window.confirm('This will replace all current fields with saved data for ' + date + '. Continue?')) {
+        return;
+      }
+
       status.innerHTML = '<div class="temp-message">Loading...</div>';
       loadBtn.disabled = true;
       loadBtn.textContent = '...';
-      renderTempInputs(0);
+
+      // Clear all fields first
+      clearAllFields();
 
       var url = SCRIPT_URL + '?date=' + encodeURIComponent(date);
       fetch(url)
@@ -168,14 +203,14 @@
 
           // Handle {status: "found", data: {...}} response
           if (data && data.status === 'found' && data.data) {
-            handleLoadedData(data.data, date, status);
+            activeHandleLoadedData(data.data, date, status);
             return;
           }
 
           // Handle array response (search client-side)
           if (Array.isArray(data)) {
             var rowData = searchRowForDate(data, date);
-            handleLoadedData(rowData, date, status);
+            activeHandleLoadedData(rowData, date, status);
             return;
           }
 
@@ -184,7 +219,7 @@
             .then(function(r2) { return r2.json(); })
             .then(function(rows) {
               var rowData = searchRowForDate(rows, date);
-              handleLoadedData(rowData, date, status);
+              activeHandleLoadedData(rowData, date, status);
             });
         })
         .catch(function() {
@@ -194,7 +229,7 @@
               loadBtn.disabled = false;
               loadBtn.textContent = 'Load';
               var rowData = searchRowForDate(rows, date);
-              handleLoadedData(rowData, date, status);
+              activeHandleLoadedData(rowData, date, status);
             })
             .catch(function() {
               loadBtn.disabled = false;
@@ -212,7 +247,7 @@
       var batchEl = document.getElementById('batch-number');
       var currentBatches = batchEl ? parseInt(batchEl.textContent) || 0 : 0;
       currentBatches = Math.min(currentBatches, 10);
-      var dateField = document.getElementById('tempDate');
+      var dateField = document.getElementById('activeDate');
       if (dateField.value.trim() === getTodayDate() && currentBatches !== lastAutoBatches) {
         lastAutoBatches = currentBatches;
         document.getElementById('tempBatchField').value = currentBatches;
@@ -231,7 +266,7 @@
       var btn = document.getElementById('tempSaveBtn');
       if (btn.disabled) return;
       btn._isSaving = true;
-      var date = normalizeDate(document.getElementById('tempDate').value.trim());
+      var date = normalizeDate(document.getElementById('activeDate').value.trim());
       var temps = [];
       for (var i = 1; i <= tempBatchCount; i++) {
         var wEl = document.getElementById('tempWater-' + i);
