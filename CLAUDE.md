@@ -2,25 +2,24 @@
 
 ## What this app is
 
-Dough Tracker is a mobile-first web calculator used by a pizza shop. In the first workflow, an employee scans a QR code, enters current sales, today's and tomorrow's forecasted sales, and counts the current dough inventory across five dough sizes; the app calculates how many dough batches to make for tomorrow and saves the entry to a Google Sheet via a Google Apps Script web app. In the second workflow, later in the day, another employee loads that day's record and enters water and dough temperatures for each batch. The entire app is currently one single `index.html` file with inline `<style>` and `<script>`, about 1,500 lines.
+Dough Tracker is a mobile-first web calculator used by a pizza shop. In the first workflow, an employee scans a QR code, enters current sales, today's and tomorrow's forecasted sales, and counts the current dough inventory across five dough sizes; the app calculates how many dough batches to make for tomorrow and saves the entry to a Google Sheet via a Google Apps Script web app. In the second workflow, later in the day, another employee loads that day's record and enters water and dough temperatures for each batch. The app has been refactored from a single monolithic `index.html` into a multi-file structure with separate CSS and JS files.
 
 ## Current file structure
 
-- `index.html` — the entire application (HTML, CSS, JS all inline)
+- `index.html` — HTML markup only (227 lines)
 - `README.md` — repo readme
 - `qr-code.png` — QR code image for scanning
 - `CLAUDE.md` — this file (project context for the refactor)
 - `css/`
-  - `styles.css` — all CSS extracted from index.html
-- `js/`
-  - `app.js` — save, history, temps, and wiring code (pending Steps 1.7–1.10)
-  - `config.js` — all constants (SCRIPT_URL, DOUGH_TABLE, PER_TRAY, etc.)
-  - `utils.js` — utility functions (parseDollar, expandDollar, sanitize, etc.)
-  - `calculate.js` — calculation pipeline (lookup, calculate, debouncedCalculate, etc.)
-  - `save.js` — placeholder (populated in Step 1.7)
-  - `history.js` — placeholder (populated in Step 1.8)
-  - `temps.js` — placeholder (populated in Step 1.9)
-  - `main.js` — placeholder (populated in Step 1.10)
+  - `styles.css` — all CSS (560 lines)
+- `js/` — loaded in this order via `<script>` tags (no modules, shared global scope)
+  - `config.js` — all constants: SCRIPT_URL, DOUGH_TABLE, PER_TRAY, etc. (42 lines)
+  - `utils.js` — utility functions: parseDollar, expandDollar, sanitize, etc. (83 lines)
+  - `calculate.js` — calculation pipeline: lookup, calculate, debouncedCalculate (124 lines)
+  - `save.js` — save validation, postToSheet, save click handler (102 lines)
+  - `history.js` — loadHistory function and initial call (52 lines)
+  - `temps.js` — temperature tracking state, UI, load/sync/save handlers (246 lines)
+  - `main.js` — event wiring, initial calculate() call, reset handler (53 lines)
 
 ## The five dough sizes
 
@@ -94,10 +93,10 @@ Sheet column names use spaces and title case:
 - Step 1.4 — Split app.js → config.js ✅ complete
 - Step 1.5 — Split app.js → utils.js ✅ complete
 - Step 1.6 — Split app.js → calculate.js ✅ complete
-- Step 1.7 — Split app.js → save.js ⬅ NEXT
-- Step 1.8 — Split app.js → history.js
-- Step 1.9 — Split app.js → temps.js
-- Step 1.10 — Create main.js, delete app.js
+- Step 1.7 — Split app.js → save.js ✅ complete
+- Step 1.8 — Split app.js → history.js ✅ complete
+- Step 1.9 — Split app.js → temps.js ✅ complete
+- Step 1.10 — Create main.js, delete app.js ✅ complete
 
 ### Phase 2 — Known bug fixes (6 steps)
 
