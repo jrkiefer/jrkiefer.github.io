@@ -546,3 +546,39 @@
     .temp-save-btn:disabled { opacity: 0.6; cursor: not-allowed; }
     .temp-save-btn.error { background: #ef4444; color: #fff; }
     .temp-save-btn.success { background: #d97706; }
+
+    /* ── Validation Messages ── */
+    .field-msg {
+      font-size: 0.6rem;
+      margin-top: 2px;
+      min-height: 14px;
+      line-height: 1.3;
+    }
+    .field-msg.error {
+      color: #fca5a5;
+      font-weight: 700;
+    }
+    .field-msg.warning {
+      color: #fbbf24;
+      font-weight: 700;
+    }
+
+    /* Invalid field highlight (error only, not warning) */
+    input[type="text"].field-invalid,
+    input[type="text"].field-invalid:focus {
+      border-color: #ef4444 !important;
+      box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.25) !important;
+    }
+
+    /* Warning field highlight (softer than error) */
+    input[type="text"].field-warning,
+    input[type="text"].field-warning:focus {
+      border-color: #fbbf24 !important;
+      box-shadow: 0 0 0 3px rgba(251, 191, 36, 0.25) !important;
+    }
+
+    /* Save hint error state */
+    #saveHint.error {
+      color: #fca5a5;
+      font-weight: 700;
+    }

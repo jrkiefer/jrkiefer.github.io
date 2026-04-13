@@ -6,17 +6,17 @@ Dough Tracker is a mobile-first web calculator used by a pizza shop. In the firs
 
 ## Current file structure
 
-- `index.html` — HTML markup only (227 lines)
+- `index.html` — HTML markup only (230 lines)
 - `README.md` — repo readme
 - `qr-code.png` — QR code image for scanning
 - `CLAUDE.md` — this file (project context for the refactor)
 - `css/`
-  - `styles.css` — all CSS (560 lines)
+  - `styles.css` — all CSS (584 lines)
 - `js/` — loaded in this order via `<script>` tags (no modules, shared global scope)
   - `config.js` — all constants: SCRIPT_URL, DOUGH_TABLE, PER_TRAY, etc. (42 lines)
   - `utils.js` — utility functions: parseDollar, expandDollar, sanitize, etc. (83 lines)
   - `calculate.js` — calculation pipeline: lookup, calculate, debouncedCalculate (124 lines)
-  - `save.js` — save validation, postToSheet, save click handler (102 lines)
+  - `save.js` — dollar field validation, save validation, postToSheet, save click handler (203 lines)
   - `history.js` — loadHistory function and initial call (52 lines)
   - `temps.js` — temperature tracking state, UI, load/sync/save handlers (246 lines)
   - `main.js` — event wiring, initial calculate() call, reset handler (53 lines)
@@ -77,7 +77,7 @@ Sheet column names use spaces and title case:
 ## Known issues (to be fixed in Phase 2)
 
 - **Blind save**: `postToSheet()` shows "Sent! (verify in sheet)" on opaque fetch responses — no real confirmation the row landed.
-- **No input validation on dollar fields**: Users can submit nonsensical values.
+- ~~**No input validation on dollar fields**~~: ✅ Fixed — dollar fields now have inline error/warning messages with range validation and cross-field checks.
 - **Empty saves**: Empty or partial entries can create garbage rows in the sheet.
 - ~~**Backdrop-blur performance**~~: ✅ Fixed — removed decorative `backdrop-filter` from 6 rules; kept only on `.header` where visually load-bearing.
 - ~~**Reset button incomplete cleanup**~~: ✅ Fixed — reset handler now fully restores temp save button (`disabled`, `textContent`, `classList`).
@@ -101,7 +101,7 @@ Sheet column names use spaces and title case:
 ### Phase 2 — Known bug fixes
 
 - Step 2.1 — Real save confirmation (pending, needs Code.gs changes)
-- Step 2.2 — Dollar field input validation (pending)
+- Step 2.2 — Dollar field input validation ✅ complete
 - Step 2.3 — Empty save backend guard (pending, needs Code.gs changes)
 - Step 2.4 — Fix reset handler for temp save button ✅ complete
 - Step 2.5 — Remove decorative backdrop-blur for mobile performance ✅ complete
