@@ -6,19 +6,19 @@ Dough Tracker is a mobile-first web calculator used by a pizza shop. In the firs
 
 ## Current file structure
 
-- `index.html` — HTML markup only (250 lines)
+- `index.html` — HTML markup only (251 lines)
 - `README.md` — repo readme
 - `qr-code.png` — QR code image for scanning
-- `CLAUDE.md` — this file (project context for the refactor)
+- `CLAUDE.md` — this file (project context)
 - `css/`
-  - `styles.css` — all CSS (602 lines)
+  - `styles.css` — all CSS (623 lines)
 - `js/` — loaded in this order via `<script>` tags (no modules, shared global scope)
-  - `config.js` — all constants: SCRIPT_URL, DOUGH_TABLE, PER_TRAY, etc. (42 lines)
-  - `utils.js` — utility functions: parseDollar, expandDollar, sanitize, etc. (83 lines)
-  - `calculate.js` — calculation pipeline: lookup, calculate, debouncedCalculate (124 lines)
-  - `save.js` — dollar field validation, save validation, postToSheet, save click handler (219 lines)
-  - `history.js` — loadHistory function and initial call (52 lines)
-  - `temps.js` — temperature tracking state, UI, active date load/sync/save handlers (281 lines)
+  - `config.js` — all constants: SCRIPT_URL, DOUGH_TABLE, PER_TRAY, etc. (43 lines)
+  - `utils.js` — utility functions: parseDollar, expandDollar, sanitize, etc. (84 lines)
+  - `calculate.js` — calculation pipeline: lookup, calculate, debouncedCalculate (144 lines)
+  - `save.js` — dollar field validation, save validation, postToSheet, save click handler (233 lines)
+  - `history.js` — loadHistory function and initial call (53 lines)
+  - `temps.js` — temperature tracking state, UI, active date load/sync/save handlers (279 lines)
   - `main.js` — event wiring, initial calculate() call, reset handler (57 lines)
 - `apps-script/`
   - `Code.gs` — version-controlled copy of the Google Apps Script backend; deploy by manually copying into the Apps Script editor
@@ -87,7 +87,7 @@ Sheet column names use spaces and title case:
 - ~~**Backdrop-blur performance**~~: ✅ Fixed — removed decorative `backdrop-filter` from 6 rules; kept only on `.header` where visually load-bearing.
 - ~~**Reset button incomplete cleanup**~~: ✅ Fixed — reset handler now fully restores temp save button (`disabled`, `textContent`, `classList`).
 
-## Refactor plan
+## Plan
 
 ### Phase 1 — Multi-file split (pure refactor, no behavior changes)
 
@@ -118,11 +118,12 @@ Sheet column names use spaces and title case:
 ### Phase 3 — New feature work
 
 - Step 3.1 — Unify date handling with top-level active date picker ✅ complete
+- Step 3.1-cleanup — Code review fixes: always-confirm, kill tempStatus, fix clearAllFields flicker, date validation, visual distinction, trays+singles split, innerHTML fix, dependency comments, stale rules ✅ complete
 
 ## Rules for future prompts
 
-1. Every future refactor prompt must read this file first for project context.
-2. At the end of every step, update the "Current file structure" section and the "Refactor plan" section to reflect the new state.
-3. Phase 1 is a pure refactor — no behavior changes, no style changes, no logic changes. If a bug is noticed during Phase 1, leave it alone; it will be fixed in Phase 2.
-4. Every step ends with a git commit on the `refactor/multi-file-split` branch. Do not push unless explicitly told to.
-5. Every step must verify that `index.html`'s rendered behavior is unchanged before committing.
+1. Every prompt must read this file first for project context.
+2. At the end of every step, update the "Current file structure" and "Plan" sections to reflect the new state.
+3. Every step ends with a git commit. Do not push unless explicitly told to.
+4. Run `node --check` on all modified JS files before committing.
+5. JS files share global scope via `<script>` tags — load order matters. See dependency comments at the top of each file.

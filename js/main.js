@@ -1,3 +1,4 @@
+    // js/main.js — depends on: all other JS files (loaded last)
     // Live calculation on every input change (debounced)
     document.querySelectorAll('input[type="text"]').forEach(function(input) {
       input.addEventListener('input', debouncedCalculate);
@@ -38,7 +39,7 @@
       // Reset save states
       isSaving = false;
       saveBtn.disabled = false;
-      saveBtn.textContent = 'Save Today\'s Count';
+      saveBtn.textContent = 'Save Count';
       saveBtn.classList.remove('error', 'success');
       var tempSaveBtnEl = document.getElementById('tempSaveBtn');
       tempSaveBtnEl._isSaving = false;
@@ -49,7 +50,6 @@
       document.getElementById('activeDate').value = getTodayDate();
       document.getElementById('activeDateStatus').innerHTML = '';
       document.getElementById('tempBatchField').value = '0';
-      document.getElementById('tempStatus').innerHTML = '';
       tempBatchManuallySet = false;
       renderTempInputs(0);
       lastAutoBatches = 0;

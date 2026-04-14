@@ -1,3 +1,4 @@
+    // js/save.js — depends on: config.js, utils.js, calculate.js
     // ── Save Validation ──
     var saveBtn = document.getElementById('saveBtn');
     var saveHint = document.getElementById('saveHint');
@@ -202,6 +203,19 @@
       isSaving = true;
       var dateEl = document.getElementById('activeDate');
       var date = dateEl && dateEl.value.trim() ? normalizeDate(dateEl.value.trim()) : normalizeDate(getTodayDate());
+      // Reject dates that are obviously wrong (>1 year ago or >7 days ahead)
+      var dateParts = date.split('/');
+      if (dateParts.length === 3) {
+        var selected = new Date(parseInt(dateParts[2]), parseInt(dateParts[0]) - 1, parseInt(dateParts[1]));
+        var today = new Date(); today.setHours(0,0,0,0); selected.setHours(0,0,0,0);
+        var diffDays = Math.round((selected - today) / 86400000);
+        if (diffDays > 7 || diffDays < -365) {
+          saveBtn.textContent = diffDays > 7 ? 'Date is too far in the future' : 'Date is too far in the past';
+          saveBtn.classList.add('error');
+          resetSaveBtn(saveBtn, 'Save Count', 3000);
+          return;
+        }
+      }
       var data = {
         date: date,
         todayForecast: expandDollar(document.getElementById('todayForecast').value),
@@ -215,5 +229,5 @@
         boilCount: getBoilCountValue(),
         batches: parseInt(document.getElementById('batch-number').textContent) || 0
       };
-      postToSheet(data, saveBtn, 'Save Today\'s Count', loadHistory, function() { isSaving = false; });
+      postToSheet(data, saveBtn, 'Save Count', loadHistory, function() { isSaving = false; });
     });

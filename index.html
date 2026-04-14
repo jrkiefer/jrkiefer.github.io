@@ -22,10 +22,12 @@
       <div class="card-label">Active Date</div>
       <div class="active-date-row">
         <div class="input-group">
+          <label for="activeDate">Date</label>
           <input type="date" id="activeDate">
         </div>
         <button type="button" class="active-load-btn" id="activeLoadBtn">Load</button>
       </div>
+      <div class="active-date-hint">Pick a date and tap Load to view or edit a saved day</div>
       <div id="activeDateStatus"></div>
     </div>
 
@@ -215,8 +217,8 @@
     </div>
 
     <!-- Save Button -->
-    <button type="button" class="save-btn" id="saveBtn" disabled>Save Today's Count</button>
-    <div id="saveHint" style="text-align:center;font-size:0.6rem;color:#64748b;margin-top:6px">Enter dough counts first</div>
+    <button type="button" class="save-btn" id="saveBtn" disabled>Save Count</button>
+    <div class="save-hint" id="saveHint">Enter dough counts first</div>
 
     <!-- Temperature Tracking -->
     <div class="temp-section">
@@ -227,7 +229,6 @@
           <input type="text" id="tempBatchField" inputmode="numeric" placeholder="0" value="0">
         </div>
       </div>
-      <div id="tempStatus"></div>
       <div id="tempInputs"></div>
       <button type="button" class="temp-save-btn" id="tempSaveBtn" style="display:none">Save Temperatures</button>
     </div>
