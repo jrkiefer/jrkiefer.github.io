@@ -1,3 +1,4 @@
+    // js/calculate.js — depends on: config.js, utils.js
     function lookup(dollarAmount) {
       // Find smallest threshold >= dollarAmount; cap at highest row
       for (const entry of DOUGH_TABLE) {
@@ -16,7 +17,7 @@
     function getCount(type) {
       var total = getCountValue(type);
       if (type !== 'sic') {
-        document.getElementById('tcTotal-' + type).innerHTML = '= <span>' + total + ' balls</span>';
+        document.getElementById('tcTotal-' + type).querySelector('span').textContent = total + ' balls';
       }
       return total;
     }
@@ -29,7 +30,7 @@
 
     function getBoilCount() {
       var total = getBoilCountValue();
-      document.getElementById('tcTotal-boil').innerHTML = '= <span>' + total + ' balls</span>';
+      document.getElementById('tcTotal-boil').querySelector('span').textContent = total + ' balls';
       return total;
     }
 

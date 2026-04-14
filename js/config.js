@@ -1,3 +1,4 @@
+    // js/config.js — no dependencies (loaded first)
     const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbysGE_0ynpVxJNdmvsfPjAdkQA3Lng7YMDp1OjP-EXbdx3xqEixgjwCKxVeSisECo-j/exec';
     const SHEET_URL = 'https://docs.google.com/spreadsheets/d/1MVjVlKd3pwXB_JkHZkP00FnM0fBerfwStfqJ-GBza0M/edit?gid=0#gid=0';
 

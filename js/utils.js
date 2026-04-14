@@ -1,3 +1,4 @@
+    // js/utils.js — no dependencies (loaded after config.js)
     function parseDollar(str) {
       return parseFloat(String(str).replace(/[$,\s]/g, '')) || 0;
     }

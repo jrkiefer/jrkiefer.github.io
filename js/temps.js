@@ -1,8 +1,10 @@
+    // js/temps.js — depends on: config.js, utils.js, calculate.js, save.js
     var isLoading = false;
 
     // ── Temperature Tracking ──
     var tempBatchCount = 0;
     var tempBatchManuallySet = false;
+    var lastAutoBatches = 0;
 
     // Default active date to today
     document.getElementById('activeDate').value = getTodayDate();
@@ -77,25 +79,27 @@
       document.getElementById('todayForecast').value = toShorthand(getField(row, "Today's Forecast", 'todayForecast'));
       document.getElementById('tomorrowForecast').value = toShorthand(getField(row, "Tomorrow's Forecast", 'tomorrowForecast'));
 
-      // Fill dough counts — put total as singles, 0 trays
-      var indi = Number(getField(row, 'Indi Count', 'indiCount')) || 0;
-      document.getElementById('tcTrays-indi').value = '0';
-      document.getElementById('tcExtra-indi').value = indi ? String(indi) : '';
-
-      var small = Number(getField(row, 'Small Count', 'smallCount')) || 0;
-      document.getElementById('tcTrays-small').value = '0';
-      document.getElementById('tcExtra-small').value = small ? String(small) : '';
-
-      var large = Number(getField(row, 'Large Count', 'largeCount')) || 0;
-      document.getElementById('tcTrays-large').value = '0';
-      document.getElementById('tcExtra-large').value = large ? String(large) : '';
+      // Fill dough counts — split into trays + singles for readability
+      var sizes = ['indi', 'small', 'large'];
+      var sheetNames = ['Indi Count', 'Small Count', 'Large Count'];
+      var camelNames = ['indiCount', 'smallCount', 'largeCount'];
+      for (var i = 0; i < sizes.length; i++) {
+        var count = Number(getField(row, sheetNames[i], camelNames[i])) || 0;
+        var perTray = PER_TRAY[sizes[i]];
+        var trays = Math.floor(count / perTray);
+        var singles = count % perTray;
+        document.getElementById('tcTrays-' + sizes[i]).value = trays ? String(trays) : '';
+        document.getElementById('tcExtra-' + sizes[i]).value = singles ? String(singles) : '';
+      }
 
       var sic = Number(getField(row, 'Sic Count', 'sicCount')) || 0;
       document.getElementById('countSic').value = sic ? String(sic) : '';
 
       var boil = Number(getField(row, 'Boil Count', 'boilCount')) || 0;
-      document.getElementById('tcTrays-boil').value = '0';
-      document.getElementById('tcExtra-boil').value = boil ? String(boil) : '';
+      var boilTrays = Math.floor(boil / BOIL_PER_TRAY);
+      var boilSingles = boil % BOIL_PER_TRAY;
+      document.getElementById('tcTrays-boil').value = boilTrays ? String(boilTrays) : '';
+      document.getElementById('tcExtra-boil').value = boilSingles ? String(boilSingles) : '';
 
       // Trigger recalculation
       calculate();
@@ -114,12 +118,11 @@
       }
     }
 
+    // Clears all form fields without triggering calculate() — caller is responsible
     function clearAllFields() {
-      // Clear dollar fields
       document.getElementById('currentSales').value = '';
       document.getElementById('todayForecast').value = '';
       document.getElementById('tomorrowForecast').value = '';
-      // Clear dough count fields
       document.getElementById('tcTrays-indi').value = '';
       document.getElementById('tcExtra-indi').value = '';
       document.getElementById('tcTrays-small').value = '';
@@ -129,13 +132,10 @@
       document.getElementById('countSic').value = '';
       document.getElementById('tcTrays-boil').value = '';
       document.getElementById('tcExtra-boil').value = '';
-      // Clear temp inputs
       document.getElementById('tempBatchField').value = '0';
       renderTempInputs(0);
       tempBatchManuallySet = false;
       lastAutoBatches = 0;
-      // Recalculate
-      calculate();
     }
 
     function activeHandleLoadedData(rowData, date, status) {
@@ -144,8 +144,6 @@
         return;
       }
 
-      // Block auto-sync while we fill everything
-      isLoading = true;
       tempBatchManuallySet = false;
 
       // Fill all dough/sales fields and recalculate
@@ -166,12 +164,9 @@
       // Sync lastAutoBatches so auto-sync doesn't re-trigger on next keystroke
       var batchEl = document.getElementById('batch-number');
       lastAutoBatches = batchEl ? Math.min(parseInt(batchEl.textContent) || 0, 10) : 0;
-
-      // Unblock auto-sync
-      isLoading = false;
     }
 
-    // Load button — fetch saved data for the active date
+    // Load button — always confirms, then fetches saved data for the active date
     document.getElementById('activeLoadBtn').addEventListener('click', function() {
       var rawDate = document.getElementById('activeDate').value.trim();
       if (!rawDate) return;
@@ -179,19 +174,18 @@
       var status = document.getElementById('activeDateStatus');
       var loadBtn = document.getElementById('activeLoadBtn');
 
-      // Confirm before overwriting if fields have data
-      var hasData = getCountValue('indi') > 0 || getCountValue('small') > 0 ||
-        getCountValue('large') > 0 || getCountValue('sic') > 0 || getBoilCountValue() > 0 ||
-        expandDollar(document.getElementById('todayForecast').value) > 0;
-      if (hasData && !window.confirm('This will replace all current fields with saved data for ' + date + '. Continue?')) {
+      // Always confirm — loading replaces everything
+      if (!window.confirm('Load saved data for ' + date + '?\nThis will replace all current fields.')) {
         return;
       }
+
+      // Block auto-sync for the entire load sequence
+      isLoading = true;
 
       status.innerHTML = '<div class="temp-message">Loading...</div>';
       loadBtn.disabled = true;
       loadBtn.textContent = '...';
 
-      // Clear all fields first
       clearAllFields();
 
       var url = SCRIPT_URL + '?date=' + encodeURIComponent(date);
@@ -204,6 +198,7 @@
           // Handle {status: "found", data: {...}} response
           if (data && data.status === 'found' && data.data) {
             activeHandleLoadedData(data.data, date, status);
+            isLoading = false;
             return;
           }
 
@@ -211,6 +206,7 @@
           if (Array.isArray(data)) {
             var rowData = searchRowForDate(data, date);
             activeHandleLoadedData(rowData, date, status);
+            isLoading = false;
             return;
           }
 
@@ -220,6 +216,7 @@
             .then(function(rows) {
               var rowData = searchRowForDate(rows, date);
               activeHandleLoadedData(rowData, date, status);
+              isLoading = false;
             });
         })
         .catch(function() {
@@ -230,17 +227,18 @@
               loadBtn.textContent = 'Load';
               var rowData = searchRowForDate(rows, date);
               activeHandleLoadedData(rowData, date, status);
+              isLoading = false;
             })
             .catch(function() {
               loadBtn.disabled = false;
               loadBtn.textContent = 'Load';
               status.innerHTML = '<div class="temp-message error">Could not load data</div>';
+              isLoading = false;
             });
         });
     });
 
     // Auto-sync: when calculate() runs and batch count changes, update temp batch field if date is today
-    var lastAutoBatches = 0;
     function syncTempBatches() {
       if (isLoading) return;
       if (tempBatchManuallySet) return;
@@ -252,7 +250,7 @@
         lastAutoBatches = currentBatches;
         document.getElementById('tempBatchField').value = currentBatches;
         renderTempInputs(currentBatches);
-        var status = document.getElementById('tempStatus');
+        var status = document.getElementById('activeDateStatus');
         if (currentBatches > 0) {
           status.innerHTML = '<div class="temp-message">' + currentBatches + ' batch' + (currentBatches > 1 ? 'es' : '') + ' from current count</div>';
         } else {

@@ -1,3 +1,4 @@
+    // js/history.js — depends on: config.js, utils.js
     // ── History ──
     function loadHistory() {
       var list = document.getElementById('historyList');
