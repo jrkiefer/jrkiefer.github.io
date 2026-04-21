@@ -10,12 +10,12 @@
       return n;
     }
 
-    function updateHint(inputId, hintId) {
+    function updateHint(inputId, displayId) {
       var raw = document.getElementById(inputId).value.trim();
-      var hint = document.getElementById(hintId);
-      if (!raw) { hint.innerHTML = ''; return; }
-      var val = expandDollar(raw);
-      hint.innerHTML = '= <span>' + formatDollar(val) + '</span>';
+      var disp = document.getElementById(displayId);
+      if (!disp) return;
+      if (!raw) { disp.textContent = ''; return; }
+      disp.textContent = formatDollar(expandDollar(raw));
     }
 
     function formatDollar(n) {
@@ -23,8 +23,8 @@
     }
 
     function valClass(n) {
-      if (n < 0) return 'negative';
-      if (n > 0) return 'positive';
+      if (n < 0) return 'neg';
+      if (n > 0) return 'pos';
       return '';
     }
 

@@ -162,8 +162,8 @@
       }
 
       // Sync lastAutoBatches so auto-sync doesn't re-trigger on next keystroke
-      var batchEl = document.getElementById('batch-number');
-      lastAutoBatches = batchEl ? Math.min(parseInt(batchEl.textContent) || 0, 10) : 0;
+      var batchEl = document.getElementById('heroBatchNum');
+      lastAutoBatches = batchEl ? Math.min(parseInt(batchEl.textContent, 10) || 0, 10) : 0;
     }
 
     // Load button — always confirms, then fetches saved data for the active date
@@ -242,8 +242,8 @@
     function syncTempBatches() {
       if (isLoading) return;
       if (tempBatchManuallySet) return;
-      var batchEl = document.getElementById('batch-number');
-      var currentBatches = batchEl ? parseInt(batchEl.textContent) || 0 : 0;
+      var batchEl = document.getElementById('heroBatchNum');
+      var currentBatches = batchEl ? parseInt(batchEl.textContent, 10) || 0 : 0;
       currentBatches = Math.min(currentBatches, 10);
       var dateField = document.getElementById('activeDate');
       if (dateField.value.trim() === getTodayDate() && currentBatches !== lastAutoBatches) {

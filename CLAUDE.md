@@ -6,20 +6,22 @@ Dough Tracker is a mobile-first web calculator used by a pizza shop. In the firs
 
 ## Current file structure
 
-- `index.html` — HTML markup only (251 lines)
+- `index.html` — HTML markup only, redesigned per Claude Design handoff (394 lines)
 - `README.md` — repo readme
 - `qr-code.png` — QR code image for scanning
 - `CLAUDE.md` — this file (project context)
 - `css/`
-  - `styles.css` — all CSS (623 lines)
+  - `styles.css` — all CSS, two themes (Mise en Place / Line Check) + density modes (1362 lines)
 - `js/` — loaded in this order via `<script>` tags (no modules, shared global scope)
   - `config.js` — all constants: SCRIPT_URL, DOUGH_TABLE, PER_TRAY, etc. (43 lines)
-  - `utils.js` — utility functions: parseDollar, expandDollar, sanitize, etc. (84 lines)
-  - `calculate.js` — calculation pipeline: lookup, calculate, debouncedCalculate (144 lines)
-  - `save.js` — dollar field validation, save validation, postToSheet, save click handler (233 lines)
+  - `utils.js` — utility functions: parseDollar, expandDollar, updateHint (inline $ expansion), sanitize, valClass (pos/neg) (84 lines)
+  - `bible.js` — Dough Bible reference: builds the 27-row table once, highlights tonight/tomorrow active rows, wires header toggle (80 lines)
+  - `calculate.js` — calculation + render pipeline: lookup, calculate, recipe chips, hero batches, unified set-out alert, debouncedCalculate (220 lines)
+  - `save.js` — dollar field validation, save validation, postToSheet, save click handler (235 lines)
   - `history.js` — loadHistory function and initial call (53 lines)
   - `temps.js` — temperature tracking state, UI, active date load/sync/save handlers (279 lines)
-  - `main.js` — event wiring, initial calculate() call, reset handler (57 lines)
+  - `tweaks.js` — Tweaks panel: theme/density/bible-visibility persistence; default theme `auto` follows `prefers-color-scheme` live until the user pins one (114 lines)
+  - `main.js` — masthead date, event wiring, initial calculate() call, reset handler (87 lines)
 - `apps-script/`
   - `Code.gs` — version-controlled copy of the Google Apps Script backend; deploy by manually copying into the Apps Script editor
 
@@ -77,7 +79,8 @@ Sheet column names use spaces and title case:
 - **Unified active date**: A single `#activeDate` date picker at the top of the page drives both the dough save and the temperature save. The Load button fetches saved data for the selected date and populates all fields (with a confirmation dialog if fields already have data). The save click handler reads from `#activeDate` (falling back to today if empty). Auto-sync of batch count only fires when the active date matches today.
 - **Date handling**: Dates use local browser time (not UTC). `normalizeDate()` converts between `YYYY-MM-DD` and `M/D/YYYY` formats for matching.
 - **Duplicate row prevention**: Lives in the Apps Script backend, not in the frontend. The frontend does not check whether a row already exists before saving.
-- **Set-out logic**: When End of Night Count goes negative for Indi/Small/Large, the card shows "Set out X trays" (computed as `ceil(-doughLeft / perTray)`). Sicilian clamps (no set-out shown) because same-day Sicilian dough can't be used. Boil has no set-out.
+- **Set-out logic**: When End of Night Count goes negative for Indi/Small/Large, the per-row `↓ Set out X trays` line appears AND the unified set-out alert banner above the breakdown lists every affected size (computed as `ceil(-doughLeft / perTray)`). Sicilian clamps (no set-out shown) because same-day Sicilian dough can't be used. Boil has no set-out.
+- **Theme `auto`**: `tweaks.js` defaults `theme` to `'auto'` and live-tracks `prefers-color-scheme` via a `matchMedia` listener — dark OS → Line Check, light OS → Mise en Place. Picking Mise or Line in the Tweaks panel pins the theme regardless of OS preference; picking `Auto` resumes tracking. Theme also drives the `<meta name="theme-color">` content for mobile browser chrome.
 
 ## Known issues (to be fixed in Phase 2)
 
@@ -119,6 +122,10 @@ Sheet column names use spaces and title case:
 
 - Step 3.1 — Unify date handling with top-level active date picker ✅ complete
 - Step 3.1-cleanup — Code review fixes: always-confirm, kill tempStatus, fix clearAllFields flicker, date validation, visual distinction, trays+singles split, innerHTML fix, dependency comments, stale rules ✅ complete
+
+### Phase 4 — Claude Design handoff implementation
+
+- Step 4.1 — Adopt redesigned `index.html` + replace `css/styles.css` with the design's Mise en Place / Line Check theme system; rewire `utils.js`, `calculate.js`, `save.js`, `temps.js`, `main.js` to new IDs (`row-<size>-*`, `heroBatchNum`, `disp_<field>`, `msg_<field>`); add `js/bible.js` for the Dough Bible reference (active rows + collapsible full table); add `js/tweaks.js` for theme/density/bible-visibility with auto `prefers-color-scheme` default. New rendering: recipe chip list, unified set-out alert banner, hero recipe + batches block, masthead date. ✅ complete
 
 ## Rules for future prompts
 

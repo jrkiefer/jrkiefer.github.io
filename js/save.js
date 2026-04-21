@@ -63,19 +63,21 @@
       for (var i = 0; i < fields.length; i++) {
         var fieldId = fields[i];
         var input = document.getElementById(fieldId);
-        var msgEl = document.getElementById('msg' + fieldId.charAt(0).toUpperCase() + fieldId.slice(1));
+        var msgEl = document.getElementById('msg_' + fieldId);
         if (!input || !msgEl) continue;
 
-        input.classList.remove('field-invalid', 'field-warning');
+        // Validation ring goes on the .dollar-field wrapper so it surrounds the composite field
+        var wrap = input.closest('.dollar-field') || input;
+        wrap.classList.remove('field-invalid', 'field-warning');
         msgEl.classList.remove('error', 'warning');
         msgEl.textContent = '';
 
         if (validation.errors[fieldId]) {
-          input.classList.add('field-invalid');
+          wrap.classList.add('field-invalid');
           msgEl.classList.add('error');
           msgEl.textContent = validation.errors[fieldId];
         } else if (validation.warnings[fieldId]) {
-          input.classList.add('field-warning');
+          wrap.classList.add('field-warning');
           msgEl.classList.add('warning');
           msgEl.textContent = validation.warnings[fieldId];
         }
@@ -227,7 +229,7 @@
         largeCount: getCountValue('large'),
         sicCount: getCountValue('sic'),
         boilCount: getBoilCountValue(),
-        batches: parseInt(document.getElementById('batch-number').textContent) || 0
+        batches: parseInt(document.getElementById('heroBatchNum').textContent, 10) || 0
       };
       postToSheet(data, saveBtn, 'Save Count', loadHistory, function() { isSaving = false; });
     });
