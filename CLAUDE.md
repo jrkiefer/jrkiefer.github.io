@@ -127,6 +127,10 @@ Sheet column names use spaces and title case:
 
 - Step 4.1 — Adopt redesigned `index.html` + replace `css/styles.css` with the design's Mise en Place / Line Check theme system; rewire `utils.js`, `calculate.js`, `save.js`, `temps.js`, `main.js` to new IDs (`row-<size>-*`, `heroBatchNum`, `disp_<field>`, `msg_<field>`); add `js/bible.js` for the Dough Bible reference (active rows + collapsible full table); add `js/tweaks.js` for theme/density/bible-visibility with auto `prefers-color-scheme` default. New rendering: recipe chip list, unified set-out alert banner, hero recipe + batches block, masthead date. ✅ complete
 
+### Phase 5 — Ports from abandoned branch `claude/update-dough-bible-2026-34P8C`
+
+- Step A — parseDollar negative guard: `Math.abs` + strip `-` in `js/utils.js` ✅ complete
+
 ## Rules for future prompts
 
 1. Every prompt must read this file first for project context.
