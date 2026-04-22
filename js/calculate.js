@@ -136,6 +136,7 @@
       for (var i = 0; i < TYPES.length; i++) {
         var t = TYPES[i];
         doughLeft[t] = counts[t] - doughUse[t];
+        if (t === 'sic' && doughLeft[t] < 0) doughLeft[t] = 0;
         ballsToMake[t] = tomorrowNeed[t] - doughLeft[t];
         if (t === 'sic' && ballsToMake[t] < 2) ballsToMake[t] = 2;
         trays[t] = ballsToMake[t] <= 0 ? 0 : Math.ceil(ballsToMake[t] / PER_TRAY[t]);

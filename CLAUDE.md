@@ -16,7 +16,7 @@ Dough Tracker is a mobile-first web calculator used by a pizza shop. In the firs
   - `config.js` — all constants: SCRIPT_URL, DOUGH_TABLE, PER_TRAY, etc. (43 lines)
   - `utils.js` — utility functions: parseDollar, expandDollar, updateHint (inline $ expansion), sanitize, stripExtraDots, valClass (pos/neg) (92 lines)
   - `bible.js` — Dough Bible reference: builds the 27-row table once, highlights tonight/tomorrow active rows, wires header toggle (80 lines)
-  - `calculate.js` — calculation + render pipeline: lookup, calculate, recipe chips, hero batches, unified set-out alert, debouncedCalculate (220 lines)
+  - `calculate.js` — calculation + render pipeline: lookup, calculate, recipe chips, hero batches, unified set-out alert, debouncedCalculate (221 lines)
   - `save.js` — dollar field validation, save validation, postToSheet, save click handler (235 lines)
   - `history.js` — loadHistory function and initial call (54 lines)
   - `temps.js` — temperature tracking state, UI, active date load/sync/save handlers (287 lines)
@@ -30,7 +30,7 @@ Dough Tracker is a mobile-first web calculator used by a pizza shop. In the firs
 - **Individual (indi)** — 11 balls per tray. Standard lookup-based calculation.
 - **Small** — 8 balls per tray. Standard lookup-based calculation.
 - **Large** — 6 balls per tray. Standard lookup-based calculation.
-- **Sicilian (sic)** — 3 balls per tray. Counted as a single number in the UI (not trays × extras). Has a hardcoded minimum of 2 balls inside `calculate()` — if the calculated "balls to make" is less than 2, it is forced to 2.
+- **Sicilian (sic)** — 3 balls per tray. Counted as a single number in the UI (not trays × extras). Has a hardcoded minimum of 2 balls inside `calculate()` — if the calculated "balls to make" is less than 2, it is forced to 2. Its night-side "Dough Left" is also clamped at 0 (same-day Sicilian can't be used, so a shortfall must not inflate tomorrow's make).
 - **Boil** — 6 balls per tray. Fixed target of 36 balls. Does NOT use the Dough Bible lookup table; instead, the formula is simply `max(0, 36 - currentBoilCount)`.
 
 ## The Dough Bible lookup
@@ -47,7 +47,7 @@ The 9-step calculation chain inside `calculate()`:
 
 1. **Sales Left** = Today's Forecast − Current Sales
 2. **Dough Use Tonight** = `lookup(Sales Left)` — ball counts needed for tonight's remaining sales
-3. **Dough Left** = Current Count − Dough Use Tonight (per size)
+3. **Dough Left** = Current Count − Dough Use Tonight (per size; Sicilian is clamped at 0)
 4. **Dough Needed Tomorrow** = `lookup(Tomorrow's Forecast)` — ball counts needed for tomorrow
 5. **Balls to Make** = Needed − Left (per size; Sicilian is floored at 2)
 6. **Trays Needed** = `ceil(Balls to Make / balls per tray)` per size (0 if Balls to Make ≤ 0)
@@ -133,6 +133,7 @@ Sheet column names use spaces and title case:
 - Step B — stripExtraDots helper in `js/utils.js`; wired into dollar + temp input listeners in `js/main.js` ✅ complete
 - Step C — Friendlier history load error: show "Couldn’t load history" message in `.catch` of `loadHistory()` ✅ complete
 - Step D — Warn when saved/computed batch count > 10 in `activeHandleLoadedData` and `syncTempBatches` (capture rawBatches, branch status message) ✅ complete
+- Step E — Cap Sicilian `doughLeft` at zero in `js/calculate.js` so a night-need shortfall doesn't inflate tomorrow's make ✅ complete
 
 ## Rules for future prompts
 
