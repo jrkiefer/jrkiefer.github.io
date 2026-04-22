@@ -47,7 +47,8 @@
           list.appendChild(link);
         })
         .catch(function() {
-          list.innerHTML = '<a class="history-link" href="' + SHEET_URL + '" target="_blank">View Full History</a>';
+          list.innerHTML = '<div class="temp-message error" style="margin-bottom:8px">Couldn\u2019t load history</div>' +
+            '<a class="history-link" href="' + SHEET_URL + '" target="_blank">View Full History</a>';
         });
     }
     loadHistory();

@@ -1,6 +1,6 @@
     // js/utils.js — no dependencies (loaded after config.js)
     function parseDollar(str) {
-      return parseFloat(String(str).replace(/[$,\s]/g, '')) || 0;
+      return Math.abs(parseFloat(String(str).replace(/[$,\s-]/g, '')) || 0);
     }
 
     function expandDollar(raw) {
@@ -36,6 +36,14 @@
       if (el.value !== before) {
         var diff = before.length - el.value.length;
         el.selectionStart = el.selectionEnd = Math.max(0, pos - diff);
+      }
+    }
+
+    function stripExtraDots(el) {
+      var val = el.value;
+      var firstDot = val.indexOf('.');
+      if (firstDot !== -1) {
+        el.value = val.substring(0, firstDot + 1) + val.substring(firstDot + 1).replace(/\./g, '');
       }
     }
 

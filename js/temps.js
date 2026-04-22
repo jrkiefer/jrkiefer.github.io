@@ -149,11 +149,15 @@
       // Fill all dough/sales fields and recalculate
       fillFieldsFromData(rowData);
 
-      var batches = parseInt(getField(rowData, 'Batches', 'batches')) || 0;
-      batches = Math.min(batches, 10);
+      var rawBatches = parseInt(getField(rowData, 'Batches', 'batches')) || 0;
+      var batches = Math.min(rawBatches, 10);
       document.getElementById('tempBatchField').value = batches;
       if (batches > 0) {
-        status.innerHTML = '<div class="temp-message">Loaded ' + date + ' \u2014 ' + batches + ' batch' + (batches > 1 ? 'es' : '') + '</div>';
+        if (rawBatches > 10) {
+          status.innerHTML = '<div class="temp-message error">Loaded ' + date + ' \u2014 showing 10 of ' + rawBatches + ' batches</div>';
+        } else {
+          status.innerHTML = '<div class="temp-message">Loaded ' + date + ' \u2014 ' + batches + ' batch' + (batches > 1 ? 'es' : '') + '</div>';
+        }
         renderTempInputs(batches);
         fillTempFields(rowData, batches);
       } else {
@@ -243,8 +247,8 @@
       if (isLoading) return;
       if (tempBatchManuallySet) return;
       var batchEl = document.getElementById('heroBatchNum');
-      var currentBatches = batchEl ? parseInt(batchEl.textContent, 10) || 0 : 0;
-      currentBatches = Math.min(currentBatches, 10);
+      var rawBatches = batchEl ? parseInt(batchEl.textContent, 10) || 0 : 0;
+      var currentBatches = Math.min(rawBatches, 10);
       var dateField = document.getElementById('activeDate');
       if (dateField.value.trim() === getTodayDate() && currentBatches !== lastAutoBatches) {
         lastAutoBatches = currentBatches;
@@ -252,7 +256,11 @@
         renderTempInputs(currentBatches);
         var status = document.getElementById('activeDateStatus');
         if (currentBatches > 0) {
-          status.innerHTML = '<div class="temp-message">' + currentBatches + ' batch' + (currentBatches > 1 ? 'es' : '') + ' from current count</div>';
+          if (rawBatches > 10) {
+            status.innerHTML = '<div class="temp-message error">Showing 10 of ' + rawBatches + ' batches from current count</div>';
+          } else {
+            status.innerHTML = '<div class="temp-message">' + currentBatches + ' batch' + (currentBatches > 1 ? 'es' : '') + ' from current count</div>';
+          }
         } else {
           status.innerHTML = '';
         }
