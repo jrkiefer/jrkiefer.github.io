@@ -19,7 +19,7 @@ Dough Tracker is a mobile-first web calculator used by a pizza shop. In the firs
   - `calculate.js` — calculation + render pipeline: lookup, calculate, recipe chips, hero batches, unified set-out alert, debouncedCalculate (220 lines)
   - `save.js` — dollar field validation, save validation, postToSheet, save click handler (235 lines)
   - `history.js` — loadHistory function and initial call (54 lines)
-  - `temps.js` — temperature tracking state, UI, active date load/sync/save handlers (279 lines)
+  - `temps.js` — temperature tracking state, UI, active date load/sync/save handlers (287 lines)
   - `tweaks.js` — Tweaks panel: theme/density/bible-visibility persistence; default theme `auto` follows `prefers-color-scheme` live until the user pins one (114 lines)
   - `main.js` — masthead date, event wiring, initial calculate() call, reset handler (89 lines)
 - `apps-script/`
@@ -132,6 +132,7 @@ Sheet column names use spaces and title case:
 - Step A — parseDollar negative guard: `Math.abs` + strip `-` in `js/utils.js` ✅ complete
 - Step B — stripExtraDots helper in `js/utils.js`; wired into dollar + temp input listeners in `js/main.js` ✅ complete
 - Step C — Friendlier history load error: show "Couldn’t load history" message in `.catch` of `loadHistory()` ✅ complete
+- Step D — Warn when saved/computed batch count > 10 in `activeHandleLoadedData` and `syncTempBatches` (capture rawBatches, branch status message) ✅ complete
 
 ## Rules for future prompts
 
