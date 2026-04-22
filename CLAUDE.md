@@ -14,14 +14,14 @@ Dough Tracker is a mobile-first web calculator used by a pizza shop. In the firs
   - `styles.css` — all CSS, two themes (Mise en Place / Line Check) + density modes (1362 lines)
 - `js/` — loaded in this order via `<script>` tags (no modules, shared global scope)
   - `config.js` — all constants: SCRIPT_URL, DOUGH_TABLE, PER_TRAY, etc. (43 lines)
-  - `utils.js` — utility functions: parseDollar, expandDollar, updateHint (inline $ expansion), sanitize, valClass (pos/neg) (84 lines)
+  - `utils.js` — utility functions: parseDollar, expandDollar, updateHint (inline $ expansion), sanitize, stripExtraDots, valClass (pos/neg) (92 lines)
   - `bible.js` — Dough Bible reference: builds the 27-row table once, highlights tonight/tomorrow active rows, wires header toggle (80 lines)
   - `calculate.js` — calculation + render pipeline: lookup, calculate, recipe chips, hero batches, unified set-out alert, debouncedCalculate (220 lines)
   - `save.js` — dollar field validation, save validation, postToSheet, save click handler (235 lines)
   - `history.js` — loadHistory function and initial call (53 lines)
   - `temps.js` — temperature tracking state, UI, active date load/sync/save handlers (279 lines)
   - `tweaks.js` — Tweaks panel: theme/density/bible-visibility persistence; default theme `auto` follows `prefers-color-scheme` live until the user pins one (114 lines)
-  - `main.js` — masthead date, event wiring, initial calculate() call, reset handler (87 lines)
+  - `main.js` — masthead date, event wiring, initial calculate() call, reset handler (89 lines)
 - `apps-script/`
   - `Code.gs` — version-controlled copy of the Google Apps Script backend; deploy by manually copying into the Apps Script editor
 
@@ -130,6 +130,7 @@ Sheet column names use spaces and title case:
 ### Phase 5 — Ports from abandoned branch `claude/update-dough-bible-2026-34P8C`
 
 - Step A — parseDollar negative guard: `Math.abs` + strip `-` in `js/utils.js` ✅ complete
+- Step B — stripExtraDots helper in `js/utils.js`; wired into dollar + temp input listeners in `js/main.js` ✅ complete
 
 ## Rules for future prompts
 

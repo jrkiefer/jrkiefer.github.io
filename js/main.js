@@ -19,6 +19,7 @@
     ['currentSales', 'todayForecast', 'tomorrowForecast'].forEach(function(id) {
       document.getElementById(id).addEventListener('input', function() {
         sanitize(this, /[^0-9.,$]/g);
+        stripExtraDots(this);
       });
     });
 
@@ -35,6 +36,7 @@
     document.getElementById('tempInputs').addEventListener('input', function(e) {
       if (e.target.tagName === 'INPUT') {
         sanitize(e.target, /[^0-9.]/g);
+        stripExtraDots(e.target);
       }
       debouncedCalculate();
     });

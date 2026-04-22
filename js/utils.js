@@ -39,6 +39,14 @@
       }
     }
 
+    function stripExtraDots(el) {
+      var val = el.value;
+      var firstDot = val.indexOf('.');
+      if (firstDot !== -1) {
+        el.value = val.substring(0, firstDot + 1) + val.substring(firstDot + 1).replace(/\./g, '');
+      }
+    }
+
     function getTodayDate() {
       var now = new Date();
       var m = String(now.getMonth()+1).padStart(2, '0');
