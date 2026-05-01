@@ -219,6 +219,7 @@
         }
       }
       var data = {
+        type: 'dough',
         date: date,
         todayForecast: expandDollar(document.getElementById('todayForecast').value),
         currentSales: expandDollar(document.getElementById('currentSales').value),
