@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en" data-theme="mise" data-density="comfy">
+<html lang="en" data-theme="mise" data-density="compact">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
@@ -317,16 +317,16 @@
       </div><!-- /#bibleBody -->
     </div>
 
-    <!-- ─── Temperatures ─── -->
-    <section class="section temp-sec">
-      <div class="section-head">
+    <!-- ─── Temperatures (collapsed by default) ─── -->
+    <section class="section temp-sec" id="tempSec">
+      <button type="button" class="section-head temp-toggle" id="tempToggle" aria-expanded="false" aria-controls="tempBody">
         <div class="step">
           <span class="step-num">05</span>
           <span class="step-title">Batch Temperatures</span>
         </div>
-        <span class="step-sub">Water · Dough °F</span>
-      </div>
-      <div class="card">
+        <span class="step-sub temp-toggle-label">Tap to expand</span>
+      </button>
+      <div class="card temp-body" id="tempBody">
         <div class="temp-batch-field">
           <div class="input-group">
             <label for="tempBatchField">Batches</label>
@@ -352,35 +352,6 @@
 
   </main>
 
-  <!-- ─── Tweaks ─── -->
-  <button type="button" class="tweaks-toggle" id="tweaksToggle" title="Tweaks">⚙</button>
-  <div class="tweaks-panel" id="tweaksPanel">
-    <h3>Tweaks</h3>
-    <div class="tweak-group">
-      <label>Style</label>
-      <div class="tweak-options">
-        <button type="button" data-group="theme" data-value="auto">Auto</button>
-        <button type="button" data-group="theme" data-value="mise">Mise en Place</button>
-        <button type="button" data-group="theme" data-value="line">Line Check</button>
-      </div>
-    </div>
-    <div class="tweak-group">
-      <label>Density</label>
-      <div class="tweak-options">
-        <button type="button" data-group="density" data-value="comfy">Comfy</button>
-        <button type="button" data-group="density" data-value="compact">Compact</button>
-      </div>
-    </div>
-    <div class="tweak-group">
-      <label>Dough Bible</label>
-      <div class="tweak-options">
-        <button type="button" data-group="bibleMode" data-value="strip">Strip</button>
-        <button type="button" data-group="bibleMode" data-value="open">Always open</button>
-        <button type="button" data-group="bibleMode" data-value="off">Hide</button>
-      </div>
-    </div>
-  </div>
-
   <script src="js/config.js"></script>
   <script src="js/utils.js"></script>
   <script src="js/bible.js"></script>
@@ -388,7 +359,6 @@
   <script src="js/save.js"></script>
   <script src="js/history.js"></script>
   <script src="js/temps.js"></script>
-  <script src="js/tweaks.js"></script>
   <script src="js/main.js"></script>
 </body>
 </html>

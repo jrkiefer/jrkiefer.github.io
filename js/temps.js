@@ -267,6 +267,19 @@
       }
     }
 
+    // Collapsible Temps section: closed by default, header toggles .open
+    (function wireTempToggle() {
+      var toggle = document.getElementById('tempToggle');
+      var sec = document.getElementById('tempSec');
+      if (!toggle || !sec) return;
+      toggle.addEventListener('click', function() {
+        var isOpen = sec.classList.toggle('open');
+        toggle.setAttribute('aria-expanded', isOpen ? 'true' : 'false');
+        var lbl = toggle.querySelector('.temp-toggle-label');
+        if (lbl) lbl.textContent = isOpen ? 'Tap to collapse' : 'Tap to expand';
+      });
+    })();
+
     // Save Temps
     document.getElementById('tempSaveBtn').addEventListener('click', function() {
       var btn = document.getElementById('tempSaveBtn');

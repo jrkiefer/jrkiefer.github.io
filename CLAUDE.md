@@ -6,21 +6,20 @@ Dough Tracker is a mobile-first web calculator used by a pizza shop. In the firs
 
 ## Current file structure
 
-- `index.html` — HTML markup only, redesigned per Claude Design handoff (394 lines)
+- `index.html` — HTML markup only; theme/density baked in on the `<html>` element (364 lines)
 - `README.md` — repo readme
 - `qr-code.png` — QR code image for scanning
 - `CLAUDE.md` — this file (project context)
 - `css/`
-  - `styles.css` — all CSS, two themes (Mise en Place / Line Check) + density modes (1362 lines)
+  - `styles.css` — all CSS; the Mise en Place theme is the only live look (Line Check rules retained as no-ops in case we re-introduce a toggle) (1293 lines)
 - `js/` — loaded in this order via `<script>` tags (no modules, shared global scope)
   - `config.js` — all constants: SCRIPT_URL, DOUGH_TABLE, PER_TRAY, etc. (43 lines)
   - `utils.js` — utility functions: parseDollar, expandDollar, updateHint (inline $ expansion), sanitize, stripExtraDots, valClass (pos/neg) (92 lines)
   - `bible.js` — Dough Bible reference: builds the 27-row table once, highlights tonight/tomorrow active rows, wires header toggle (80 lines)
   - `calculate.js` — calculation + render pipeline: lookup, calculate, recipe chips, hero batches, unified set-out alert, debouncedCalculate (221 lines)
-  - `save.js` — dollar field validation, save validation, postToSheet, save click handler (235 lines)
+  - `save.js` — dollar field validation, save validation, postToSheet, save click handler (236 lines)
   - `history.js` — loadHistory function and initial call (54 lines)
-  - `temps.js` — temperature tracking state, UI, active date load/sync/save handlers (287 lines)
-  - `tweaks.js` — Tweaks panel: theme/density/bible-visibility persistence; default theme `auto` follows `prefers-color-scheme` live until the user pins one (114 lines)
+  - `temps.js` — temperature tracking state, UI, active date load/sync/save handlers, collapsible-section toggle (300 lines)
   - `main.js` — masthead date, event wiring, initial calculate() call, reset handler (89 lines)
 - `apps-script/`
   - `Code.gs` — version-controlled copy of the Google Apps Script backend; deploy by manually copying into the Apps Script editor
@@ -85,7 +84,8 @@ Sheet column header strings (used as keys in the merged JSON response):
 - **Date handling**: Dates use local browser time (not UTC). `normalizeDate()` converts between `YYYY-MM-DD` and `M/D/YYYY` formats for matching.
 - **Duplicate row prevention**: Lives in the Apps Script backend, not in the frontend. The frontend does not check whether a row already exists before saving.
 - **Set-out logic**: When End of Night Count goes negative for Indi/Small/Large, the per-row `↓ Set out X trays` line appears AND the unified set-out alert banner above the breakdown lists every affected size (computed as `ceil(-doughLeft / perTray)`). Sicilian clamps (no set-out shown) because same-day Sicilian dough can't be used. Boil has no set-out.
-- **Theme `auto`**: `tweaks.js` defaults `theme` to `'auto'` and live-tracks `prefers-color-scheme` via a `matchMedia` listener — dark OS → Line Check, light OS → Mise en Place. Picking Mise or Line in the Tweaks panel pins the theme regardless of OS preference; picking `Auto` resumes tracking. Theme also drives the `<meta name="theme-color">` content for mobile browser chrome.
+- **Theme/density baked in**: `<html data-theme="mise" data-density="compact">` is the only live combination. The Tweaks panel was removed — staff don't need to choose. Line Check theme rules still exist in `styles.css` but never match. To bring back a toggle later, restore a slim controller and switch the `data-theme` attribute.
+- **Temps section is collapsed by default**: `<section class="temp-sec">` starts without the `.open` class so its body is hidden via `.temp-sec:not(.open) .temp-body { display: none; }`. The header acts as a button (`#tempToggle`) that toggles `.open` on every tap. Closed every page load — only managers expand it.
 
 ## Known issues (to be fixed in Phase 2)
 
@@ -146,6 +146,12 @@ Sheet column header strings (used as keys in the merged JSON response):
 - Step 6.2 — `js/save.js` sends explicit `type: 'dough'` on the POST payload ✅ complete
 
 **Deployment for Phase 6** (one-time, manual): clear the existing single-sheet data, paste the new `apps-script/Code.gs` into the Apps Script editor, run `seedSheets()` once, then deploy a new version.
+
+### Phase 7 — UI simplification
+
+- Step 7.1 — Bake in Mise en Place + Compact as the only look (`<html data-theme="mise" data-density="compact">`); delete Tweaks panel, gear button, `js/tweaks.js`, and tweaks CSS ✅ complete
+- Step 7.2 — Collapse Batch Temperatures by default: section header toggles `.open` on the section, body hidden until expanded; reduces distraction for non-manager employees ✅ complete
+- Step 7.3 — Bump body font 15px → 16px and line-height 1.4 → 1.45 for legibility ✅ complete
 
 ## Rules for future prompts
 
