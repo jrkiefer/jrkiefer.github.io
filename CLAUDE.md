@@ -57,15 +57,20 @@ The 9-step calculation chain inside `calculate()`:
 
 ## Google Sheets integration
 
-`SCRIPT_URL` points to a Google Apps Script web app that acts as the database API.
+`SCRIPT_URL` points to a Google Apps Script web app that acts as the database API. The spreadsheet has **three tabs**, each owning one captured-data type. The `SHEETS` config object at the top of `Code.gs` is the single source of truth for tab names and headers — adding a new captured-data type later is a one-entry change there plus a new branch in `doPost`.
 
-- **Save (POST)**: `postToSheet()` sends a POST with a JSON body (`Content-Type: text/plain` to avoid CORS preflight). On CORS failure, retries with `mode: 'no-cors'`. One row per day in the sheet; a second save on the same day overwrites the existing row. The backend returns `{status: "ok", action, row, date}` on success, or `{status: "error", message}` on failure (e.g., empty save rejected). The frontend shows "Saved row N" or "Updated row N" for confirmed saves, "Sent! (verify in sheet)" only for unverifiable opaque responses.
+- **Tab `Dough Counts`**: `Date | Today's Forecast | Current Sales | Sales Left | Tomorrow's Forecast | Indi Count | Small Count | Large Count | Sic Count | Boil Count | Batches`
+- **Tab `Temperatures`**: `Date | Water 1 | Dough 1 | Water 2 | Dough 2 | … | Water 10 | Dough 10` (interleaved pairs)
+- **Tab `Dough Bible`**: `Threshold | Indi | Small | Large | Sicilian` — 27 rows mirroring `DOUGH_TABLE` in `js/config.js`. **Reference only**; the JS owns the source of truth for calculations. `BIBLE_DATA` in `Code.gs` must be kept in sync with `DOUGH_TABLE` if either changes.
+
+- **Save (POST)**: `postToSheet()` sends a POST with a JSON body (`Content-Type: text/plain` to avoid CORS preflight). On CORS failure, retries with `mode: 'no-cors'`. The backend routes by `data.type`: `"dough"` (default) writes to the Dough Counts tab; `"temps"` writes to the Temperatures tab. Each tab keeps one row per day; a second save on the same day overwrites the existing row. The backend returns `{status: "ok", action, row, date}` on success, or `{status: "error", message}` on failure. Actions: `"created"`, `"updated"`, `"temps_saved"`, `"temps_noop"` (empty temps array). Temps can be saved on a date with no prior dough save — the backend appends a new Temperatures row with just the date.
 - **Backend source**: `Code.gs` is tracked in the repo under `apps-script/`. Deploy flow: edit the file via PR, merge, then manually copy into the Apps Script editor and deploy as a new version.
-- **History (GET)**: `loadHistory()` fetches `SCRIPT_URL` with no parameters, receives an array of all rows, takes the last 10, and displays them newest-first.
-- **Load by date (GET)**: Fetches `SCRIPT_URL?date=<date>` and expects either `{status: "found", data: {...}}` or `{status: "not_found"}`. Falls back to fetching all rows and searching client-side if the endpoint returns an array instead.
+- **One-time setup**: `seedSheets()` (in `Code.gs`) is run once from the Apps Script editor. It creates any missing tabs, writes headers, and seeds the Dough Bible. Idempotent — safe to re-run.
+- **History (GET)**: `loadHistory()` fetches `SCRIPT_URL` with no parameters, receives an array of the last 30 Dough Counts rows, takes the last 10, and displays them newest-first.
+- **Load by date (GET)**: Fetches `SCRIPT_URL?date=<date>` and expects either `{status: "found", data: {...}}` or `{status: "not_found"}`. The backend looks up the date in **both** Dough Counts and Temperatures and returns a merged record so the frontend stays unaware of the split.
 
-Sheet column names use spaces and title case:
-- `"Today's Forecast"`, `"Current Sales"`, `"Tomorrow's Forecast"`
+Sheet column header strings (used as keys in the merged JSON response):
+- `"Today's Forecast"`, `"Current Sales"`, `"Sales Left"`, `"Tomorrow's Forecast"`
 - `"Indi Count"`, `"Small Count"`, `"Large Count"`, `"Sic Count"`, `"Boil Count"`
 - `"Batches"`
 - `"Water 1"` through `"Water 10"`, `"Dough 1"` through `"Dough 10"`
@@ -134,6 +139,13 @@ Sheet column names use spaces and title case:
 - Step C — Friendlier history load error: show "Couldn’t load history" message in `.catch` of `loadHistory()` ✅ complete
 - Step D — Warn when saved/computed batch count > 10 in `activeHandleLoadedData` and `syncTempBatches` (capture rawBatches, branch status message) ✅ complete
 - Step E — Cap Sicilian `doughLeft` at zero in `js/calculate.js` so a night-need shortfall doesn't inflate tomorrow's make ✅ complete
+
+### Phase 6 — Multi-sheet Google Sheets storage
+
+- Step 6.1 — Backend split into `Dough Counts` / `Temperatures` / `Dough Bible` tabs via `SHEETS` config + idempotent `seedSheets()`; merged `doGet?date=` response keeps the frontend unchanged ✅ complete
+- Step 6.2 — `js/save.js` sends explicit `type: 'dough'` on the POST payload ✅ complete
+
+**Deployment for Phase 6** (one-time, manual): clear the existing single-sheet data, paste the new `apps-script/Code.gs` into the Apps Script editor, run `seedSheets()` once, then deploy a new version.
 
 ## Rules for future prompts
 
