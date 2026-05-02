@@ -16,6 +16,14 @@ var SHEETS = {
   bible: {
     name: "Dough Bible",
     headers: ["Threshold","Indi","Small","Large","Sicilian"]
+  },
+  make: {
+    name: "2pm Make Amount",
+    headers: ["Date","Indi","Small","Large","Sicilian","Boil"]
+  },
+  final: {
+    name: "Final Dough Amount at 2pm",
+    headers: ["Date","Indi","Small","Large","Sicilian","Boil"]
   }
 };
 
@@ -140,12 +148,43 @@ function handleDoughPost(data) {
   ];
 
   var existingRow = findRowByDate(sheet, data.date);
+  var action;
+  var resultRow;
   if (existingRow !== -1) {
     sheet.getRange(existingRow, 1, 1, rowData.length).setValues([rowData]);
-    return jsonResponse({status: "ok", action: "updated", row: existingRow, date: data.date});
+    action = "updated";
+    resultRow = existingRow;
+  } else {
+    sheet.appendRow(rowData);
+    action = "created";
+    resultRow = sheet.getLastRow();
   }
-  sheet.appendRow(rowData);
-  return jsonResponse({status: "ok", action: "created", row: sheet.getLastRow(), date: data.date});
+
+  // Best-effort writes to the auxiliary tabs. Failures here don't break the
+  // primary Dough Counts save.
+  upsertSizeRow("make", data.date, data.makes);
+  upsertSizeRow("final", data.date, data.finals);
+
+  return jsonResponse({status: "ok", action: action, row: resultRow, date: data.date});
+}
+
+function upsertSizeRow(sheetKey, date, sizes) {
+  if (!sizes) return;
+  var sheet = getSheet(sheetKey);
+  var rowData = [
+    date,
+    Number(sizes.indi)  || 0,
+    Number(sizes.small) || 0,
+    Number(sizes.large) || 0,
+    Number(sizes.sic)   || 0,
+    Number(sizes.boil)  || 0
+  ];
+  var row = findRowByDate(sheet, date);
+  if (row !== -1) {
+    sheet.getRange(row, 1, 1, rowData.length).setValues([rowData]);
+  } else {
+    sheet.appendRow(rowData);
+  }
 }
 
 function handleTempsPost(data) {
