@@ -56,13 +56,15 @@ The 9-step calculation chain inside `calculate()`:
 
 ## Google Sheets integration
 
-`SCRIPT_URL` points to a Google Apps Script web app that acts as the database API. The spreadsheet has **three tabs**, each owning one captured-data type. The `SHEETS` config object at the top of `Code.gs` is the single source of truth for tab names and headers — adding a new captured-data type later is a one-entry change there plus a new branch in `doPost`.
+`SCRIPT_URL` points to a Google Apps Script web app that acts as the database API. The spreadsheet has **five tabs**, each owning one captured-data type. The `SHEETS` config object at the top of `Code.gs` is the single source of truth for tab names and headers — adding a new captured-data type later is a one-entry change there plus a new branch (or extension of `handleDoughPost`) in `doPost`.
 
 - **Tab `Dough Counts`**: `Date | Today's Forecast | Current Sales | Sales Left | Tomorrow's Forecast | Indi Count | Small Count | Large Count | Sic Count | Boil Count | Batches`
 - **Tab `Temperatures`**: `Date | Water 1 | Dough 1 | Water 2 | Dough 2 | … | Water 10 | Dough 10` (interleaved pairs)
 - **Tab `Dough Bible`**: `Threshold | Indi | Small | Large | Sicilian` — 27 rows mirroring `DOUGH_TABLE` in `js/config.js`. **Reference only**; the JS owns the source of truth for calculations. `BIBLE_DATA` in `Code.gs` must be kept in sync with `DOUGH_TABLE` if either changes.
+- **Tab `2pm Make Amount`**: `Date | Indi | Small | Large | Sicilian | Boil` — per-size **balls to make** as calculated by `calculate()` (post-clamp: Sicilian min 2, Boil = `max(0, 36 - count)`). Written automatically alongside every Dough Counts save.
+- **Tab `Final Dough Amount at 2pm`**: `Date | Indi | Small | Large | Sicilian | Boil` — per-size `count + make`, i.e. how much dough is on hand once the morning batches are done. Also written automatically alongside every Dough Counts save.
 
-- **Save (POST)**: `postToSheet()` sends a POST with a JSON body (`Content-Type: text/plain` to avoid CORS preflight). On CORS failure, retries with `mode: 'no-cors'`. The backend routes by `data.type`: `"dough"` (default) writes to the Dough Counts tab; `"temps"` writes to the Temperatures tab. Each tab keeps one row per day; a second save on the same day overwrites the existing row. The backend returns `{status: "ok", action, row, date}` on success, or `{status: "error", message}` on failure. Actions: `"created"`, `"updated"`, `"temps_saved"`, `"temps_noop"` (empty temps array). Temps can be saved on a date with no prior dough save — the backend appends a new Temperatures row with just the date.
+- **Save (POST)**: `postToSheet()` sends a POST with a JSON body (`Content-Type: text/plain` to avoid CORS preflight). On CORS failure, retries with `mode: 'no-cors'`. The backend routes by `data.type`: `"dough"` (default) writes to the Dough Counts tab AND, when `makes` / `finals` objects are present in the payload, also upserts the matching rows in the **2pm Make Amount** and **Final Dough Amount at 2pm** tabs (best-effort, not part of the response payload). `"temps"` writes to the Temperatures tab. Each tab keeps one row per day; a second save on the same day overwrites the existing row. The backend returns `{status: "ok", action, row, date}` on success (`row` references the Dough Counts row for dough saves), or `{status: "error", message}` on failure. Actions: `"created"`, `"updated"`, `"temps_saved"`, `"temps_noop"` (empty temps array). Temps can be saved on a date with no prior dough save — the backend appends a new Temperatures row with just the date.
 - **Backend source**: `Code.gs` is tracked in the repo under `apps-script/`. Deploy flow: edit the file via PR, merge, then manually copy into the Apps Script editor and deploy as a new version.
 - **One-time setup**: `seedSheets()` (in `Code.gs`) is run once from the Apps Script editor. It creates any missing tabs, writes headers, and seeds the Dough Bible. Idempotent — safe to re-run.
 - **History (GET)**: `loadHistory()` fetches `SCRIPT_URL` with no parameters, receives an array of the last 30 Dough Counts rows, takes the last 10, and displays them newest-first.
@@ -86,6 +88,7 @@ Sheet column header strings (used as keys in the merged JSON response):
 - **Set-out logic**: When End of Night Count goes negative for Indi/Small/Large, the per-row `↓ Set out X trays` line appears AND the unified set-out alert banner above the breakdown lists every affected size (computed as `ceil(-doughLeft / perTray)`). Sicilian clamps (no set-out shown) because same-day Sicilian dough can't be used. Boil has no set-out.
 - **Theme/density baked in**: `<html data-theme="mise" data-density="compact">` is the only live combination. The Tweaks panel was removed — staff don't need to choose. Line Check theme rules still exist in `styles.css` but never match. To bring back a toggle later, restore a slim controller and switch the `data-theme` attribute.
 - **Temps section is collapsed by default**: `<section class="temp-sec">` starts without the `.open` class so its body is hidden via `.temp-sec:not(.open) .temp-body { display: none; }`. The header acts as a button (`#tempToggle`) that toggles `.open` on every tap. Closed every page load — only managers expand it.
+- **Bible and History sections are collapsed by default**: same pattern as Temps. `.bible:not(.open) #bibleBody { display: none; }` hides the whole Bible body (active-row strip cards + 27-row table) until tap. `.history-sec:not(.open) .history-body { display: none; }` hides the recent-history list. Header text flips between *"Tap to expand"* and *"Tap to collapse"* with a ▾/▴ chevron.
 
 ## Known issues (to be fixed in Phase 2)
 
@@ -152,6 +155,15 @@ Sheet column header strings (used as keys in the merged JSON response):
 - Step 7.1 — Bake in Mise en Place + Compact as the only look (`<html data-theme="mise" data-density="compact">`); delete Tweaks panel, gear button, `js/tweaks.js`, and tweaks CSS ✅ complete
 - Step 7.2 — Collapse Batch Temperatures by default: section header toggles `.open` on the section, body hidden until expanded; reduces distraction for non-manager employees ✅ complete
 - Step 7.3 — Bump body font 15px → 16px and line-height 1.4 → 1.45 for legibility ✅ complete
+
+### Phase 8 — Make + 2pm tabs, collapse Bible & History
+
+- Step 8.1 — Backend: `SHEETS` extended with `make` (tab `2pm Make Amount`) and `final` (tab `Final Dough Amount at 2pm`); `handleDoughPost` upserts both via new `upsertSizeRow(sheetKey, date, sizes)` helper; `seedSheets()` creates the new tabs idempotently ✅ complete
+- Step 8.2 — Frontend: `js/save.js` reads per-size `make` from the breakdown DOM (`row-<size>-make`) via new `readMakeNum()` helper and sends `makes` + `finals` (count + make per size) on every dough save ✅ complete
+- Step 8.3 — Bible fully collapsible: `.bible:not(.open) #bibleBody` hides the entire body (strip cards + table); toggle text now matches Temps style ✅ complete
+- Step 8.4 — History collapsible: section restructured to a button-toggle header + `.history-body` wrapper; CSS + IIFE in `js/history.js` mirror the Temps pattern ✅ complete
+
+**Deployment for Phase 8** (manual): paste the new `apps-script/Code.gs` into the Apps Script editor, run `seedSheets()` once to create the two new tabs (idempotent), then deploy a new version.
 
 ## Rules for future prompts
 
