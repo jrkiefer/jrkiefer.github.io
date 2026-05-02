@@ -90,8 +90,8 @@
 html, body { background: var(--bg); color: var(--ink); }
 body {
   font-family: var(--font-body);
-  font-size: 15px;
-  line-height: 1.4;
+  font-size: 16px;
+  line-height: 1.45;
   -webkit-font-smoothing: antialiased;
   min-height: 100vh;
   background-image:
@@ -1036,6 +1036,20 @@ input.field-warning, input.field-warning:focus,
 
 /* ───────────────────────── Temp section ───────────────────────── */
 .temp-sec { margin-top: 24px; }
+
+/* Temps collapse: header acts as a toggle, body hidden until .open */
+.temp-toggle {
+  width: 100%;
+  cursor: pointer;
+  background: transparent;
+  border: none;
+  padding: 0 2px;
+  text-align: left;
+}
+.temp-toggle .temp-toggle-label::after { content: " ▾"; color: var(--ink-mute); }
+.temp-sec.open .temp-toggle .temp-toggle-label::after { content: " ▴"; }
+.temp-sec:not(.open) .temp-body { display: none; }
+
 .temp-batch-field { max-width: 150px; }
 .temp-batch-pair {
   background: var(--paper);
@@ -1141,89 +1155,6 @@ input.field-warning, input.field-warning:focus,
   text-transform: uppercase;
 }
 .history-link:hover { text-decoration: underline; }
-
-/* ───────────────────────── Tweaks panel ───────────────────────── */
-.tweaks-toggle {
-  position: fixed;
-  bottom: 16px;
-  right: 16px;
-  width: 42px; height: 42px;
-  background: var(--ink);
-  color: var(--paper);
-  border-radius: 50%;
-  display: none;
-  align-items: center;
-  justify-content: center;
-  box-shadow: 0 6px 20px -4px rgba(0,0,0,0.3);
-  font-size: 18px;
-  z-index: 50;
-}
-[data-theme="line"] .tweaks-toggle { border-radius: 0; background: var(--accent); color: #000; }
-.tweaks-toggle.visible { display: flex; }
-
-.tweaks-panel {
-  position: fixed;
-  bottom: 68px;
-  right: 16px;
-  width: 280px;
-  background: var(--paper);
-  border: 1px solid var(--rule);
-  border-radius: var(--radius);
-  box-shadow: 0 20px 50px -10px rgba(0,0,0,0.3);
-  padding: 16px;
-  z-index: 49;
-  display: none;
-}
-.tweaks-panel.open { display: block; }
-.tweaks-panel h3 {
-  font-family: var(--font-display);
-  font-size: 16px;
-  font-weight: 600;
-  margin-bottom: 12px;
-  letter-spacing: -0.01em;
-}
-[data-theme="line"] .tweaks-panel h3 {
-  font-family: var(--font-body);
-  font-weight: 800;
-  text-transform: uppercase;
-  font-size: 12px;
-  letter-spacing: 0.06em;
-}
-.tweak-group { margin-bottom: 12px; }
-.tweak-group:last-child { margin-bottom: 0; }
-.tweak-group label {
-  display: block;
-  font-family: var(--font-body);
-  font-size: 10px;
-  font-weight: 700;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
-  color: var(--ink-mute);
-  margin-bottom: 4px;
-}
-.tweak-options {
-  display: flex;
-  gap: 4px;
-  border: 1px solid var(--rule);
-  border-radius: var(--radius-sm);
-  overflow: hidden;
-}
-.tweak-options button {
-  flex: 1;
-  padding: 8px;
-  font-family: var(--font-mono);
-  font-size: 11px;
-  color: var(--ink-soft);
-  background: transparent;
-  transition: all 0.15s;
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
-}
-.tweak-options button.active {
-  background: var(--ink);
-  color: var(--paper);
-}
-[data-theme="line"] .tweak-options button.active { background: var(--accent); color: #000; }
 
 /* Focus ring across the board */
 button:focus-visible, input:focus-visible {
