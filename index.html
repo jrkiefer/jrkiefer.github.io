@@ -352,6 +352,44 @@
       </div>
     </section>
 
+    <!-- ─── Actual Make (manager correction, collapsed by default) ─── -->
+    <section class="section make-sec" id="makeSec">
+      <button type="button" class="section-head make-toggle" id="makeToggle" aria-expanded="false" aria-controls="makeBody">
+        <div class="step">
+          <span class="step-num">07</span>
+          <span class="step-title">Actual Make Amount</span>
+        </div>
+        <span class="step-sub make-toggle-label">Tap to expand</span>
+      </button>
+      <div class="card make-body" id="makeBody">
+        <p class="make-hint">Enter the actual balls made for any sizes that came out different from the recipe. Blank fields keep the calculated value. Numbers in light gray are the calculated suggestion.</p>
+        <div class="grid-2">
+          <div class="input-group make-input" style="--c: var(--indi)">
+            <label>Individual</label>
+            <input type="text" id="makeBalls-indi" inputmode="numeric" placeholder="0">
+          </div>
+          <div class="input-group make-input" style="--c: var(--small)">
+            <label>Small</label>
+            <input type="text" id="makeBalls-small" inputmode="numeric" placeholder="0">
+          </div>
+          <div class="input-group make-input" style="--c: var(--large)">
+            <label>Large</label>
+            <input type="text" id="makeBalls-large" inputmode="numeric" placeholder="0">
+          </div>
+          <div class="input-group make-input" style="--c: var(--sic)">
+            <label>Sicilian</label>
+            <input type="text" id="makeBalls-sic" inputmode="numeric" placeholder="0">
+          </div>
+          <div class="input-group make-input full-col" style="--c: var(--boil)">
+            <label>Boil</label>
+            <input type="text" id="makeBalls-boil" inputmode="numeric" placeholder="0">
+          </div>
+        </div>
+        <button type="button" class="make-save-btn" id="makeSaveBtn">Save Actual Make</button>
+        <div class="make-status" id="makeStatus"></div>
+      </div>
+    </section>
+
   </main>
 
   <script src="js/config.js"></script>
@@ -361,6 +399,7 @@
   <script src="js/save.js"></script>
   <script src="js/history.js"></script>
   <script src="js/temps.js"></script>
+  <script src="js/make.js"></script>
   <script src="js/main.js"></script>
 </body>
 </html>

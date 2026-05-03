@@ -77,6 +77,15 @@
       tempSaveBtnEl.disabled = false;
       tempSaveBtnEl.textContent = 'Save Temperatures';
       tempSaveBtnEl.classList.remove('error', 'success');
+      var makeSaveBtnEl = document.getElementById('makeSaveBtn');
+      if (makeSaveBtnEl) {
+        makeSaveBtnEl._isSaving = false;
+        makeSaveBtnEl.disabled = false;
+        makeSaveBtnEl.textContent = 'Save Actual Make';
+        makeSaveBtnEl.classList.remove('error', 'success');
+      }
+      var makeStatusEl = document.getElementById('makeStatus');
+      if (makeStatusEl) { makeStatusEl.textContent = ''; makeStatusEl.classList.remove('error'); }
 
       // Reset active date and temp section
       document.getElementById('activeDate').value = getTodayDate();

@@ -119,6 +119,9 @@ function doPost(e) {
   if (type === "temps") {
     return handleTempsPost(data);
   }
+  if (type === "make") {
+    return handleMakePost(data);
+  }
   if (type === "dough") {
     return handleDoughPost(data);
   }
@@ -185,6 +188,54 @@ function upsertSizeRow(sheetKey, date, sizes) {
   } else {
     sheet.appendRow(rowData);
   }
+}
+
+// Manager-entered actual make corrections. Overwrites the 2pm Make Amount row
+// (from the original calculated values) and recomputes the matching Final
+// Dough Amount at 2pm row using the existing Dough Counts row's counts.
+// Requires a Dough Counts row to already exist for this date.
+function handleMakePost(data) {
+  if (!data.date) {
+    return jsonResponse({status: "error", message: "Missing date"});
+  }
+  if (!data.makes) {
+    return jsonResponse({status: "error", message: "Missing makes"});
+  }
+
+  var doughSheet = getSheet("dough");
+  var doughRow = findRowByDate(doughSheet, data.date);
+  if (doughRow === -1) {
+    return jsonResponse({status: "error", message: "No dough count saved for " + data.date + " — save count first"});
+  }
+
+  var doughObj = readRowAsObject(doughSheet, doughRow);
+  var counts = {
+    indi:  Number(doughObj["Indi Count"])  || 0,
+    small: Number(doughObj["Small Count"]) || 0,
+    large: Number(doughObj["Large Count"]) || 0,
+    sic:   Number(doughObj["Sic Count"])   || 0,
+    boil:  Number(doughObj["Boil Count"])  || 0
+  };
+  var makes = {
+    indi:  Number(data.makes.indi)  || 0,
+    small: Number(data.makes.small) || 0,
+    large: Number(data.makes.large) || 0,
+    sic:   Number(data.makes.sic)   || 0,
+    boil:  Number(data.makes.boil)  || 0
+  };
+  var finals = {
+    indi:  counts.indi  + makes.indi,
+    small: counts.small + makes.small,
+    large: counts.large + makes.large,
+    sic:   counts.sic   + makes.sic,
+    boil:  counts.boil  + makes.boil
+  };
+
+  upsertSizeRow("make",  data.date, makes);
+  upsertSizeRow("final", data.date, finals);
+
+  var makeRow = findRowByDate(getSheet("make"), data.date);
+  return jsonResponse({status: "ok", action: "make_saved", row: makeRow, date: data.date});
 }
 
 function handleTempsPost(data) {

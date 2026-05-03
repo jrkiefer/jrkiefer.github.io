@@ -13,14 +13,15 @@ Dough Tracker is a mobile-first web calculator used by a pizza shop. In the firs
 - `css/`
   - `styles.css` — all CSS; the Mise en Place theme is the only live look (Line Check rules retained as no-ops in case we re-introduce a toggle) (1293 lines)
 - `js/` — loaded in this order via `<script>` tags (no modules, shared global scope)
-  - `config.js` — all constants: SCRIPT_URL, DOUGH_TABLE, PER_TRAY, etc. (43 lines)
-  - `utils.js` — utility functions: parseDollar, expandDollar, updateHint (inline $ expansion), sanitize, stripExtraDots, valClass (pos/neg) (92 lines)
-  - `bible.js` — Dough Bible reference: builds the 27-row table once, highlights tonight/tomorrow active rows, wires header toggle (80 lines)
-  - `calculate.js` — calculation + render pipeline: lookup, calculate, recipe chips, hero batches, unified set-out alert, debouncedCalculate (221 lines)
-  - `save.js` — dollar field validation, save validation, postToSheet, save click handler (236 lines)
-  - `history.js` — loadHistory function and initial call (54 lines)
-  - `temps.js` — temperature tracking state, UI, active date load/sync/save handlers, collapsible-section toggle (300 lines)
-  - `main.js` — masthead date, event wiring, initial calculate() call, reset handler (89 lines)
+  - `config.js` — all constants: SCRIPT_URL, DOUGH_TABLE, PER_TRAY, etc.
+  - `utils.js` — utility functions: parseDollar, expandDollar, updateHint (inline $ expansion), sanitize, stripExtraDots, valClass (pos/neg)
+  - `bible.js` — Dough Bible reference: builds the 27-row table once, highlights tonight/tomorrow active rows, wires header toggle
+  - `calculate.js` — calculation + render pipeline: lookup, calculate, recipe chips, hero batches, unified set-out alert, debouncedCalculate; calls `updateMakePlaceholders()` if defined
+  - `save.js` — dollar field validation, save validation, postToSheet, save click handler
+  - `history.js` — loadHistory function, history toggle wire-up
+  - `temps.js` — temperature tracking state, UI, active date load/sync/save handlers, collapsible-section toggle
+  - `make.js` — manager-only "Actual Make" card: collapsible toggle, calc-value placeholders, save click handler (POST type 'make')
+  - `main.js` — masthead date, event wiring, initial calculate() call, reset handler (also resets the make card)
 - `apps-script/`
   - `Code.gs` — version-controlled copy of the Google Apps Script backend; deploy by manually copying into the Apps Script editor
 
@@ -64,7 +65,12 @@ The 9-step calculation chain inside `calculate()`:
 - **Tab `2pm Make Amount`**: `Date | Indi | Small | Large | Sicilian | Boil` — per-size **balls to make** as calculated by `calculate()` (post-clamp: Sicilian min 2, Boil = `max(0, 36 - count)`). Written automatically alongside every Dough Counts save.
 - **Tab `Final Dough Amount at 2pm`**: `Date | Indi | Small | Large | Sicilian | Boil` — per-size `count + make`, i.e. how much dough is on hand once the morning batches are done. Also written automatically alongside every Dough Counts save.
 
-- **Save (POST)**: `postToSheet()` sends a POST with a JSON body (`Content-Type: text/plain` to avoid CORS preflight). On CORS failure, retries with `mode: 'no-cors'`. The backend routes by `data.type`: `"dough"` (default) writes to the Dough Counts tab AND, when `makes` / `finals` objects are present in the payload, also upserts the matching rows in the **2pm Make Amount** and **Final Dough Amount at 2pm** tabs (best-effort, not part of the response payload). `"temps"` writes to the Temperatures tab. Each tab keeps one row per day; a second save on the same day overwrites the existing row. The backend returns `{status: "ok", action, row, date}` on success (`row` references the Dough Counts row for dough saves), or `{status: "error", message}` on failure. Actions: `"created"`, `"updated"`, `"temps_saved"`, `"temps_noop"` (empty temps array). Temps can be saved on a date with no prior dough save — the backend appends a new Temperatures row with just the date.
+- **Save (POST)**: `postToSheet()` sends a POST with a JSON body (`Content-Type: text/plain` to avoid CORS preflight). On CORS failure, retries with `mode: 'no-cors'`. The backend routes by `data.type`:
+  - `"dough"` (default) writes to the Dough Counts tab AND, when `makes` / `finals` objects are present in the payload, also upserts the matching rows in the **2pm Make Amount** and **Final Dough Amount at 2pm** tabs (best-effort, not part of the response payload).
+  - `"temps"` writes to the Temperatures tab.
+  - `"make"` (manager actual-make correction) overwrites the **2pm Make Amount** row with the supplied per-size makes, then **recomputes** the **Final Dough Amount at 2pm** row using the existing Dough Counts row's counts. Requires a Dough Counts row to exist for the date — returns an error otherwise.
+  
+  Each tab keeps one row per day; a second save on the same day overwrites the existing row. The backend returns `{status: "ok", action, row, date}` on success, or `{status: "error", message}` on failure. Actions: `"created"`, `"updated"`, `"temps_saved"`, `"temps_noop"` (empty temps array), `"make_saved"`. Temps can be saved on a date with no prior dough save — the backend appends a new Temperatures row with just the date.
 - **Backend source**: `Code.gs` is tracked in the repo under `apps-script/`. Deploy flow: edit the file via PR, merge, then manually copy into the Apps Script editor and deploy as a new version.
 - **One-time setup**: `seedSheets()` (in `Code.gs`) is run once from the Apps Script editor. It creates any missing tabs, writes headers, and seeds the Dough Bible. Idempotent — safe to re-run.
 - **History (GET)**: `loadHistory()` fetches `SCRIPT_URL` with no parameters, receives an array of the last 30 Dough Counts rows, takes the last 10, and displays them newest-first.
@@ -89,6 +95,7 @@ Sheet column header strings (used as keys in the merged JSON response):
 - **Theme/density baked in**: `<html data-theme="mise" data-density="compact">` is the only live combination. The Tweaks panel was removed — staff don't need to choose. Line Check theme rules still exist in `styles.css` but never match. To bring back a toggle later, restore a slim controller and switch the `data-theme` attribute.
 - **Temps section is collapsed by default**: `<section class="temp-sec">` starts without the `.open` class so its body is hidden via `.temp-sec:not(.open) .temp-body { display: none; }`. The header acts as a button (`#tempToggle`) that toggles `.open` on every tap. Closed every page load — only managers expand it.
 - **Bible and History sections are collapsed by default**: same pattern as Temps. `.bible:not(.open) #bibleBody { display: none; }` hides the whole Bible body (active-row strip cards + 27-row table) until tap. `.history-sec:not(.open) .history-body { display: none; }` hides the recent-history list. Header text flips between *"Tap to expand"* and *"Tap to collapse"* with a ▾/▴ chevron.
+- **Actual Make card (Step 07) is collapsed by default**: same pattern as Temps. The card contains 5 ball-count inputs (one per size) that start blank, with the calculated balls-to-make shown as a placeholder. Blank fields fall back to the placeholder value on save (so partial corrections work). The card has its own `Save Actual Make` button that POSTs `{type: 'make', date, makes}` — the backend overwrites the **2pm Make Amount** row and recomputes the **Final Dough Amount at 2pm** row using the existing Dough Counts row's counts. Requires a Dough Counts row to exist for the date.
 
 ## Known issues (to be fixed in Phase 2)
 
@@ -164,6 +171,14 @@ Sheet column header strings (used as keys in the merged JSON response):
 - Step 8.4 — History collapsible: section restructured to a button-toggle header + `.history-body` wrapper; CSS + IIFE in `js/history.js` mirror the Temps pattern ✅ complete
 
 **Deployment for Phase 8** (manual): paste the new `apps-script/Code.gs` into the Apps Script editor, run `seedSheets()` once to create the two new tabs (idempotent), then deploy a new version.
+
+### Phase 9 — Actual Make correction card
+
+- Step 9.1 — Backend: new `handleMakePost(data)` route; reads the existing Dough Counts row for the date, overwrites the **2pm Make Amount** row with the supplied makes, and recomputes the **Final Dough Amount at 2pm** row using `count + make` per size. Errors out if no Dough Counts row exists for the date. ✅ complete
+- Step 9.2 — Frontend: new `js/make.js` and a Step 07 collapsed-by-default card at the bottom of the page. Five ball-count inputs (one per size) start blank with the calculated value as placeholder; blank fields fall back to placeholder on save. Separate `Save Actual Make` button POSTs `{type: 'make', date, makes}`. ✅ complete
+- Step 9.3 — `calculate()` calls `updateMakePlaceholders()` so the calc-value hints stay current; `postToSheet` recognises the new `make_saved` action; `main.js` reset handler clears the make card too. ✅ complete
+
+**Deployment for Phase 9** (manual): paste the new `apps-script/Code.gs` into the Apps Script editor (no `seedSheets()` re-run needed — the two tabs the make handler writes to already exist from Phase 8), then deploy a new version.
 
 ## Rules for future prompts
 

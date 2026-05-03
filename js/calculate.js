@@ -209,6 +209,9 @@
       // Dough Bible active rows + table highlight
       updateBible(tonightIdx, tomorrowIdx);
 
+      // Make card placeholders mirror the calculated balls-to-make per size
+      if (typeof updateMakePlaceholders === 'function') updateMakePlaceholders();
+
       updateSaveButtons();
       syncTempBatches();
     }

@@ -163,6 +163,7 @@
             if (json.action === 'updated') actionText = 'Updated row ' + json.row;
             else if (json.action === 'created') actionText = 'Saved row ' + json.row;
             else if (json.action === 'temps_saved') actionText = 'Temps saved!';
+            else if (json.action === 'make_saved') actionText = 'Make saved!';
             btn.textContent = actionText;
             btn.classList.add('success');
             resetSaveBtn(btn, successLabel);
