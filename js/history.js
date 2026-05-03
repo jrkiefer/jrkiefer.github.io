@@ -52,3 +52,16 @@
         });
     }
     loadHistory();
+
+    // Collapsible History section: closed by default, header toggles .open
+    (function wireHistoryToggle() {
+      var toggle = document.getElementById('historyToggle');
+      var sec = document.getElementById('historySec');
+      if (!toggle || !sec) return;
+      toggle.addEventListener('click', function() {
+        var isOpen = sec.classList.toggle('open');
+        toggle.setAttribute('aria-expanded', isOpen ? 'true' : 'false');
+        var lbl = toggle.querySelector('.history-toggle-label');
+        if (lbl) lbl.textContent = isOpen ? 'Tap to collapse' : 'Tap to expand';
+      });
+    })();

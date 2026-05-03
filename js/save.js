@@ -4,6 +4,13 @@
     var saveHint = document.getElementById('saveHint');
     var isSaving = false;
 
+    // Read a calculated "balls to make" value from the breakdown DOM.
+    // calculate() always runs before save (debounced or sync), so these are current.
+    function readMakeNum(elId) {
+      var el = document.getElementById(elId);
+      return el ? (parseInt(el.textContent, 10) || 0) : 0;
+    }
+
     function validateDollarFields() {
       var errors = {};
       var warnings = {};
@@ -218,6 +225,18 @@
           return;
         }
       }
+      var indiCount  = getCountValue('indi');
+      var smallCount = getCountValue('small');
+      var largeCount = getCountValue('large');
+      var sicCount   = getCountValue('sic');
+      var boilCount  = getBoilCountValue();
+
+      var indiMake  = readMakeNum('row-indi-make');
+      var smallMake = readMakeNum('row-small-make');
+      var largeMake = readMakeNum('row-large-make');
+      var sicMake   = readMakeNum('row-sic-make');
+      var boilMake  = readMakeNum('row-boil-make');
+
       var data = {
         type: 'dough',
         date: date,
@@ -225,12 +244,22 @@
         currentSales: expandDollar(document.getElementById('currentSales').value),
         salesLeft: expandDollar(document.getElementById('todayForecast').value) - expandDollar(document.getElementById('currentSales').value),
         tomorrowForecast: expandDollar(document.getElementById('tomorrowForecast').value),
-        indiCount: getCountValue('indi'),
-        smallCount: getCountValue('small'),
-        largeCount: getCountValue('large'),
-        sicCount: getCountValue('sic'),
-        boilCount: getBoilCountValue(),
-        batches: parseInt(document.getElementById('heroBatchNum').textContent, 10) || 0
+        indiCount: indiCount,
+        smallCount: smallCount,
+        largeCount: largeCount,
+        sicCount: sicCount,
+        boilCount: boilCount,
+        batches: parseInt(document.getElementById('heroBatchNum').textContent, 10) || 0,
+        makes: {
+          indi: indiMake, small: smallMake, large: largeMake, sic: sicMake, boil: boilMake
+        },
+        finals: {
+          indi:  indiCount  + indiMake,
+          small: smallCount + smallMake,
+          large: largeCount + largeMake,
+          sic:   sicCount   + sicMake,
+          boil:  boilCount  + boilMake
+        }
       };
       postToSheet(data, saveBtn, 'Save Count', loadHistory, function() { isSaving = false; });
     });

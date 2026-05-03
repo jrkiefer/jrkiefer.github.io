@@ -66,7 +66,7 @@
       }
     }
 
-    // Header toggle (acts as an accordion)
+    // Header toggle (acts as an accordion). Closed by default; matches Temps pattern.
     (function wireBibleHead() {
       var head = document.getElementById('bibleHead');
       var bible = document.getElementById('bible');
@@ -75,6 +75,6 @@
         var isOpen = bible.classList.toggle('open');
         head.setAttribute('aria-expanded', isOpen ? 'true' : 'false');
         var toggle = head.querySelector('.toggle');
-        if (toggle) toggle.textContent = isOpen ? 'Collapse' : 'Expand';
+        if (toggle) toggle.textContent = isOpen ? 'Tap to collapse' : 'Tap to expand';
       });
     })();

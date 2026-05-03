@@ -287,11 +287,11 @@
       </div>
     </section>
 
-    <!-- ─── Dough Bible reference ─── -->
+    <!-- ─── Dough Bible reference (collapsed by default) ─── -->
     <div class="bible" id="bible">
       <button type="button" class="bible-head" id="bibleHead" aria-expanded="false" aria-controls="bibleBody" style="width:100%; cursor:pointer; display:flex; align-items:center; justify-content:space-between; text-align:left;">
-        <span class="name">Dough <em>Bible</em> — active row</span>
-        <span class="toggle">Expand</span>
+        <span class="name">Dough <em>Bible</em></span>
+        <span class="toggle">Tap to expand</span>
       </button>
       <div id="bibleBody">
       <div class="bible-active">
@@ -338,16 +338,18 @@
       </div>
     </section>
 
-    <!-- ─── History ─── -->
-    <section class="section history-sec">
-      <div class="section-head">
+    <!-- ─── History (collapsed by default) ─── -->
+    <section class="section history-sec" id="historySec">
+      <button type="button" class="section-head history-toggle" id="historyToggle" aria-expanded="false" aria-controls="historyBody">
         <div class="step">
           <span class="step-num">06</span>
           <span class="step-title">Recent History</span>
         </div>
-        <span class="step-sub">Last 10 days</span>
+        <span class="step-sub history-toggle-label">Tap to expand</span>
+      </button>
+      <div class="history-body" id="historyBody">
+        <div id="historyList"></div>
       </div>
-      <div id="historyList"></div>
     </section>
 
   </main>
