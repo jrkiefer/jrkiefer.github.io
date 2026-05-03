@@ -166,6 +166,15 @@
             else if (json.action === 'make_saved') actionText = 'Make saved!';
             btn.textContent = actionText;
             btn.classList.add('success');
+            // After a successful Save Count, fill the Step-07 make inputs with
+            // the current calculated balls-to-make per size so the manager
+            // sees solid numbers and only edits sizes that came out different.
+            // Skipped for temps_saved / make_saved since they don't change the
+            // calc, and skipped if make.js isn't loaded.
+            if ((json.action === 'created' || json.action === 'updated') &&
+                typeof populateMakeInputs === 'function') {
+              populateMakeInputs();
+            }
             resetSaveBtn(btn, successLabel);
             if (onSuccess) onSuccess();
           } else if (json && json.status === 'error') {
