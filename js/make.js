@@ -79,11 +79,21 @@
 
         status.textContent = '';
         status.classList.remove('error');
-        btn._isSaving = true;
         var data = { type: 'make', date: date, makes: makes };
         postToSheet(data, btn, 'Save Actual Make',
-          function() { btn._isSaving = false; },
-          function() { btn._isSaving = false; }
+          null,
+          // Echo the backend error into #makeStatus. Postsheet leaves the error
+          // on the button itself, but the button is narrow — the dedicated
+          // status div below the inputs displays the full message and keeps it
+          // around if the user clicks Save again (which would replace the
+          // button text).
+          function() {
+            var msg = btn.textContent || '';
+            if (msg.indexOf('Error') === 0) {
+              status.textContent = msg.replace(/^Error:\s*/, '');
+              status.classList.add('error');
+            }
+          }
         );
       });
     }
