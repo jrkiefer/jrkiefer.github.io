@@ -1,9 +1,13 @@
     // js/make.js — depends on: config.js, utils.js, calculate.js, save.js
     // Manager-entered actual make corrections. UI: collapsed-by-default card at
-    // the bottom of the page. Inputs are blank by default with the calculated
-    // make values shown as placeholder hints. On save:
-    //   - blank fields fall back to the calculated value (placeholder)
-    //   - filled fields override the calculated value
+    // the bottom of the page.
+    // Pre-first-save: inputs are blank with calculated values shown as faded
+    // placeholder hints (placeholders refreshed on every recalculation).
+    // After Save Count succeeds: inputs are auto-populated with the calculated
+    // values so the manager sees solid numbers and only edits sizes that came
+    // out different from the recipe.
+    // On Save Actual Make: blank fields still fall back to the placeholder, so
+    // the pre-first-save corner case keeps working.
     // Backend overwrites the 2pm Make Amount and Final Dough Amount at 2pm rows
     // for the active date. Requires that a Dough Counts row already exists.
 
@@ -20,6 +24,21 @@
         var calcEl = document.getElementById('row-' + t + '-make');
         var calc = calcEl ? (parseInt(calcEl.textContent, 10) || 0) : 0;
         input.placeholder = String(calc);
+      }
+    }
+
+    // Fill the make inputs with the currently-calculated balls-to-make per
+    // size. Called from save.js after a successful Save Count so the manager
+    // sees solid numbers and only edits the sizes that came out different
+    // from the recipe.
+    function populateMakeInputs() {
+      for (var i = 0; i < MAKE_TYPES.length; i++) {
+        var t = MAKE_TYPES[i];
+        var input = document.getElementById('makeBalls-' + t);
+        if (!input) continue;
+        var calcEl = document.getElementById('row-' + t + '-make');
+        var calc = calcEl ? (parseInt(calcEl.textContent, 10) || 0) : 0;
+        input.value = String(calc);
       }
     }
 

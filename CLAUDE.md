@@ -95,7 +95,7 @@ Sheet column header strings (used as keys in the merged JSON response):
 - **Theme/density baked in**: `<html data-theme="mise" data-density="compact">` is the only live combination. The Tweaks panel was removed — staff don't need to choose. Line Check theme rules still exist in `styles.css` but never match. To bring back a toggle later, restore a slim controller and switch the `data-theme` attribute.
 - **Temps section is collapsed by default**: `<section class="temp-sec">` starts without the `.open` class so its body is hidden via `.temp-sec:not(.open) .temp-body { display: none; }`. The header acts as a button (`#tempToggle`) that toggles `.open` on every tap. Closed every page load — only managers expand it.
 - **Bible and History sections are collapsed by default**: same pattern as Temps. `.bible:not(.open) #bibleBody { display: none; }` hides the whole Bible body (active-row strip cards + 27-row table) until tap. `.history-sec:not(.open) .history-body { display: none; }` hides the recent-history list. Header text flips between *"Tap to expand"* and *"Tap to collapse"* with a ▾/▴ chevron.
-- **Actual Make card (Step 07) is collapsed by default**: same pattern as Temps. The card contains 5 ball-count inputs (one per size) that start blank, with the calculated balls-to-make shown as a placeholder. Blank fields fall back to the placeholder value on save (so partial corrections work). The card has its own `Save Actual Make` button that POSTs `{type: 'make', date, makes}` — the backend overwrites the **2pm Make Amount** row and recomputes the **Final Dough Amount at 2pm** row using the existing Dough Counts row's counts. Requires a Dough Counts row to exist for the date.
+- **Actual Make card (Step 07) is collapsed by default**: same pattern as Temps. The card contains 5 ball-count inputs (one per size). Pre-first-save, inputs are blank with the calculated balls-to-make shown as a placeholder hint. After every successful Save Count, `populateMakeInputs()` (in `js/make.js`, called from the success branch in `js/save.js`) fills the inputs with the current calculated values so the manager sees solid numbers and only edits sizes that came out different. Blank fields still fall back to the placeholder on save, so the pre-first-save corner case keeps working. The card has its own `Save Actual Make` button that POSTs `{type: 'make', date, makes}` — the backend overwrites the **2pm Make Amount** row and recomputes the **Final Dough Amount at 2pm** row using the existing Dough Counts row's counts. Requires a Dough Counts row to exist for the date. Reset clears the inputs back to blank with placeholders visible.
 - **Make card uses a single ball-count input per size, not trays + extras**: The Dough Counts card uses trays + extras (`tcTrays-<size>` + `tcExtra-<size>`), but the Actual Make card uses a single `makeBalls-<size>` input. This is intentional — managers correcting an actual make think in terms of total balls, not "how many trays + leftovers." If the divergence ever feels confusing, the count card pattern can be ported over.
 
 ## Known issues (to be fixed in Phase 2)
@@ -180,6 +180,12 @@ Sheet column header strings (used as keys in the merged JSON response):
 - Step 9.3 — `calculate()` calls `updateMakePlaceholders()` so the calc-value hints stay current; `postToSheet` recognises the new `make_saved` action; `main.js` reset handler clears the make card too. ✅ complete
 
 **Deployment for Phase 9** (manual): paste the new `apps-script/Code.gs` into the Apps Script editor (no `seedSheets()` re-run needed — the two tabs the make handler writes to already exist from Phase 8), then deploy a new version.
+
+### Phase 10 — Auto-fill the Actual Make card on Save Count
+
+- Step 10.1 — `populateMakeInputs()` in `js/make.js` writes calculated balls-to-make into the make-card inputs (sibling to `updateMakePlaceholders()` but `.value` instead of `.placeholder`); save success branch in `js/save.js` calls it on `created`/`updated` actions only. Step-07 inputs now show solid numbers after every Save Count, so the card reads as "ready to correct" instead of "empty." ✅ complete
+
+**Deployment for Phase 10**: frontend-only — no Apps Script changes.
 
 ## Rules for future prompts
 
