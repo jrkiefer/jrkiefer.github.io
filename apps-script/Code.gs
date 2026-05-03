@@ -165,8 +165,8 @@ function handleDoughPost(data) {
 
   // Best-effort writes to the auxiliary tabs. Failures here don't break the
   // primary Dough Counts save.
-  upsertSizeRow("make", data.date, data.makes);
-  upsertSizeRow("final", data.date, data.finals);
+  try { upsertSizeRow("make", data.date, data.makes); }   catch (e) { console.error("upsert make failed:", e); }
+  try { upsertSizeRow("final", data.date, data.finals); } catch (e) { console.error("upsert final failed:", e); }
 
   return jsonResponse({status: "ok", action: action, row: resultRow, date: data.date});
 }
