@@ -93,27 +93,51 @@
 
     function updateSaveButtons() {
       if (!isSaving) {
-        var validation = validateDollarFields();
-        applyValidationToDOM(validation);
+        var mode = (typeof getMode === 'function') ? getMode() : 'twopm';
 
-        var hasData = getCountValue('indi') > 0 || getCountValue('small') > 0 ||
-          getCountValue('large') > 0 || getCountValue('sic') > 0 || getBoilCountValue() > 0 ||
-          expandDollar(document.getElementById('todayForecast').value) > 0;
-
-        if (validation.hasErrors) {
-          saveBtn.disabled = true;
-          saveHint.textContent = 'Fix errors above before saving';
-          saveHint.classList.add('error');
-          saveHint.style.display = 'block';
-        } else if (!hasData) {
-          saveBtn.disabled = true;
-          saveHint.textContent = 'Enter dough counts first';
-          saveHint.classList.remove('error');
-          saveHint.style.display = 'block';
+        if (mode === 'eon') {
+          // EON mode: only the eonSales field exists in the sales card. The
+          // 2pm dollar-field validation rules don't apply, so just check that
+          // at least one count or eonSales has been entered, mirroring the
+          // backend's hasCount || hasSales guard.
+          var eonInput = document.getElementById('eonSales');
+          var eonRaw = eonInput ? eonInput.value : '';
+          var hasEonData = expandDollar(eonRaw) > 0 ||
+            getCountValue('indi') > 0 || getCountValue('small') > 0 ||
+            getCountValue('large') > 0 || getCountValue('sic') > 0 || getBoilCountValue() > 0;
+          if (!hasEonData) {
+            saveBtn.disabled = true;
+            saveHint.textContent = 'Enter EON sales or counts';
+            saveHint.classList.remove('error');
+            saveHint.style.display = 'block';
+          } else {
+            saveBtn.disabled = false;
+            saveHint.classList.remove('error');
+            saveHint.style.display = 'none';
+          }
         } else {
-          saveBtn.disabled = false;
-          saveHint.classList.remove('error');
-          saveHint.style.display = 'none';
+          var validation = validateDollarFields();
+          applyValidationToDOM(validation);
+
+          var hasData = getCountValue('indi') > 0 || getCountValue('small') > 0 ||
+            getCountValue('large') > 0 || getCountValue('sic') > 0 || getBoilCountValue() > 0 ||
+            expandDollar(document.getElementById('todayForecast').value) > 0;
+
+          if (validation.hasErrors) {
+            saveBtn.disabled = true;
+            saveHint.textContent = 'Fix errors above before saving';
+            saveHint.classList.add('error');
+            saveHint.style.display = 'block';
+          } else if (!hasData) {
+            saveBtn.disabled = true;
+            saveHint.textContent = 'Enter dough counts first';
+            saveHint.classList.remove('error');
+            saveHint.style.display = 'block';
+          } else {
+            saveBtn.disabled = false;
+            saveHint.classList.remove('error');
+            saveHint.style.display = 'none';
+          }
         }
       }
       // Temp save: disable if no temp values entered
@@ -164,6 +188,8 @@
             else if (json.action === 'created') actionText = 'Saved row ' + json.row;
             else if (json.action === 'temps_saved') actionText = 'Temps saved!';
             else if (json.action === 'make_saved') actionText = 'Make saved!';
+            else if (json.action === 'eon_created') actionText = 'EON saved row ' + json.row;
+            else if (json.action === 'eon_updated') actionText = 'EON updated row ' + json.row;
             btn.textContent = actionText;
             btn.classList.add('success');
             // After a successful Save Count, fill the Step-07 make inputs with
@@ -212,18 +238,23 @@
     // ── Save Entry ──
     saveBtn.addEventListener('click', function() {
       if (saveBtn.disabled) return;
-      // Defensive: re-validate before saving in case button state is stale
-      var validation = validateDollarFields();
-      if (validation.hasErrors) {
-        applyValidationToDOM(validation);
-        updateSaveButtons();
-        return;
+      var mode = (typeof getMode === 'function') ? getMode() : 'twopm';
+
+      // Dollar validation only applies to the 2 PM card's three fields.
+      if (mode !== 'eon') {
+        var validation = validateDollarFields();
+        if (validation.hasErrors) {
+          applyValidationToDOM(validation);
+          updateSaveButtons();
+          return;
+        }
       }
       isSaving = true;
       var dateEl = document.getElementById('activeDate');
       var date = dateEl && dateEl.value.trim() ? normalizeDate(dateEl.value.trim()) : normalizeDate(getTodayDate());
       // Reject dates that are obviously wrong (>1 year ago or >7 days ahead)
       var dateParts = date.split('/');
+      var resetLabel = (mode === 'eon') ? 'Save EON Count' : 'Save Count';
       if (dateParts.length === 3) {
         var selected = new Date(parseInt(dateParts[2]), parseInt(dateParts[0]) - 1, parseInt(dateParts[1]));
         var today = new Date(); today.setHours(0,0,0,0); selected.setHours(0,0,0,0);
@@ -231,7 +262,7 @@
         if (diffDays > 7 || diffDays < -365) {
           saveBtn.textContent = diffDays > 7 ? 'Date is too far in the future' : 'Date is too far in the past';
           saveBtn.classList.add('error');
-          resetSaveBtn(saveBtn, 'Save Count', 3000);
+          resetSaveBtn(saveBtn, resetLabel, 3000);
           return;
         }
       }
@@ -241,13 +272,29 @@
       var sicCount   = getCountValue('sic');
       var boilCount  = getBoilCountValue();
 
+      var data;
+      if (mode === 'eon') {
+        data = {
+          type: 'eon',
+          date: date,
+          eonSales: expandDollar(document.getElementById('eonSales').value),
+          indiCount: indiCount,
+          smallCount: smallCount,
+          largeCount: largeCount,
+          sicCount: sicCount,
+          boilCount: boilCount
+        };
+        postToSheet(data, saveBtn, 'Save EON Count', null, function() { isSaving = false; });
+        return;
+      }
+
       var indiMake  = readMakeNum('row-indi-make');
       var smallMake = readMakeNum('row-small-make');
       var largeMake = readMakeNum('row-large-make');
       var sicMake   = readMakeNum('row-sic-make');
       var boilMake  = readMakeNum('row-boil-make');
 
-      var data = {
+      data = {
         type: 'dough',
         date: date,
         todayForecast: expandDollar(document.getElementById('todayForecast').value),

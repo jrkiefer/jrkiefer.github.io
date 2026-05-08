@@ -109,10 +109,12 @@
     }
 
     function calculate() {
-      // Update inline dollar expansions
+      // Update inline dollar expansions (eonSales lives only in the EON sales
+      // card; updateHint is a no-op when the element is missing)
       updateHint('currentSales', 'disp_currentSales');
       updateHint('todayForecast', 'disp_todayForecast');
       updateHint('tomorrowForecast', 'disp_tomorrowForecast');
+      updateHint('eonSales', 'disp_eonSales');
 
       var currentSales = expandDollar(document.getElementById('currentSales').value);
       var todayForecast = expandDollar(document.getElementById('todayForecast').value);
