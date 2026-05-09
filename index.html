@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en" data-theme="mise" data-density="compact">
+<html lang="en" data-theme="mise" data-density="compact" data-mode="twopm">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
@@ -49,60 +49,89 @@
       </div>
     </section>
 
-    <!-- ─── Sales & Forecast ─── -->
+    <!-- ─── Sales & Forecast (2 PM) / End of Night Sales (EON) ─── -->
     <section class="section">
       <div class="section-head">
         <div class="step">
           <span class="step-num">01</span>
-          <span class="step-title">Sales &amp; Forecast</span>
+          <span class="step-title sales-twopm-title">Sales &amp; Forecast</span>
+          <span class="step-title sales-eon-title">End of Night Sales</span>
         </div>
-        <span class="step-sub">Dollars</span>
+        <span class="step-sub sales-twopm-title">Dollars</span>
+        <span class="step-sub sales-eon-title">Dollars</span>
       </div>
       <div class="card">
 
-        <div class="input-group full-col">
-          <label for="currentSales">Current Sales</label>
-          <div class="dollar-field">
-            <span class="dollar-sign">$</span>
-            <input type="text" id="currentSales" inputmode="decimal" placeholder="0">
-            <span class="dollar-expanded num" id="disp_currentSales"></span>
-          </div>
-          <div class="field-msg" id="msg_currentSales"></div>
-        </div>
-
-        <div class="grid-2">
-          <div class="input-group">
-            <label for="todayForecast">Today's Forecast</label>
+        <!-- 2 PM mode: current sales, today's forecast, tomorrow's forecast -->
+        <div class="sales-twopm">
+          <div class="input-group full-col">
+            <label for="currentSales">Current Sales</label>
             <div class="dollar-field">
               <span class="dollar-sign">$</span>
-              <input type="text" id="todayForecast" inputmode="decimal" placeholder="10">
-              <span class="dollar-expanded num" id="disp_todayForecast"></span>
+              <input type="text" id="currentSales" inputmode="decimal" placeholder="0">
+              <span class="dollar-expanded num" id="disp_currentSales"></span>
             </div>
-            <div class="field-msg" id="msg_todayForecast"></div>
+            <div class="field-msg" id="msg_currentSales"></div>
           </div>
-          <div class="input-group">
-            <label for="tomorrowForecast">Tomorrow's Forecast</label>
+
+          <div class="grid-2">
+            <div class="input-group">
+              <label for="todayForecast">Today's Forecast</label>
+              <div class="dollar-field">
+                <span class="dollar-sign">$</span>
+                <input type="text" id="todayForecast" inputmode="decimal" placeholder="10">
+                <span class="dollar-expanded num" id="disp_todayForecast"></span>
+              </div>
+              <div class="field-msg" id="msg_todayForecast"></div>
+            </div>
+            <div class="input-group">
+              <label for="tomorrowForecast">Tomorrow's Forecast</label>
+              <div class="dollar-field">
+                <span class="dollar-sign">$</span>
+                <input type="text" id="tomorrowForecast" inputmode="decimal" placeholder="10">
+                <span class="dollar-expanded num" id="disp_tomorrowForecast"></span>
+              </div>
+              <div class="field-msg" id="msg_tomorrowForecast"></div>
+            </div>
+          </div>
+
+          <div class="dollar-guide">
+            <span>Enter <strong>1.7</strong> → $1,700</span>
+            <span>Enter <strong>10</strong> → $10,000</span>
+            <span>Enter <strong>10000</strong> → $10,000</span>
+          </div>
+
+          <div class="sales-left">
+            <span class="sl-label">Sales Left Tonight</span>
+            <span class="sl-value num" id="salesLeftValue">$0</span>
+          </div>
+        </div>
+
+        <!-- EON mode: single end-of-night sales total -->
+        <div class="sales-eon">
+          <div class="input-group full-col">
+            <label for="eonSales">End of Night Sales</label>
             <div class="dollar-field">
               <span class="dollar-sign">$</span>
-              <input type="text" id="tomorrowForecast" inputmode="decimal" placeholder="10">
-              <span class="dollar-expanded num" id="disp_tomorrowForecast"></span>
+              <input type="text" id="eonSales" inputmode="decimal" placeholder="0">
+              <span class="dollar-expanded num" id="disp_eonSales"></span>
             </div>
-            <div class="field-msg" id="msg_tomorrowForecast"></div>
+            <div class="field-msg" id="msg_eonSales"></div>
           </div>
-        </div>
-
-        <div class="dollar-guide">
-          <span>Enter <strong>1.7</strong> → $1,700</span>
-          <span>Enter <strong>10</strong> → $10,000</span>
-          <span>Enter <strong>10000</strong> → $10,000</span>
-        </div>
-
-        <div class="sales-left">
-          <span class="sl-label">Sales Left Tonight</span>
-          <span class="sl-value num" id="salesLeftValue">$0</span>
+          <div class="dollar-guide">
+            <span>Enter <strong>1.7</strong> → $1,700</span>
+            <span>Enter <strong>10</strong> → $10,000</span>
+            <span>Enter <strong>10000</strong> → $10,000</span>
+          </div>
         </div>
       </div>
     </section>
+
+    <!-- ─── Mode Tabs (2 PM / EON) ─── -->
+    <div class="mode-tabs" role="tablist" aria-label="Save mode">
+      <button type="button" class="mode-tab active" id="tab-twopm" role="tab" aria-selected="true" data-mode="twopm">2 PM</button>
+      <button type="button" class="mode-tab" id="tab-eon" role="tab" aria-selected="false" data-mode="eon">EON</button>
+    </div>
 
     <!-- ─── Dough Counts ─── -->
     <section class="section">
@@ -164,7 +193,7 @@
     </section>
 
     <!-- ─── Set-out Alert ─── -->
-    <div class="alert hidden" id="setoutAlert">
+    <div class="alert hidden hide-in-eon" id="setoutAlert">
       <div class="alert-icon">!</div>
       <div class="alert-body">
         <div class="alert-title">Set out from freezer</div>
@@ -179,7 +208,7 @@
     </div>
 
     <!-- ─── Hero: recipe + batches ─── -->
-    <section class="section">
+    <section class="section hide-in-eon">
       <div class="section-head">
         <div class="step">
           <span class="step-num">03</span>
@@ -205,7 +234,7 @@
     </section>
 
     <!-- ─── Breakdown ─── -->
-    <section class="section">
+    <section class="section hide-in-eon">
       <div class="section-head">
         <div class="step">
           <span class="step-num">04</span>
@@ -353,7 +382,7 @@
     </section>
 
     <!-- ─── Actual Make (manager correction, collapsed by default) ─── -->
-    <section class="section make-sec" id="makeSec">
+    <section class="section make-sec hide-in-eon" id="makeSec">
       <button type="button" class="section-head make-toggle" id="makeToggle" aria-expanded="false" aria-controls="makeBody">
         <div class="step">
           <span class="step-num">07</span>
@@ -400,6 +429,7 @@
   <script src="js/history.js"></script>
   <script src="js/temps.js"></script>
   <script src="js/make.js"></script>
+  <script src="js/tabs.js"></script>
   <script src="js/main.js"></script>
 </body>
 </html>

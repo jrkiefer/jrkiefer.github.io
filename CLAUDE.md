@@ -21,7 +21,8 @@ Dough Tracker is a mobile-first web calculator used by a pizza shop. In the firs
   - `history.js` — loadHistory function, history toggle wire-up
   - `temps.js` — temperature tracking state, UI, active date load/sync/save handlers, collapsible-section toggle
   - `make.js` — manager-only "Actual Make" card: collapsible toggle, calc-value placeholders, save click handler (POST type 'make')
-  - `main.js` — masthead date, event wiring, initial calculate() call, reset handler (also resets the make card)
+  - `tabs.js` — 2 PM / EON mode switcher (`getMode`, `setMode`); flips `<html data-mode>`, the `.mode-tab.active` class, and the save-button label; calls `updateSaveButtons()` on switch
+  - `main.js` — masthead date, event wiring, initial calculate() call, reset handler (also resets the make card and flips back to the 2 PM tab)
 - `apps-script/`
   - `Code.gs` — version-controlled copy of the Google Apps Script backend; deploy by manually copying into the Apps Script editor
 
@@ -64,23 +65,26 @@ The 9-step calculation chain inside `calculate()`:
 - **Tab `Dough Bible`**: `Threshold | Indi | Small | Large | Sicilian` — 27 rows mirroring `DOUGH_TABLE` in `js/config.js`. **Reference only**; the JS owns the source of truth for calculations. `BIBLE_DATA` in `Code.gs` must be kept in sync with `DOUGH_TABLE` if either changes.
 - **Tab `2pm Make Amount`**: `Date | Indi | Small | Large | Sicilian | Boil` — per-size **balls to make** as calculated by `calculate()` (post-clamp: Sicilian min 2, Boil = `max(0, 36 - count)`). Written automatically alongside every Dough Counts save.
 - **Tab `Final Dough Amount at 2pm`**: `Date | Indi | Small | Large | Sicilian | Boil` — per-size `count + make`, i.e. how much dough is on hand once the morning batches are done. Also written automatically alongside every Dough Counts save.
+- **Tab `End of Night Count`**: `Date | EON Sales | EON Indi Count | EON Small Count | EON Large Count | EON Sic Count | EON Boil Count` — captured at close from the **EON tab**. Independent of the morning Dough Counts row; one row per date, columns are EON-prefixed so the merged GET response can carry both 2 PM and EON values for the same date without collision.
 
 - **Save (POST)**: `postToSheet()` sends a POST with a JSON body (`Content-Type: text/plain` to avoid CORS preflight). On CORS failure, retries with `mode: 'no-cors'`. The backend routes by `data.type`:
   - `"dough"` (default) writes to the Dough Counts tab AND, when `makes` / `finals` objects are present in the payload, also upserts the matching rows in the **2pm Make Amount** and **Final Dough Amount at 2pm** tabs (best-effort, not part of the response payload).
   - `"temps"` writes to the Temperatures tab.
   - `"make"` (manager actual-make correction) overwrites the **2pm Make Amount** row with the supplied per-size makes, then **recomputes** the **Final Dough Amount at 2pm** row using the existing Dough Counts row's counts. Requires a Dough Counts row to exist for the date — returns an error otherwise.
+  - `"eon"` writes the End of Night save (one EON sales total + per-size counts) to the **End of Night Count** tab. Independent of the morning Dough Counts row — no prerequisite save needed.
   
-  Each tab keeps one row per day; a second save on the same day overwrites the existing row. The backend returns `{status: "ok", action, row, date}` on success, or `{status: "error", message}` on failure. Actions: `"created"`, `"updated"`, `"temps_saved"`, `"temps_noop"` (empty temps array), `"make_saved"`. Temps can be saved on a date with no prior dough save — the backend appends a new Temperatures row with just the date.
+  Each tab keeps one row per day; a second save on the same day overwrites the existing row. The backend returns `{status: "ok", action, row, date}` on success, or `{status: "error", message}` on failure. Actions: `"created"`, `"updated"`, `"temps_saved"`, `"temps_noop"` (empty temps array), `"make_saved"`, `"eon_created"`, `"eon_updated"`. Temps can be saved on a date with no prior dough save — the backend appends a new Temperatures row with just the date.
 - **Backend source**: `Code.gs` is tracked in the repo under `apps-script/`. Deploy flow: edit the file via PR, merge, then manually copy into the Apps Script editor and deploy as a new version.
 - **One-time setup**: `seedSheets()` (in `Code.gs`) is run once from the Apps Script editor. It creates any missing tabs, writes headers, and seeds the Dough Bible. Idempotent — safe to re-run.
 - **History (GET)**: `loadHistory()` fetches `SCRIPT_URL` with no parameters, receives an array of the last 30 Dough Counts rows, takes the last 10, and displays them newest-first.
-- **Load by date (GET)**: Fetches `SCRIPT_URL?date=<date>` and expects either `{status: "found", data: {...}}` or `{status: "not_found"}`. The backend looks up the date in **both** Dough Counts and Temperatures and returns a merged record so the frontend stays unaware of the split.
+- **Load by date (GET)**: Fetches `SCRIPT_URL?date=<date>` and expects either `{status: "found", data: {...}}` or `{status: "not_found"}`. The backend looks up the date in **Dough Counts**, **Temperatures**, **and End of Night Count**, and returns a single merged record. The frontend reads the active tab's keys (e.g. `"Today's Forecast"` in 2 PM mode, `"EON Sales"` in EON mode) to populate only the visible fields.
 
 Sheet column header strings (used as keys in the merged JSON response):
 - `"Today's Forecast"`, `"Current Sales"`, `"Sales Left"`, `"Tomorrow's Forecast"`
 - `"Indi Count"`, `"Small Count"`, `"Large Count"`, `"Sic Count"`, `"Boil Count"`
 - `"Batches"`
 - `"Water 1"` through `"Water 10"`, `"Dough 1"` through `"Dough 10"`
+- `"EON Sales"`, `"EON Indi Count"`, `"EON Small Count"`, `"EON Large Count"`, `"EON Sic Count"`, `"EON Boil Count"`
 
 ## Known quirks and gotchas
 
@@ -95,6 +99,7 @@ Sheet column header strings (used as keys in the merged JSON response):
 - **Theme/density baked in**: `<html data-theme="mise" data-density="compact">` is the only live combination. The Tweaks panel was removed — staff don't need to choose. Line Check theme rules still exist in `styles.css` but never match. To bring back a toggle later, restore a slim controller and switch the `data-theme` attribute.
 - **Temps section is collapsed by default**: `<section class="temp-sec">` starts without the `.open` class so its body is hidden via `.temp-sec:not(.open) .temp-body { display: none; }`. The header acts as a button (`#tempToggle`) that toggles `.open` on every tap. Closed every page load — only managers expand it.
 - **Bible and History sections are collapsed by default**: same pattern as Temps. `.bible:not(.open) #bibleBody { display: none; }` hides the whole Bible body (active-row strip cards + 27-row table) until tap. `.history-sec:not(.open) .history-body { display: none; }` hides the recent-history list. Header text flips between *"Tap to expand"* and *"Tap to collapse"* with a ▾/▴ chevron.
+- **2 PM / EON mode tabs**: a tab strip sits between Step 01 and Step 02. The active mode is held on `<html data-mode="twopm"|"eon">` so visibility is purely CSS-driven (`[data-mode="eon"] .hide-in-eon { display: none; }`, plus `.sales-twopm` / `.sales-eon` swap rules inside Step 01). 2 PM mode is the existing morning workflow. EON mode keeps Step 00 (Active Date), Step 01 (morphed to a single `eonSales` input), Step 02 (Dough Counts), Step 05 (Temps), and Step 06 (History) visible; **Steps 03 (Recipe), 04 (By Size), and 07 (Make) hide**, and the set-out alert hides too. The save button text flips between "Save Count" and "Save EON Count"; `updateSaveButtons()` reads `getMode()` and applies the right validation rules per mode (2 PM: full dollar-field validation; EON: just "any count or sales entered"). The Load button is mode-aware via `fillFieldsFromData(row)` reading EON-prefixed keys (`"EON Sales"`, `"EON Indi Count"`, …) when in EON mode. Reset always flips back to 2 PM. Count fields (`tcTrays-*`, `tcExtra-*`, `countSic`, `tcTrays-boil` etc.) are **shared** across modes — the mode only changes where the values save and which sales fields show.
 - **Actual Make card (Step 07) is collapsed by default**: same pattern as Temps. The card contains 5 ball-count inputs (one per size). Pre-first-save, inputs are blank with the calculated balls-to-make shown as a placeholder hint. After every successful Save Count, `populateMakeInputs()` (in `js/make.js`, called from the success branch in `js/save.js`) fills the inputs with the current calculated values so the manager sees solid numbers and only edits sizes that came out different. Blank fields still fall back to the placeholder on save, so the pre-first-save corner case keeps working. The card has its own `Save Actual Make` button that POSTs `{type: 'make', date, makes}` — the backend overwrites the **2pm Make Amount** row and recomputes the **Final Dough Amount at 2pm** row using the existing Dough Counts row's counts. Requires a Dough Counts row to exist for the date. Reset clears the inputs back to blank with placeholders visible.
 - **Make card uses a single ball-count input per size, not trays + extras**: The Dough Counts card uses trays + extras (`tcTrays-<size>` + `tcExtra-<size>`), but the Actual Make card uses a single `makeBalls-<size>` input. This is intentional — managers correcting an actual make think in terms of total balls, not "how many trays + leftovers." If the divergence ever feels confusing, the count card pattern can be ported over.
 
@@ -186,6 +191,14 @@ Sheet column header strings (used as keys in the merged JSON response):
 - Step 10.1 — `populateMakeInputs()` in `js/make.js` writes calculated balls-to-make into the make-card inputs (sibling to `updateMakePlaceholders()` but `.value` instead of `.placeholder`); save success branch in `js/save.js` calls it on `created`/`updated` actions only. Step-07 inputs now show solid numbers after every Save Count, so the card reads as "ready to correct" instead of "empty." ✅ complete
 
 **Deployment for Phase 10**: frontend-only — no Apps Script changes.
+
+### Phase 11 — 2 PM / EON tabs + End of Night Count sheet
+
+- Step 11.1 — Backend: `SHEETS.eon` entry (tab `End of Night Count`, EON-prefixed headers); new POST type `"eon"` → `handleEonPost(data)` upserts one row per date; `getByDate` extended to merge EON rows alongside Dough Counts + Temperatures. `seedSheets()` picks up the new tab idempotently. ✅ complete
+- Step 11.2 — Frontend HTML/CSS: tab strip between Step 01 and Step 02; Step 01 sales card carries both `.sales-twopm` (3 dollar fields) and `.sales-eon` (single `eonSales` input) blocks, swapped via `[data-mode]` CSS rules. Steps 03, 04, 07 + the set-out alert tagged `.hide-in-eon`. Mode tab styling lives in a new `.mode-tabs` block. ✅ complete
+- Step 11.3 — Frontend JS: new `js/tabs.js` (`getMode`, `setMode`, click wire-up). `js/save.js` save handler + `updateSaveButtons()` branch on `getMode()` to build the right payload and apply the right validation. `js/temps.js` `fillFieldsFromData()` reads EON-prefixed keys when in EON mode and `activeHandleLoadedData()` short-circuits the batches/temps wiring. `js/calculate.js` calls `updateHint('eonSales', 'disp_eonSales')`. `js/main.js` wires the eonSales input listener and the reset handler flips back to 2 PM via `setMode('twopm')`. `postToSheet()` recognises new `eon_created`/`eon_updated` actions. ✅ complete
+
+**Deployment for Phase 11** (manual): paste the new `apps-script/Code.gs` into the Apps Script editor, run `seedSheets()` once to create the new **End of Night Count** tab (idempotent — existing tabs untouched), then deploy a new version.
 
 ## Rules for future prompts
 

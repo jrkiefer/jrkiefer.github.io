@@ -24,6 +24,11 @@ var SHEETS = {
   final: {
     name: "Final Dough Amount at 2pm",
     headers: ["Date","Indi","Small","Large","Sicilian","Boil"]
+  },
+  eon: {
+    name: "End of Night Count",
+    headers: ["Date","EON Sales",
+              "EON Indi Count","EON Small Count","EON Large Count","EON Sic Count","EON Boil Count"]
   }
 };
 
@@ -122,6 +127,9 @@ function doPost(e) {
   if (type === "make") {
     return handleMakePost(data);
   }
+  if (type === "eon") {
+    return handleEonPost(data);
+  }
   if (type === "dough") {
     return handleDoughPost(data);
   }
@@ -188,6 +196,45 @@ function upsertSizeRow(sheetKey, date, sizes) {
   } else {
     sheet.appendRow(rowData);
   }
+}
+
+// End-of-night save. Captures the day's final-sales total and a fresh dough
+// count taken at close. Independent of the morning Dough Counts row — the
+// EON tab keeps one row per date with EON-prefixed columns so the merged GET
+// response can carry both records side by side.
+function handleEonPost(data) {
+  if (!data.date) {
+    return jsonResponse({status: "error", message: "Missing date"});
+  }
+  var hasCount = (Number(data.indiCount)  || 0) > 0 ||
+                 (Number(data.smallCount) || 0) > 0 ||
+                 (Number(data.largeCount) || 0) > 0 ||
+                 (Number(data.sicCount)   || 0) > 0 ||
+                 (Number(data.boilCount)  || 0) > 0;
+  var hasSales = (Number(data.eonSales) || 0) > 0;
+  if (!hasCount && !hasSales) {
+    return jsonResponse({status: "error", message: "Empty save rejected — no EON sales or counts"});
+  }
+
+  var sheet = getSheet("eon");
+  var rowData = [
+    data.date, data.eonSales,
+    data.indiCount, data.smallCount, data.largeCount, data.sicCount, data.boilCount
+  ];
+
+  var existingRow = findRowByDate(sheet, data.date);
+  var action;
+  var resultRow;
+  if (existingRow !== -1) {
+    sheet.getRange(existingRow, 1, 1, rowData.length).setValues([rowData]);
+    action = "eon_updated";
+    resultRow = existingRow;
+  } else {
+    sheet.appendRow(rowData);
+    action = "eon_created";
+    resultRow = sheet.getLastRow();
+  }
+  return jsonResponse({status: "ok", action: action, row: resultRow, date: data.date});
 }
 
 // Manager-entered actual make corrections. Overwrites the 2pm Make Amount row
@@ -270,10 +317,12 @@ function doGet(e) {
 function getByDate(date) {
   var dough = getSheet("dough");
   var temps = getSheet("temps");
+  var eon   = getSheet("eon");
   var doughRow = findRowByDate(dough, date);
   var tempsRow = findRowByDate(temps, date);
+  var eonRow   = findRowByDate(eon, date);
 
-  if (doughRow === -1 && tempsRow === -1) {
+  if (doughRow === -1 && tempsRow === -1 && eonRow === -1) {
     return jsonResponse({status: "not_found"});
   }
 
@@ -285,6 +334,12 @@ function getByDate(date) {
   if (tempsRow !== -1) {
     var t = readRowAsObject(temps, tempsRow);
     for (var k2 in t) merged[k2] = t[k2];
+  }
+  if (eonRow !== -1) {
+    var n = readRowAsObject(eon, eonRow);
+    // EON columns are already prefixed ("EON Sales", "EON Indi Count", ...)
+    // so they don't collide with the morning Dough Counts columns.
+    for (var k3 in n) merged[k3] = n[k3];
   }
   return jsonResponse({status: "found", data: merged});
 }

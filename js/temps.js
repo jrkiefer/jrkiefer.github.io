@@ -74,15 +74,34 @@
     }
 
     function fillFieldsFromData(row) {
-      // Fill dollar fields with shorthand
-      document.getElementById('currentSales').value = toShorthand(getField(row, 'Current Sales', 'currentSales'));
-      document.getElementById('todayForecast').value = toShorthand(getField(row, "Today's Forecast", 'todayForecast'));
-      document.getElementById('tomorrowForecast').value = toShorthand(getField(row, "Tomorrow's Forecast", 'tomorrowForecast'));
+      var mode = (typeof getMode === 'function') ? getMode() : 'twopm';
+
+      // Sales card varies by mode: 2 PM uses three dollar fields, EON uses one.
+      // Backend's merged response carries both sets when both saves exist for
+      // the date; we populate only the visible mode's fields so switching tabs
+      // never shows stale numbers from the other workflow.
+      if (mode === 'eon') {
+        document.getElementById('eonSales').value = toShorthand(getField(row, 'EON Sales', 'eonSales'));
+      } else {
+        document.getElementById('currentSales').value = toShorthand(getField(row, 'Current Sales', 'currentSales'));
+        document.getElementById('todayForecast').value = toShorthand(getField(row, "Today's Forecast", 'todayForecast'));
+        document.getElementById('tomorrowForecast').value = toShorthand(getField(row, "Tomorrow's Forecast", 'tomorrowForecast'));
+      }
+
+      // EON tab keeps EON-prefixed count headers; 2 PM uses the unprefixed ones.
+      var prefix = (mode === 'eon') ? 'EON ' : '';
+      var camelPrefix = (mode === 'eon') ? 'eon' : '';
+      function camelKey(name) {
+        // 'indiCount' / 'eonIndiCount'
+        return camelPrefix
+          ? camelPrefix + name.charAt(0).toUpperCase() + name.slice(1)
+          : name;
+      }
 
       // Fill dough counts — split into trays + singles for readability
       var sizes = ['indi', 'small', 'large'];
-      var sheetNames = ['Indi Count', 'Small Count', 'Large Count'];
-      var camelNames = ['indiCount', 'smallCount', 'largeCount'];
+      var sheetNames = [prefix + 'Indi Count', prefix + 'Small Count', prefix + 'Large Count'];
+      var camelNames = [camelKey('indiCount'), camelKey('smallCount'), camelKey('largeCount')];
       for (var i = 0; i < sizes.length; i++) {
         var count = Number(getField(row, sheetNames[i], camelNames[i])) || 0;
         var perTray = PER_TRAY[sizes[i]];
@@ -92,10 +111,10 @@
         document.getElementById('tcExtra-' + sizes[i]).value = singles ? String(singles) : '';
       }
 
-      var sic = Number(getField(row, 'Sic Count', 'sicCount')) || 0;
+      var sic = Number(getField(row, prefix + 'Sic Count', camelKey('sicCount'))) || 0;
       document.getElementById('countSic').value = sic ? String(sic) : '';
 
-      var boil = Number(getField(row, 'Boil Count', 'boilCount')) || 0;
+      var boil = Number(getField(row, prefix + 'Boil Count', camelKey('boilCount'))) || 0;
       var boilTrays = Math.floor(boil / BOIL_PER_TRAY);
       var boilSingles = boil % BOIL_PER_TRAY;
       document.getElementById('tcTrays-boil').value = boilTrays ? String(boilTrays) : '';
@@ -123,6 +142,8 @@
       document.getElementById('currentSales').value = '';
       document.getElementById('todayForecast').value = '';
       document.getElementById('tomorrowForecast').value = '';
+      var eonInput = document.getElementById('eonSales');
+      if (eonInput) eonInput.value = '';
       document.getElementById('tcTrays-indi').value = '';
       document.getElementById('tcExtra-indi').value = '';
       document.getElementById('tcTrays-small').value = '';
@@ -148,6 +169,20 @@
 
       // Fill all dough/sales fields and recalculate
       fillFieldsFromData(rowData);
+
+      var mode = (typeof getMode === 'function') ? getMode() : 'twopm';
+
+      // Batches + temps are 2 PM-only concepts. EON mode skips them but still
+      // benefits from temps populating if a Temperatures row exists.
+      if (mode === 'eon') {
+        var hasEonRow = (getField(rowData, 'EON Sales', 'eonSales') !== '') ||
+          (getField(rowData, 'EON Indi Count', 'eonIndiCount') !== '');
+        var msg = hasEonRow
+          ? 'Loaded ' + date + ' \u2014 EON record'
+          : 'Loaded ' + date + ' \u2014 no EON record yet';
+        status.innerHTML = '<div class="temp-message">' + msg + '</div>';
+        return;
+      }
 
       var rawBatches = parseInt(getField(rowData, 'Batches', 'batches')) || 0;
       var batches = Math.min(rawBatches, 10);

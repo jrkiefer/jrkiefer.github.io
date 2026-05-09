@@ -16,8 +16,10 @@
     });
 
     // Dollar fields: allow digits, decimal, comma, dollar sign
-    ['currentSales', 'todayForecast', 'tomorrowForecast'].forEach(function(id) {
-      document.getElementById(id).addEventListener('input', function() {
+    ['currentSales', 'todayForecast', 'tomorrowForecast', 'eonSales'].forEach(function(id) {
+      var el = document.getElementById(id);
+      if (!el) return;
+      el.addEventListener('input', function() {
         sanitize(this, /[^0-9.,$]/g);
         stripExtraDots(this);
       });
@@ -49,12 +51,12 @@
       document.querySelectorAll('input[type="text"]').forEach(function(input) { input.value = ''; });
 
       // Clear inline dollar expansions
-      ['disp_currentSales', 'disp_todayForecast', 'disp_tomorrowForecast'].forEach(function(id) {
+      ['disp_currentSales', 'disp_todayForecast', 'disp_tomorrowForecast', 'disp_eonSales'].forEach(function(id) {
         var el = document.getElementById(id); if (el) el.textContent = '';
       });
 
       // Clear field validation rings + messages
-      ['currentSales', 'todayForecast', 'tomorrowForecast'].forEach(function(id) {
+      ['currentSales', 'todayForecast', 'tomorrowForecast', 'eonSales'].forEach(function(id) {
         var input = document.getElementById(id);
         if (!input) return;
         var wrap = input.closest('.dollar-field') || input;
@@ -67,7 +69,8 @@
       var alert = document.getElementById('setoutAlert');
       if (alert) { alert.classList.add('hidden'); }
 
-      // Reset save states
+      // Reset save states + flip back to the default 2 PM tab
+      if (typeof setMode === 'function') setMode('twopm');
       isSaving = false;
       saveBtn.disabled = false;
       saveBtn.textContent = 'Save Count';
