@@ -97,5 +97,6 @@
       tempBatchManuallySet = false;
       renderTempInputs(0);
       lastAutoBatches = 0;
+      if (typeof hideEonOutlook === 'function') hideEonOutlook();
       calculate();
     });

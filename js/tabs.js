@@ -27,7 +27,7 @@
       }
 
       var btn = document.getElementById('saveBtn');
-      if (btn) btn.textContent = (newMode === 'eon') ? 'Save EON Count' : 'Save Count';
+      if (btn) btn.textContent = (newMode === 'eon') ? 'Compare to Tomorrow' : 'Save Count';
 
       // Re-run validation/enabling so the save button reflects the now-visible
       // inputs. updateSaveButtons reads getMode() to pick the right ruleset.

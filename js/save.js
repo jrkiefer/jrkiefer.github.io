@@ -201,6 +201,15 @@
                 typeof populateMakeInputs === 'function') {
               populateMakeInputs();
             }
+            // After an EON save, render the outlook card (Step 08): per-size
+            // have / need / diff vs tomorrow's forecast + a bottom summary.
+            // tomorrowForecast is echoed by handleEonPost from the matching
+            // Dough Counts row — null when no 2 PM save exists, which the
+            // render function turns into a friendly "outlook unavailable" line.
+            if ((json.action === 'eon_created' || json.action === 'eon_updated') &&
+                typeof renderEonOutlook === 'function') {
+              renderEonOutlook(json.tomorrowForecast);
+            }
             resetSaveBtn(btn, successLabel);
             if (onSuccess) onSuccess();
           } else if (json && json.status === 'error') {
@@ -254,7 +263,7 @@
       var date = dateEl && dateEl.value.trim() ? normalizeDate(dateEl.value.trim()) : normalizeDate(getTodayDate());
       // Reject dates that are obviously wrong (>1 year ago or >7 days ahead)
       var dateParts = date.split('/');
-      var resetLabel = (mode === 'eon') ? 'Save EON Count' : 'Save Count';
+      var resetLabel = (mode === 'eon') ? 'Compare to Tomorrow' : 'Save Count';
       if (dateParts.length === 3) {
         var selected = new Date(parseInt(dateParts[2]), parseInt(dateParts[0]) - 1, parseInt(dateParts[1]));
         var today = new Date(); today.setHours(0,0,0,0); selected.setHours(0,0,0,0);
@@ -284,7 +293,7 @@
           sicCount: sicCount,
           boilCount: boilCount
         };
-        postToSheet(data, saveBtn, 'Save EON Count', null, function() { isSaving = false; });
+        postToSheet(data, saveBtn, 'Compare to Tomorrow', null, function() { isSaving = false; });
         return;
       }
 
