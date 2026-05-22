@@ -1008,9 +1008,9 @@ input.field-warning, input.field-warning:focus,
 .save-btn {
   display: block;
   width: 100%;
-  height: 56px;
+  height: 72px;
   font-family: var(--font-body);
-  font-size: 14px;
+  font-size: 17px;
   font-weight: 700;
   letter-spacing: 0.12em;
   text-transform: uppercase;

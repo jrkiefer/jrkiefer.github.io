@@ -27,7 +27,11 @@
       }
 
       var btn = document.getElementById('saveBtn');
-      if (btn) btn.textContent = (newMode === 'eon') ? 'Compare to Tomorrow' : 'Save Count';
+      if (btn) btn.textContent = (newMode === 'eon') ? 'Compare to Tomorrow' : 'Compute / Save';
+
+      // EON never auto-saves — drop any pending timer when switching away
+      // from 2 PM so it can't fire after the user has moved on.
+      if (newMode === 'eon' && typeof disarmAutoSaveTimer === 'function') disarmAutoSaveTimer();
 
       // Re-run validation/enabling so the save button reflects the now-visible
       // inputs. updateSaveButtons reads getMode() to pick the right ruleset.

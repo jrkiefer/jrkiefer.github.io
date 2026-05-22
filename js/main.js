@@ -10,9 +10,11 @@
       el.textContent = DOW[now.getDay()] + ' · ' + MON[now.getMonth()] + ' ' + now.getDate() + ' ' + now.getFullYear();
     })();
 
-    // Live calculation on every input change (debounced)
+    // Live calculation on every input change (debounced); also re-arm the
+    // 2 PM auto-save timer so any keystroke pushes the auto-save window out.
     document.querySelectorAll('input[type="text"]').forEach(function(input) {
       input.addEventListener('input', debouncedCalculate);
+      input.addEventListener('input', armAutoSaveTimer);
     });
 
     // Dollar fields: allow digits, decimal, comma, dollar sign
@@ -73,8 +75,12 @@
       if (typeof setMode === 'function') setMode('twopm');
       isSaving = false;
       saveBtn.disabled = false;
-      saveBtn.textContent = 'Save Count';
+      saveBtn.textContent = 'Compute / Save';
       saveBtn.classList.remove('error', 'success');
+      // Disarm any pending auto-save and reset the once-flag so the next
+      // time conditions are met we use the 15s window again.
+      if (typeof disarmAutoSaveTimer === 'function') disarmAutoSaveTimer();
+      autoSavedOnce = false;
       var tempSaveBtnEl = document.getElementById('tempSaveBtn');
       tempSaveBtnEl._isSaving = false;
       tempSaveBtnEl.disabled = false;
