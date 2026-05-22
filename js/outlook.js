@@ -1,9 +1,21 @@
-    // js/outlook.js — depends on: config.js, calculate.js
-    // EON Outlook: after a successful EON save, compare the night's counts to
-    // tomorrow's needs (looked up from the saved 2 PM forecast for the same
-    // date). Renders five per-size rows + a bottom summary. The card lives at
-    // #eonOutlookSec and is hidden by default; renderEonOutlook() reveals it,
-    // hideEonOutlook() puts it back (called from Reset).
+    // js/outlook.js — depends on: config.js, utils.js, calculate.js
+    // EON Outlook (Step 08): after Compare to Tomorrow, compare the night's
+    // counts to tomorrow's need (looked up from the saved 2 PM forecast for the
+    // same date, or a value the user types into #outlookForecast).
+    //
+    // Two functions cover the entry points:
+    //   renderEonOutlook(forecast) — called from save success in js/save.js.
+    //     Pre-fills the forecast input from the backend value unless the user
+    //     has already manually typed something (data-manual on the input).
+    //     Then triggers renderOutlookRows().
+    //   renderOutlookRows() — reads #outlookForecast live and renders the
+    //     per-size rows + bottom summary. Re-fired on every input change in
+    //     #outlookForecast (debounced ~150 ms) so the user sees the outlook
+    //     update as they edit the forecast.
+    //
+    // Manual entry wins: once the user has typed anything in #outlookForecast,
+    // re-tapping Compare to Tomorrow does NOT overwrite their value. Reset is
+    // the only way to drop the manual flag.
 
     var OUTLOOK_LABELS = {
       indi:  'Individual',
@@ -19,25 +31,45 @@
       sic:   'var(--sic)',
       boil:  'var(--boil)'
     };
+    var OUTLOOK_SIZES = ['indi', 'small', 'large', 'sic', 'boil'];
 
     function renderEonOutlook(tomorrowForecast) {
       var sec = document.getElementById('eonOutlookSec');
+      var input = document.getElementById('outlookForecast');
+      var src = document.getElementById('outlookForecastSource');
+      if (!sec || !input) return;
+
+      // Manual entry wins — never overwrite if user has typed.
+      if (input.dataset.manual !== 'true') {
+        if (tomorrowForecast != null && !isNaN(Number(tomorrowForecast))) {
+          input.value = toShorthand(Number(tomorrowForecast));
+          if (src) src.textContent = 'From 2 PM save';
+        } else {
+          input.value = '';
+          if (src) src.textContent = 'No 2 PM save — enter manually';
+        }
+        updateHint('outlookForecast', 'disp_outlookForecast');
+      }
+
+      sec.style.display = '';
+      renderOutlookRows();
+    }
+
+    function renderOutlookRows() {
+      var input = document.getElementById('outlookForecast');
       var list = document.getElementById('outlookList');
       var summary = document.getElementById('outlookSummary');
-      var forecastEl = document.getElementById('eonForecastDisp');
-      if (!sec || !list || !summary) return;
+      if (!list || !summary) return;
 
-      // No 2 PM save for this date — render a friendly fallback and bail
-      if (tomorrowForecast == null || isNaN(Number(tomorrowForecast))) {
+      var forecast = expandDollar(input ? input.value : '');
+      if (!forecast || forecast <= 0) {
         list.innerHTML = '';
-        summary.innerHTML = 'Outlook unavailable — no 2 PM forecast saved for this date.';
         summary.className = 'outlook-summary warn';
-        if (forecastEl) forecastEl.textContent = 'No 2 PM forecast';
-        sec.style.display = '';
+        summary.innerHTML = "Enter tomorrow's forecast above to see the outlook.";
         return;
       }
 
-      var needs = lookup(Number(tomorrowForecast));
+      var needs = lookup(forecast);
       var have = {
         indi:  getCountValue('indi'),
         small: getCountValue('small'),
@@ -53,12 +85,11 @@
         boil:  36   // boil target is fixed, never from the Bible table
       };
 
-      var SIZES = ['indi', 'small', 'large', 'sic', 'boil'];
       var rowsHTML = '';
       var deficits = [];
       var totalLeftover = 0;
-      for (var i = 0; i < SIZES.length; i++) {
-        var s = SIZES[i];
+      for (var i = 0; i < OUTLOOK_SIZES.length; i++) {
+        var s = OUTLOOK_SIZES[i];
         var diff = have[s] - need[s];
         var diffClass = diff < 0 ? 'neg' : (diff > 0 ? 'pos' : 'zero');
         var diffText = (diff > 0 ? '+' : '') + diff;
@@ -76,30 +107,48 @@
       }
       list.innerHTML = rowsHTML;
 
-      if (forecastEl) forecastEl.textContent = "Tomorrow's Forecast: $" + Number(tomorrowForecast).toLocaleString('en-US');
-
       if (deficits.length > 0) {
-        var joined = deficits.length === 1
-          ? deficits[0]
-          : deficits.join(' + ');
+        var joined = deficits.length === 1 ? deficits[0] : deficits.join(' + ');
         summary.innerHTML = 'Tomorrow we will potentially go into same-day dough by <strong>' + joined + '</strong>.';
         summary.className = 'outlook-summary deficit';
       } else {
         summary.innerHTML = 'Dough is good ✓ — <strong>' + totalLeftover + ' leftover balls</strong>.';
         summary.className = 'outlook-summary good';
       }
-
-      sec.style.display = '';
     }
 
     function hideEonOutlook() {
       var sec = document.getElementById('eonOutlookSec');
       if (!sec) return;
       sec.style.display = 'none';
+      var input = document.getElementById('outlookForecast');
+      if (input) {
+        input.value = '';
+        delete input.dataset.manual;
+      }
+      var disp = document.getElementById('disp_outlookForecast');
+      if (disp) disp.textContent = '';
+      var src = document.getElementById('outlookForecastSource');
+      if (src) src.textContent = '—';
       var list = document.getElementById('outlookList');
       var summary = document.getElementById('outlookSummary');
-      var forecastEl = document.getElementById('eonForecastDisp');
       if (list) list.innerHTML = '';
       if (summary) { summary.innerHTML = ''; summary.className = 'outlook-summary'; }
-      if (forecastEl) forecastEl.textContent = '—';
     }
+
+    // Wire the forecast input: debounced live re-render of the outlook rows.
+    // The first keystroke flips the manual flag so subsequent Compare taps
+    // don't overwrite the user's typed value.
+    (function wireOutlookForecast() {
+      var input = document.getElementById('outlookForecast');
+      if (!input) return;
+      var t = null;
+      input.addEventListener('input', function() {
+        input.dataset.manual = 'true';
+        var src = document.getElementById('outlookForecastSource');
+        if (src) src.textContent = 'Manual entry';
+        updateHint('outlookForecast', 'disp_outlookForecast');
+        clearTimeout(t);
+        t = setTimeout(renderOutlookRows, 150);
+      });
+    })();

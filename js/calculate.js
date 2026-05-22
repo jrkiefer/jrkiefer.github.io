@@ -109,12 +109,14 @@
     }
 
     function calculate() {
-      // Update inline dollar expansions (eonSales lives only in the EON sales
-      // card; updateHint is a no-op when the element is missing)
+      // Update inline dollar expansions. eonSales and outlookForecast live
+      // only in the EON flow; updateHint is a safe no-op when the element
+      // exists but is empty.
       updateHint('currentSales', 'disp_currentSales');
       updateHint('todayForecast', 'disp_todayForecast');
       updateHint('tomorrowForecast', 'disp_tomorrowForecast');
       updateHint('eonSales', 'disp_eonSales');
+      updateHint('outlookForecast', 'disp_outlookForecast');
 
       var currentSales = expandDollar(document.getElementById('currentSales').value);
       var todayForecast = expandDollar(document.getElementById('todayForecast').value);

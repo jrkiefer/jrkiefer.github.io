@@ -16,7 +16,7 @@
     });
 
     // Dollar fields: allow digits, decimal, comma, dollar sign
-    ['currentSales', 'todayForecast', 'tomorrowForecast', 'eonSales'].forEach(function(id) {
+    ['currentSales', 'todayForecast', 'tomorrowForecast', 'eonSales', 'outlookForecast'].forEach(function(id) {
       var el = document.getElementById(id);
       if (!el) return;
       el.addEventListener('input', function() {
@@ -51,7 +51,7 @@
       document.querySelectorAll('input[type="text"]').forEach(function(input) { input.value = ''; });
 
       // Clear inline dollar expansions
-      ['disp_currentSales', 'disp_todayForecast', 'disp_tomorrowForecast', 'disp_eonSales'].forEach(function(id) {
+      ['disp_currentSales', 'disp_todayForecast', 'disp_tomorrowForecast', 'disp_eonSales', 'disp_outlookForecast'].forEach(function(id) {
         var el = document.getElementById(id); if (el) el.textContent = '';
       });
 

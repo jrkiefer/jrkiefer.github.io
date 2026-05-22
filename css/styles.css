@@ -1440,6 +1440,31 @@ button:focus-visible, input:focus-visible {
 [data-mode="twopm"] .hide-in-twopm { display: none; }
 
 /* ───────────────────────── EON Outlook ───────────────────────── */
+.outlook-forecast {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 6px;
+  padding: 10px 12px;
+  margin: -4px 0 12px;
+  background: var(--rule-soft);
+  border-radius: var(--radius-sm);
+}
+.outlook-forecast > label {
+  font-family: var(--font-body);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink-soft);
+}
+.outlook-forecast .dollar-field { margin: 0; }
+.outlook-forecast-source {
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  letter-spacing: 0.08em;
+  color: var(--ink-mute);
+}
+
 .outlook-list {
   list-style: none;
   padding: 0;

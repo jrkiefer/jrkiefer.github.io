@@ -214,9 +214,18 @@
           <span class="step-num">08</span>
           <span class="step-title">EON Outlook</span>
         </div>
-        <span class="step-sub" id="eonForecastDisp">—</span>
+        <span class="step-sub">vs tomorrow's need</span>
       </div>
       <div class="card">
+        <div class="outlook-forecast">
+          <label for="outlookForecast">Tomorrow's Forecast</label>
+          <div class="dollar-field">
+            <span class="dollar-sign">$</span>
+            <input type="text" id="outlookForecast" inputmode="decimal" placeholder="0">
+            <span class="dollar-expanded num" id="disp_outlookForecast"></span>
+          </div>
+          <div class="outlook-forecast-source" id="outlookForecastSource">—</div>
+        </div>
         <ul class="outlook-list" id="outlookList"></ul>
         <div class="outlook-summary" id="outlookSummary"></div>
       </div>
