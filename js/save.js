@@ -4,6 +4,12 @@
     var saveHint = document.getElementById('saveHint');
     var isSaving = false;
 
+    // 2 PM auto-save state. Armed by input events when the required fields
+    // are all filled; first fire after 15s of idle, subsequent fires after 30s
+    // (manager already proved they're paying attention, so wait longer).
+    var autoSaveTimer = null;
+    var autoSavedOnce = false;
+
     // Read a calculated "balls to make" value from the breakdown DOM.
     // calculate() always runs before save (debounced or sync), so these are current.
     function readMakeNum(elId) {
@@ -163,7 +169,7 @@
       }, delay || 3000);
     }
 
-    function postToSheet(data, btn, successLabel, onSuccess, onError) {
+    function postToSheet(data, btn, successLabel, onSuccess, onError, successOverride) {
       btn.disabled = true;
       btn.textContent = 'Saving...';
       btn.classList.remove('error', 'success');
@@ -173,7 +179,7 @@
         body: JSON.stringify(data)
       }).then(function(r) {
         if (r.type === 'opaque' || r.status === 0) {
-          btn.textContent = 'Sent! (verify in sheet)';
+          btn.textContent = successOverride || 'Sent! (verify in sheet)';
           btn.classList.add('success');
           resetSaveBtn(btn, successLabel);
           if (onSuccess) onSuccess();
@@ -190,7 +196,7 @@
             else if (json.action === 'make_saved') actionText = 'Make saved!';
             else if (json.action === 'eon_created') actionText = 'EON saved row ' + json.row;
             else if (json.action === 'eon_updated') actionText = 'EON updated row ' + json.row;
-            btn.textContent = actionText;
+            btn.textContent = successOverride || actionText;
             btn.classList.add('success');
             // After a successful Save Count, fill the Step-07 make inputs with
             // the current calculated balls-to-make per size so the manager
@@ -201,6 +207,15 @@
                 typeof populateMakeInputs === 'function') {
               populateMakeInputs();
             }
+            // After an EON save, render the outlook card (Step 08): per-size
+            // have / need / diff vs tomorrow's forecast + a bottom summary.
+            // tomorrowForecast is echoed by handleEonPost from the matching
+            // Dough Counts row — null when no 2 PM save exists, which the
+            // render function turns into a friendly "outlook unavailable" line.
+            if ((json.action === 'eon_created' || json.action === 'eon_updated') &&
+                typeof renderEonOutlook === 'function') {
+              renderEonOutlook(json.tomorrowForecast);
+            }
             resetSaveBtn(btn, successLabel);
             if (onSuccess) onSuccess();
           } else if (json && json.status === 'error') {
@@ -209,7 +224,7 @@
             btn.disabled = false;
             if (onError) onError();
           } else {
-            btn.textContent = 'Sent! (verify in sheet)';
+            btn.textContent = successOverride || 'Sent! (verify in sheet)';
             btn.classList.add('success');
             resetSaveBtn(btn, successLabel);
             if (onSuccess) onSuccess();
@@ -222,7 +237,7 @@
           headers: { 'Content-Type': 'text/plain' },
           body: JSON.stringify(data)
         }).then(function() {
-          btn.textContent = 'Sent! (verify in sheet)';
+          btn.textContent = successOverride || 'Sent! (verify in sheet)';
           btn.classList.add('success');
           resetSaveBtn(btn, successLabel);
           if (onSuccess) onSuccess();
@@ -235,10 +250,102 @@
       });
     }
 
+    function buildDoughPayload(date) {
+      var indiCount  = getCountValue('indi');
+      var smallCount = getCountValue('small');
+      var largeCount = getCountValue('large');
+      var sicCount   = getCountValue('sic');
+      var boilCount  = getBoilCountValue();
+      var indiMake  = readMakeNum('row-indi-make');
+      var smallMake = readMakeNum('row-small-make');
+      var largeMake = readMakeNum('row-large-make');
+      var sicMake   = readMakeNum('row-sic-make');
+      var boilMake  = readMakeNum('row-boil-make');
+      var todayF    = expandDollar(document.getElementById('todayForecast').value);
+      var currSales = expandDollar(document.getElementById('currentSales').value);
+      return {
+        type: 'dough',
+        date: date,
+        todayForecast: todayF,
+        currentSales: currSales,
+        salesLeft: todayF - currSales,
+        tomorrowForecast: expandDollar(document.getElementById('tomorrowForecast').value),
+        indiCount: indiCount,
+        smallCount: smallCount,
+        largeCount: largeCount,
+        sicCount: sicCount,
+        boilCount: boilCount,
+        batches: parseInt(document.getElementById('heroBatchNum').textContent, 10) || 0,
+        makes: { indi: indiMake, small: smallMake, large: largeMake, sic: sicMake, boil: boilMake },
+        finals: {
+          indi:  indiCount  + indiMake,
+          small: smallCount + smallMake,
+          large: largeCount + largeMake,
+          sic:   sicCount   + sicMake,
+          boil:  boilCount  + boilMake
+        }
+      };
+    }
+
+    // ── 2 PM Auto-save ──
+    // Fires only in 2 PM mode once Current Sales + both forecasts + Indi/Small/
+    // Large counts are all positive (Sicilian and Boil can stay at 0 — managers
+    // commonly leave them empty if there's none in the case). Validation must
+    // also be passing (saveBtn enabled).
+    function isReadyForAutoSave() {
+      if (typeof getMode === 'function' && getMode() !== 'twopm') return false;
+      if (isSaving || saveBtn.disabled) return false;
+      if (expandDollar(document.getElementById('currentSales').value) <= 0) return false;
+      if (expandDollar(document.getElementById('todayForecast').value) <= 0) return false;
+      if (expandDollar(document.getElementById('tomorrowForecast').value) <= 0) return false;
+      if (getCountValue('indi')  <= 0) return false;
+      if (getCountValue('small') <= 0) return false;
+      if (getCountValue('large') <= 0) return false;
+      return true;
+    }
+
+    function armAutoSaveTimer() {
+      if (!isReadyForAutoSave()) { disarmAutoSaveTimer(); return; }
+      clearTimeout(autoSaveTimer);
+      autoSaveTimer = setTimeout(performAutoSave, autoSavedOnce ? 30000 : 15000);
+    }
+
+    function disarmAutoSaveTimer() {
+      if (autoSaveTimer) { clearTimeout(autoSaveTimer); autoSaveTimer = null; }
+    }
+
+    function performAutoSave() {
+      autoSaveTimer = null;
+      // Re-check at fire time: user may have cleared a field or switched tabs
+      // during the wait, or a manual save may have started.
+      if (!isReadyForAutoSave()) return;
+      isSaving = true;
+      var dateEl = document.getElementById('activeDate');
+      var date = dateEl && dateEl.value.trim() ? normalizeDate(dateEl.value.trim()) : normalizeDate(getTodayDate());
+      var dateParts = date.split('/');
+      if (dateParts.length === 3) {
+        var selected = new Date(parseInt(dateParts[2]), parseInt(dateParts[0]) - 1, parseInt(dateParts[1]));
+        var today = new Date(); today.setHours(0,0,0,0); selected.setHours(0,0,0,0);
+        var diffDays = Math.round((selected - today) / 86400000);
+        if (diffDays > 7 || diffDays < -365) { isSaving = false; return; }
+      }
+      var data = buildDoughPayload(date);
+      postToSheet(data, saveBtn,
+        'Compute / Save',
+        function() { autoSavedOnce = true; loadHistory(); },   // success: flip the flag so next auto-save uses 30s
+        function() { isSaving = false; },                      // error: just clear isSaving so user can retry
+        'Auto-saved ✓');
+    }
+
     // ── Save Entry ──
     saveBtn.addEventListener('click', function() {
       if (saveBtn.disabled) return;
       var mode = (typeof getMode === 'function') ? getMode() : 'twopm';
+
+      // Manual save short-circuits auto-save: drop any pending timer and
+      // remember that one save has happened so the next auto-save uses 30s.
+      disarmAutoSaveTimer();
+      autoSavedOnce = true;
 
       // Dollar validation only applies to the 2 PM card's three fields.
       if (mode !== 'eon') {
@@ -254,7 +361,7 @@
       var date = dateEl && dateEl.value.trim() ? normalizeDate(dateEl.value.trim()) : normalizeDate(getTodayDate());
       // Reject dates that are obviously wrong (>1 year ago or >7 days ahead)
       var dateParts = date.split('/');
-      var resetLabel = (mode === 'eon') ? 'Save EON Count' : 'Save Count';
+      var resetLabel = (mode === 'eon') ? 'Compare to Tomorrow' : 'Compute / Save';
       if (dateParts.length === 3) {
         var selected = new Date(parseInt(dateParts[2]), parseInt(dateParts[0]) - 1, parseInt(dateParts[1]));
         var today = new Date(); today.setHours(0,0,0,0); selected.setHours(0,0,0,0);
@@ -266,11 +373,6 @@
           return;
         }
       }
-      var indiCount  = getCountValue('indi');
-      var smallCount = getCountValue('small');
-      var largeCount = getCountValue('large');
-      var sicCount   = getCountValue('sic');
-      var boilCount  = getBoilCountValue();
 
       var data;
       if (mode === 'eon') {
@@ -278,45 +380,16 @@
           type: 'eon',
           date: date,
           eonSales: expandDollar(document.getElementById('eonSales').value),
-          indiCount: indiCount,
-          smallCount: smallCount,
-          largeCount: largeCount,
-          sicCount: sicCount,
-          boilCount: boilCount
+          indiCount: getCountValue('indi'),
+          smallCount: getCountValue('small'),
+          largeCount: getCountValue('large'),
+          sicCount: getCountValue('sic'),
+          boilCount: getBoilCountValue()
         };
-        postToSheet(data, saveBtn, 'Save EON Count', null, function() { isSaving = false; });
+        postToSheet(data, saveBtn, 'Compare to Tomorrow', null, function() { isSaving = false; });
         return;
       }
 
-      var indiMake  = readMakeNum('row-indi-make');
-      var smallMake = readMakeNum('row-small-make');
-      var largeMake = readMakeNum('row-large-make');
-      var sicMake   = readMakeNum('row-sic-make');
-      var boilMake  = readMakeNum('row-boil-make');
-
-      data = {
-        type: 'dough',
-        date: date,
-        todayForecast: expandDollar(document.getElementById('todayForecast').value),
-        currentSales: expandDollar(document.getElementById('currentSales').value),
-        salesLeft: expandDollar(document.getElementById('todayForecast').value) - expandDollar(document.getElementById('currentSales').value),
-        tomorrowForecast: expandDollar(document.getElementById('tomorrowForecast').value),
-        indiCount: indiCount,
-        smallCount: smallCount,
-        largeCount: largeCount,
-        sicCount: sicCount,
-        boilCount: boilCount,
-        batches: parseInt(document.getElementById('heroBatchNum').textContent, 10) || 0,
-        makes: {
-          indi: indiMake, small: smallMake, large: largeMake, sic: sicMake, boil: boilMake
-        },
-        finals: {
-          indi:  indiCount  + indiMake,
-          small: smallCount + smallMake,
-          large: largeCount + largeMake,
-          sic:   sicCount   + sicMake,
-          boil:  boilCount  + boilMake
-        }
-      };
-      postToSheet(data, saveBtn, 'Save Count', loadHistory, function() { isSaving = false; });
+      data = buildDoughPayload(date);
+      postToSheet(data, saveBtn, 'Compute / Save', loadHistory, function() { isSaving = false; });
     });

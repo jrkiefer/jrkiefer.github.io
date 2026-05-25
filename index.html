@@ -203,9 +203,33 @@
 
     <!-- ─── Save ─── -->
     <div class="save-wrap">
-      <button type="button" class="save-btn" id="saveBtn" disabled>Save Count</button>
+      <button type="button" class="save-btn" id="saveBtn" disabled>Compute / Save</button>
       <div class="save-hint" id="saveHint">Enter dough counts first</div>
     </div>
+
+    <!-- ─── EON Outlook (EON mode only, revealed by renderEonOutlook after save) ─── -->
+    <section class="section hide-in-twopm" id="eonOutlookSec" style="display:none">
+      <div class="section-head">
+        <div class="step">
+          <span class="step-num">08</span>
+          <span class="step-title">EON Outlook</span>
+        </div>
+        <span class="step-sub">vs tomorrow's need</span>
+      </div>
+      <div class="card">
+        <div class="outlook-forecast">
+          <label for="outlookForecast">Tomorrow's Forecast</label>
+          <div class="dollar-field">
+            <span class="dollar-sign">$</span>
+            <input type="text" id="outlookForecast" inputmode="decimal" placeholder="0">
+            <span class="dollar-expanded num" id="disp_outlookForecast"></span>
+          </div>
+          <div class="outlook-forecast-source" id="outlookForecastSource">—</div>
+        </div>
+        <ul class="outlook-list" id="outlookList"></ul>
+        <div class="outlook-summary" id="outlookSummary"></div>
+      </div>
+    </section>
 
     <!-- ─── Hero: recipe + batches ─── -->
     <section class="section hide-in-eon">
@@ -430,6 +454,7 @@
   <script src="js/temps.js"></script>
   <script src="js/make.js"></script>
   <script src="js/tabs.js"></script>
+  <script src="js/outlook.js"></script>
   <script src="js/main.js"></script>
 </body>
 </html>

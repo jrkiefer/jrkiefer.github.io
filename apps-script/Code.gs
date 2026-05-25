@@ -234,7 +234,24 @@ function handleEonPost(data) {
     action = "eon_created";
     resultRow = sheet.getLastRow();
   }
-  return jsonResponse({status: "ok", action: action, row: resultRow, date: data.date});
+
+  // Echo tomorrow's forecast from the matching Dough Counts row so the frontend
+  // can render the EON outlook without a second round trip. Null when no 2 PM
+  // save exists for this date — frontend handles that branch.
+  var tomorrowForecast = null;
+  try {
+    var doughSheet = getSheet("dough");
+    var doughRow = findRowByDate(doughSheet, data.date);
+    if (doughRow !== -1) {
+      var doughObj = readRowAsObject(doughSheet, doughRow);
+      var raw = Number(doughObj["Tomorrow's Forecast"]);
+      tomorrowForecast = isNaN(raw) ? null : raw;
+    }
+  } catch (e) {
+    console.error("lookup tomorrowForecast failed:", e);
+  }
+
+  return jsonResponse({status: "ok", action: action, row: resultRow, date: data.date, tomorrowForecast: tomorrowForecast});
 }
 
 // Manager-entered actual make corrections. Overwrites the 2pm Make Amount row
