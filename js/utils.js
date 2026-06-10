@@ -1,4 +1,4 @@
-    // js/utils.js — no dependencies (loaded after config.js)
+    // js/utils.js — depends on: config.js (SCRIPT_URL)
     function parseDollar(str) {
       return Math.abs(parseFloat(String(str).replace(/[$,\s-]/g, '')) || 0);
     }
@@ -93,6 +93,24 @@
       }
       if (v === undefined || v === null) v = 0;
       return v;
+    }
+
+    // Sheet date cell (Date object or 'YYYY-MM-DD[THH:MM:SS]' string) -> 'M/D/YYYY'
+    function sheetDateToLocal(raw) {
+      if (raw instanceof Date) {
+        return (raw.getMonth() + 1) + '/' + raw.getDate() + '/' + raw.getFullYear();
+      }
+      var s = String(raw);
+      if (/^\d{4}-\d{2}-\d{2}/.test(s)) {
+        var ds = s.indexOf('T') === -1 ? s + 'T00:00:00' : s;
+        return new Date(ds).toLocaleDateString('en-US');
+      }
+      return s;
+    }
+
+    // GET to the Apps Script backend; query like '?date=4/1/2026' (optional)
+    function fetchSheetJSON(query) {
+      return fetch(SCRIPT_URL + (query || '')).then(function(r) { return r.json(); });
     }
 
     // Collapsible section: toggle button flips .open on the section,

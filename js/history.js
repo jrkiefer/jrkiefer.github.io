@@ -3,8 +3,7 @@
     function loadHistory() {
       var list = document.getElementById('historyList');
       if (!list) return;
-      fetch(SCRIPT_URL)
-        .then(function(r) { return r.json(); })
+      fetchSheetJSON()
         .then(function(rows) {
           if (!rows || !rows.length) {
             list.innerHTML = '<a class="history-link" href="' + SHEET_URL + '" target="_blank">View Full History</a>';
@@ -14,11 +13,7 @@
           list.innerHTML = '';
           for (var i = 0; i < recent.length; i++) {
             var r = recent[i];
-            var date = r['Date'] || r['date'] || '';
-            if (date && /^\d{4}-\d{2}-\d{2}/.test(date)) {
-              var ds = date.indexOf('T') === -1 ? date + 'T00:00:00' : date;
-              date = new Date(ds).toLocaleDateString('en-US');
-            }
+            var date = sheetDateToLocal(r['Date'] || r['date'] || '');
             var forecast = r["Today's Forecast"] || r['todayForecast'] || 0;
             var sales = r['Current Sales'] || r['currentSales'] || 0;
             var batches = r['Batches'] || r['batches'] || 0;
