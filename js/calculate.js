@@ -24,7 +24,8 @@
     function getCount(type) {
       var total = getCountValue(type);
       if (type !== 'sic') {
-        var strong = document.getElementById('tcTotal-' + type).querySelector('strong');
+        var totalEl = document.getElementById('tcTotal-' + type);
+        var strong = totalEl ? totalEl.querySelector('strong') : null;
         if (strong) strong.textContent = total;
       }
       return total;
@@ -38,7 +39,8 @@
 
     function getBoilCount() {
       var total = getBoilCountValue();
-      var strong = document.getElementById('tcTotal-boil').querySelector('strong');
+      var totalEl = document.getElementById('tcTotal-boil');
+      var strong = totalEl ? totalEl.querySelector('strong') : null;
       if (strong) strong.textContent = total;
       return total;
     }

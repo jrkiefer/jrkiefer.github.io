@@ -2,6 +2,7 @@
     // ── History ──
     function loadHistory() {
       var list = document.getElementById('historyList');
+      if (!list) return;
       fetch(SCRIPT_URL)
         .then(function(r) { return r.json(); })
         .then(function(rows) {

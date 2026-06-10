@@ -31,7 +31,9 @@
     ['tcTrays-indi', 'tcExtra-indi', 'tcTrays-small', 'tcExtra-small',
      'tcTrays-large', 'tcExtra-large', 'countSic',
      'tcTrays-boil', 'tcExtra-boil'].forEach(function(id) {
-      document.getElementById(id).addEventListener('input', function() {
+      var el = document.getElementById(id);
+      if (!el) return;
+      el.addEventListener('input', function() {
         sanitize(this, /[^0-9]/g);
       });
     });
@@ -82,10 +84,12 @@
       if (typeof disarmAutoSaveTimer === 'function') disarmAutoSaveTimer();
       autoSavedOnce = false;
       var tempSaveBtnEl = document.getElementById('tempSaveBtn');
-      tempSaveBtnEl._isSaving = false;
-      tempSaveBtnEl.disabled = false;
-      tempSaveBtnEl.textContent = 'Save Temperatures';
-      tempSaveBtnEl.classList.remove('error', 'success');
+      if (tempSaveBtnEl) {
+        tempSaveBtnEl._isSaving = false;
+        tempSaveBtnEl.disabled = false;
+        tempSaveBtnEl.textContent = 'Save Temperatures';
+        tempSaveBtnEl.classList.remove('error', 'success');
+      }
       var makeSaveBtnEl = document.getElementById('makeSaveBtn');
       if (makeSaveBtnEl) {
         makeSaveBtnEl._isSaving = false;

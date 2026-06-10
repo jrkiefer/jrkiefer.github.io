@@ -148,7 +148,7 @@
       }
       // Temp save: disable if no temp values entered
       var tempSaveBtn = document.getElementById('tempSaveBtn');
-      if (tempSaveBtn.style.display !== 'none' && !tempSaveBtn._isSaving) {
+      if (tempSaveBtn && tempSaveBtn.style.display !== 'none' && !tempSaveBtn._isSaving) {
         var hasTemps = false;
         for (var i = 1; i <= tempBatchCount; i++) {
           var wEl = document.getElementById('tempWater-' + i);
