@@ -1,0 +1,26 @@
+name: CI
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  checks:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      # Runs before npm ci so syntax errors fail fast even if the registry
+      # is down. node --check rejects the .gs extension, hence the copy.
+      - name: Syntax check (node --check)
+        run: |
+          set -e
+          for f in js/*.js; do node --check "$f"; done
+          cp apps-script/Code.gs /tmp/Code.check.js
+          node --check /tmp/Code.check.js
+      - run: npm ci
+      - run: npm run lint
+      - run: npm test
