@@ -110,6 +110,49 @@
       }
     }
 
+    // Pure 9-step calculation — no DOM access (unit-tested; see CLAUDE.md "The math").
+    // inputs = {
+    //   currentSales, todayForecast, tomorrowForecast,   // expanded dollars
+    //   counts: { indi, small, large, sic },             // current ball counts
+    //   boilCount
+    // }
+    function computeDough(inputs) {
+      var salesLeft = inputs.todayForecast - inputs.currentSales;
+      var doughUse = lookup(salesLeft);
+      var tonightIdx = lookupIndex(salesLeft);
+      var tomorrowNeed = lookup(inputs.tomorrowForecast);
+      var tomorrowIdx = lookupIndex(inputs.tomorrowForecast);
+      var doughLeft = {};
+      var ballsToMake = {};
+      var trays = {};
+
+      for (var i = 0; i < TYPES.length; i++) {
+        var t = TYPES[i];
+        doughLeft[t] = inputs.counts[t] - doughUse[t];
+        if (t === 'sic' && doughLeft[t] < 0) doughLeft[t] = 0;
+        ballsToMake[t] = tomorrowNeed[t] - doughLeft[t];
+        if (t === 'sic' && ballsToMake[t] < 2) ballsToMake[t] = 2;
+        trays[t] = ballsToMake[t] <= 0 ? 0 : Math.ceil(ballsToMake[t] / PER_TRAY[t]);
+      }
+
+      // Boil Dough — fixed target, not from lookup
+      var boilMake = Math.max(0, BOIL_TARGET - inputs.boilCount);
+      var boilTrays = boilMake === 0 ? 0 : Math.ceil(boilMake / BOIL_PER_TRAY);
+
+      var totalTrays = 0;
+      for (var k = 0; k < TYPES.length; k++) totalTrays += trays[TYPES[k]];
+      totalTrays += boilTrays;
+      var batches = totalTrays === 0 ? 0 : Math.ceil(totalTrays / TRAYS_PER_BATCH);
+
+      return {
+        salesLeft: salesLeft, tonightIdx: tonightIdx, tomorrowIdx: tomorrowIdx,
+        doughUse: doughUse, tomorrowNeed: tomorrowNeed, doughLeft: doughLeft,
+        ballsToMake: ballsToMake, trays: trays,
+        boilMake: boilMake, boilTrays: boilTrays,
+        totalTrays: totalTrays, batches: batches
+      };
+    }
+
     function calculate() {
       // Update inline dollar expansions. eonSales and outlookForecast live
       // only in the EON flow; updateHint is a safe no-op when the element
@@ -130,33 +173,23 @@
         sic: getCount('sic'),
       };
 
-      var salesLeft = todayForecast - currentSales;
-      var doughUse = lookup(salesLeft);
-      var tonightIdx = lookupIndex(salesLeft);
-      var tomorrowNeed = lookup(tomorrowForecast);
-      var tomorrowIdx = lookupIndex(tomorrowForecast);
-      var doughLeft = {};
-      var ballsToMake = {};
-      var trays = {};
-
-      for (var i = 0; i < TYPES.length; i++) {
-        var t = TYPES[i];
-        doughLeft[t] = counts[t] - doughUse[t];
-        if (t === 'sic' && doughLeft[t] < 0) doughLeft[t] = 0;
-        ballsToMake[t] = tomorrowNeed[t] - doughLeft[t];
-        if (t === 'sic' && ballsToMake[t] < 2) ballsToMake[t] = 2;
-        trays[t] = ballsToMake[t] <= 0 ? 0 : Math.ceil(ballsToMake[t] / PER_TRAY[t]);
-      }
-
-      // Boil Dough — fixed target, not from lookup
       var boilCount = getBoilCount();
-      var boilMake = Math.max(0, BOIL_TARGET - boilCount);
-      var boilTrays = boilMake === 0 ? 0 : Math.ceil(boilMake / BOIL_PER_TRAY);
-
-      var totalTrays = 0;
-      for (var k = 0; k < TYPES.length; k++) totalTrays += trays[TYPES[k]];
-      totalTrays += boilTrays;
-      var batches = totalTrays === 0 ? 0 : Math.ceil(totalTrays / TRAYS_PER_BATCH);
+      var result = computeDough({
+        currentSales: currentSales,
+        todayForecast: todayForecast,
+        tomorrowForecast: tomorrowForecast,
+        counts: counts,
+        boilCount: boilCount
+      });
+      var salesLeft = result.salesLeft;
+      var doughUse = result.doughUse;
+      var tomorrowNeed = result.tomorrowNeed;
+      var doughLeft = result.doughLeft;
+      var ballsToMake = result.ballsToMake;
+      var trays = result.trays;
+      var boilMake = result.boilMake;
+      var totalTrays = result.totalTrays;
+      var batches = result.batches;
 
       // Sales Left banner
       document.getElementById('salesLeftValue').textContent = formatDollar(salesLeft);
@@ -213,7 +246,7 @@
       document.getElementById('heroTotalTrays').textContent = totalTrays + (totalTrays === 1 ? ' tray' : ' trays');
 
       // Dough Bible active rows + table highlight
-      updateBible(tonightIdx, tomorrowIdx);
+      updateBible(result.tonightIdx, result.tomorrowIdx);
 
       // Make card placeholders mirror the calculated balls-to-make per size
       if (typeof updateMakePlaceholders === 'function') updateMakePlaceholders();
