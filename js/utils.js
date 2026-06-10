@@ -85,7 +85,7 @@
       if (v === undefined || v === null) {
         var lower = sheetName.toLowerCase().replace(/\s+/g, '');
         for (var k in row) {
-          if (row.hasOwnProperty(k) && k.toLowerCase().replace(/\s+/g, '') === lower) {
+          if (Object.prototype.hasOwnProperty.call(row, k) && k.toLowerCase().replace(/\s+/g, '') === lower) {
             v = row[k];
             break;
           }
