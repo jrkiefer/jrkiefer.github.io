@@ -93,6 +93,13 @@ function normalizeDate(dateStr) {
   return String(dateStr).trim();
 }
 
+function hasNegative(values) {
+  for (var i = 0; i < values.length; i++) {
+    if ((Number(values[i]) || 0) < 0) return true;
+  }
+  return false;
+}
+
 function findRowByDate(sheet, targetDate) {
   var allData = sheet.getDataRange().getValues();
   var normalized = normalizeDate(targetDate);
@@ -149,6 +156,13 @@ function handleDoughPost(data) {
                     (Number(data.tomorrowForecast) || 0) > 0;
   if (!hasDough && !hasForecast) {
     return jsonResponse({status: "error", message: "Empty save rejected — no dough counts or forecast"});
+  }
+  // salesLeft is derived and legitimately negative when sales exceed forecast,
+  // so it's deliberately excluded from this check.
+  if (hasNegative([data.indiCount, data.smallCount, data.largeCount, data.sicCount,
+                   data.boilCount, data.todayForecast, data.tomorrowForecast,
+                   data.currentSales, data.batches])) {
+    return jsonResponse({status: "error", message: "Negative values rejected"});
   }
 
   var sheet = getSheet("dough");
@@ -215,6 +229,10 @@ function handleEonPost(data) {
   if (!hasCount && !hasSales) {
     return jsonResponse({status: "error", message: "Empty save rejected — no EON sales or counts"});
   }
+  if (hasNegative([data.eonSales, data.indiCount, data.smallCount,
+                   data.largeCount, data.sicCount, data.boilCount])) {
+    return jsonResponse({status: "error", message: "Negative values rejected"});
+  }
 
   var sheet = getSheet("eon");
   var rowData = [
@@ -264,6 +282,10 @@ function handleMakePost(data) {
   }
   if (!data.makes) {
     return jsonResponse({status: "error", message: "Missing makes"});
+  }
+  if (hasNegative([data.makes.indi, data.makes.small, data.makes.large,
+                   data.makes.sic, data.makes.boil])) {
+    return jsonResponse({status: "error", message: "Negative values rejected"});
   }
 
   var doughSheet = getSheet("dough");
