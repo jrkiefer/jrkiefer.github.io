@@ -95,6 +95,20 @@
       return v;
     }
 
+    // Collapsible section: toggle button flips .open on the section,
+    // aria-expanded on the button, and the "Tap to expand/collapse" label.
+    function wireSectionToggle(toggleId, sectionId, labelSelector) {
+      var toggle = document.getElementById(toggleId);
+      var sec = document.getElementById(sectionId);
+      if (!toggle || !sec) return;
+      toggle.addEventListener('click', function() {
+        var isOpen = sec.classList.toggle('open');
+        toggle.setAttribute('aria-expanded', isOpen ? 'true' : 'false');
+        var lbl = toggle.querySelector(labelSelector);
+        if (lbl) lbl.textContent = isOpen ? 'Tap to collapse' : 'Tap to expand';
+      });
+    }
+
     function toShorthand(n) {
       n = Number(n) || 0;
       if (n === 0) return '';
