@@ -2,50 +2,60 @@
 
 ## What this app is
 
-Dough Tracker is a mobile-first web calculator used by a pizza shop. In the first workflow, an employee scans a QR code, enters current sales, today's and tomorrow's forecasted sales, and counts the current dough inventory across five dough sizes; the app calculates how many dough batches to make for tomorrow and saves the entry to a Google Sheet via a Google Apps Script web app. In the second workflow, later in the day, another employee loads that day's record and enters water and dough temperatures for each batch. The app has been refactored from a single monolithic `index.html` into a multi-file structure with separate CSS and JS files.
+Dough Tracker is a mobile-first web calculator used by a pizza shop. In the first workflow, an employee scans a QR code, enters current sales, today's and tomorrow's forecasted sales, and counts the current dough inventory across five dough sizes; the app calculates how many dough batches to make for tomorrow and saves the entry to a Google Sheet via a Google Apps Script web app. In the second workflow, later in the day, another employee loads that day's record and enters water and dough temperatures for each batch. A third workflow at close (the EON tab) captures end-of-night sales and counts and compares them to tomorrow's need.
+
+Static site served by GitHub Pages — no build step. The JS is plain `<script>` tags sharing global scope; load order matters (see the dependency comment at the top of each file).
 
 ## Current file structure
 
-- `index.html` — HTML markup only; theme/density baked in on the `<html>` element (364 lines)
+- `index.html` — HTML markup only; theme/density baked in on the `<html>` element
 - `README.md` — repo readme
 - `qr-code.png` — QR code image for scanning
 - `CLAUDE.md` — this file (project context)
+- `package.json` / `package-lock.json` — test + lint scripts; only devDependencies (eslint). No build system.
+- `eslint.config.mjs` — flat config; declares the cross-file globals shared via `<script>` tags
+- `.github/workflows/ci.yml` — CI: `node --check`, eslint, `npm test` on every PR and push to main
 - `css/`
-  - `styles.css` — all CSS; the Mise en Place theme is the only live look (Line Check rules retained as no-ops in case we re-introduce a toggle) (1293 lines)
+  - `styles.css` — all CSS; Mise en Place is the only theme (the old Line Check theme rules were deleted — restore from git history if a toggle ever returns)
 - `js/` — loaded in this order via `<script>` tags (no modules, shared global scope)
   - `config.js` — all constants: SCRIPT_URL, DOUGH_TABLE, PER_TRAY, etc.
-  - `utils.js` — utility functions: parseDollar, expandDollar, updateHint (inline $ expansion), sanitize, stripExtraDots, valClass (pos/neg)
-  - `bible.js` — Dough Bible reference: builds the 27-row table once, highlights tonight/tomorrow active rows, wires header toggle
-  - `calculate.js` — calculation + render pipeline: lookup, calculate, recipe chips, hero batches, unified set-out alert, debouncedCalculate; calls `updateMakePlaceholders()` if defined
-  - `save.js` — dollar field validation, save validation, postToSheet, save click handler
+  - `utils.js` — shared helpers: parseDollar, expandDollar, updateHint (inline $ expansion), sanitize, stripExtraDots, valClass, normalizeDate, parseMDY (M/D/YYYY → Date or null), sheetDateToLocal (sheet cell → M/D/YYYY), fetchSheetJSON (GET wrapper), wireSectionToggle (shared collapsible-section wiring), getField, toShorthand
+  - `bible.js` — Dough Bible reference: builds the 27-row table once, highlights tonight/tomorrow active rows
+  - `calculate.js` — `computeDough(inputs)` is the pure, unit-tested 9-step math core; `calculate()` reads the DOM, delegates to it, and renders (recipe chips, hero batches, unified set-out alert); `debouncedCalculate()`; calls `updateMakePlaceholders()` if defined
+  - `save.js` — dollar field validation, save validation, postToSheet, auto-save plumbing, save click handler
   - `history.js` — loadHistory function, history toggle wire-up
-  - `temps.js` — temperature tracking state, UI, active date load/sync/save handlers, collapsible-section toggle
-  - `make.js` — manager-only "Actual Make" card: collapsible toggle, calc-value placeholders, save click handler (POST type 'make')
+  - `temps.js` — temperature tracking state, UI, active date load/sync/save handlers
+  - `make.js` — manager-only "Actual Make" card: calc-value placeholders, save click handler (POST type 'make')
   - `tabs.js` — 2 PM / EON mode switcher (`getMode`, `setMode`); flips `<html data-mode>`, the `.mode-tab.active` class, and the save-button label; calls `updateSaveButtons()` on switch
   - `outlook.js` — EON Outlook card (Step 08): `renderEonOutlook(tomorrowForecast)` builds per-size have/need/diff rows + bottom summary; `hideEonOutlook()` for reset
   - `main.js` — masthead date, event wiring, initial calculate() call, reset handler (also resets the make card, flips back to the 2 PM tab, and hides the outlook)
 - `apps-script/`
   - `Code.gs` — version-controlled copy of the Google Apps Script backend; deploy by manually copying into the Apps Script editor
+- `test/` — zero-dependency unit tests (Node's built-in `node:test`); see Testing & CI below
+  - `helpers/load.js` — vm-based harness that loads the global-scope scripts
+  - `utils.test.js`, `lookup.test.js`, `compute.test.js`, `codegs.test.js`
 
 ## The five dough sizes
 
 - **Individual (indi)** — 11 balls per tray. Standard lookup-based calculation.
 - **Small** — 8 balls per tray. Standard lookup-based calculation.
 - **Large** — 6 balls per tray. Standard lookup-based calculation.
-- **Sicilian (sic)** — 3 balls per tray. Counted as a single number in the UI (not trays × extras). Has a hardcoded minimum of 2 balls inside `calculate()` — if the calculated "balls to make" is less than 2, it is forced to 2. Its night-side "Dough Left" is also clamped at 0 (same-day Sicilian can't be used, so a shortfall must not inflate tomorrow's make).
+- **Sicilian (sic)** — 3 balls per tray. Counted as a single number in the UI (not trays × extras). Has a hardcoded minimum of 2 balls inside `computeDough()` — if the calculated "balls to make" is less than 2, it is forced to 2. Its night-side "Dough Left" is also clamped at 0 (same-day Sicilian can't be used, so a shortfall must not inflate tomorrow's make).
 - **Boil** — 6 balls per tray. Fixed target of 36 balls. Does NOT use the Dough Bible lookup table; instead, the formula is simply `max(0, 36 - currentBoilCount)`.
 
 ## The Dough Bible lookup
 
 `DOUGH_TABLE` is a 27-row array of objects. Each row has a `threshold` (dollar amount) and ball counts for `indi`, `small`, `large`, and `sic`. Thresholds range from $3,750 to $20,750.
 
-The `lookup(dollarAmount)` function performs a linear scan and returns the first entry whose `threshold >= dollarAmount` — in other words, it rounds UP to the next threshold. If the input exceeds the last threshold ($20,750), it caps at the highest row and returns that row's values.
+The `lookup(dollarAmount)` function performs a linear scan and returns the first entry whose `threshold >= dollarAmount` — in other words, it rounds UP to the next threshold. If the input exceeds the last threshold ($20,750), it caps at the highest row and returns that row's values. Zero or negative inputs floor at the first row — so even an untouched form shows a non-zero recipe.
 
 Boil dough does NOT use this table. Its target is always 36 regardless of forecast.
 
+**`BIBLE_DATA` in `Code.gs` mirrors `DOUGH_TABLE` and a test enforces the sync** — editing one without the other fails `npm test` (and CI).
+
 ## The math
 
-The 9-step calculation chain inside `calculate()`:
+The 9-step calculation chain inside `computeDough()` (pure, unit-tested in `test/compute.test.js`):
 
 1. **Sales Left** = Today's Forecast − Current Sales
 2. **Dough Use Tonight** = `lookup(Sales Left)` — ball counts needed for tonight's remaining sales
@@ -57,14 +67,16 @@ The 9-step calculation chain inside `calculate()`:
 8. **Total Trays** = sum of all tray counts (Indi + Small + Large + Sicilian + Boil trays)
 9. **Batches** = `ceil(Total Trays / 11)`
 
+Note: because of the Sicilian minimum of 2 (≥ 1 tray), batches can never compute to 0.
+
 ## Google Sheets integration
 
-`SCRIPT_URL` points to a Google Apps Script web app that acts as the database API. The spreadsheet has **five tabs**, each owning one captured-data type. The `SHEETS` config object at the top of `Code.gs` is the single source of truth for tab names and headers — adding a new captured-data type later is a one-entry change there plus a new branch (or extension of `handleDoughPost`) in `doPost`.
+`SCRIPT_URL` points to a Google Apps Script web app that acts as the database API. The spreadsheet has **six tabs**, each owning one captured-data type. The `SHEETS` config object at the top of `Code.gs` is the single source of truth for tab names and headers — adding a new captured-data type later is a one-entry change there plus a new branch (or extension of `handleDoughPost`) in `doPost`.
 
 - **Tab `Dough Counts`**: `Date | Today's Forecast | Current Sales | Sales Left | Tomorrow's Forecast | Indi Count | Small Count | Large Count | Sic Count | Boil Count | Batches`
 - **Tab `Temperatures`**: `Date | Water 1 | Dough 1 | Water 2 | Dough 2 | … | Water 10 | Dough 10` (interleaved pairs)
-- **Tab `Dough Bible`**: `Threshold | Indi | Small | Large | Sicilian` — 27 rows mirroring `DOUGH_TABLE` in `js/config.js`. **Reference only**; the JS owns the source of truth for calculations. `BIBLE_DATA` in `Code.gs` must be kept in sync with `DOUGH_TABLE` if either changes.
-- **Tab `2pm Make Amount`**: `Date | Indi | Small | Large | Sicilian | Boil` — per-size **balls to make** as calculated by `calculate()` (post-clamp: Sicilian min 2, Boil = `max(0, 36 - count)`). Written automatically alongside every Dough Counts save.
+- **Tab `Dough Bible`**: `Threshold | Indi | Small | Large | Sicilian` — 27 rows mirroring `DOUGH_TABLE` in `js/config.js`. **Reference only**; the JS owns the source of truth for calculations.
+- **Tab `2pm Make Amount`**: `Date | Indi | Small | Large | Sicilian | Boil` — per-size **balls to make** as calculated (post-clamp: Sicilian min 2, Boil = `max(0, 36 - count)`). Written automatically alongside every Dough Counts save.
 - **Tab `Final Dough Amount at 2pm`**: `Date | Indi | Small | Large | Sicilian | Boil` — per-size `count + make`, i.e. how much dough is on hand once the morning batches are done. Also written automatically alongside every Dough Counts save.
 - **Tab `End of Night Count`**: `Date | EON Sales | EON Indi Count | EON Small Count | EON Large Count | EON Sic Count | EON Boil Count` — captured at close from the **EON tab**. Independent of the morning Dough Counts row; one row per date, columns are EON-prefixed so the merged GET response can carry both 2 PM and EON values for the same date without collision.
 
@@ -73,8 +85,8 @@ The 9-step calculation chain inside `calculate()`:
   - `"temps"` writes to the Temperatures tab.
   - `"make"` (manager actual-make correction) overwrites the **2pm Make Amount** row with the supplied per-size makes, then **recomputes** the **Final Dough Amount at 2pm** row using the existing Dough Counts row's counts. Requires a Dough Counts row to exist for the date — returns an error otherwise.
   - `"eon"` writes the End of Night save (one EON sales total + per-size counts) to the **End of Night Count** tab. Independent of the morning Dough Counts row — no prerequisite save needed.
-  
-  Each tab keeps one row per day; a second save on the same day overwrites the existing row. The backend returns `{status: "ok", action, row, date}` on success, or `{status: "error", message}` on failure. Actions: `"created"`, `"updated"`, `"temps_saved"`, `"temps_noop"` (empty temps array), `"make_saved"`, `"eon_created"`, `"eon_updated"`. Temps can be saved on a date with no prior dough save — the backend appends a new Temperatures row with just the date.
+
+  The backend rejects empty saves AND **negative counts/forecasts/sales/makes** with `{status: "error", message: "..."}` (derived `salesLeft` is exempt — it's legitimately negative when sales exceed forecast). Each tab keeps one row per day; a second save on the same day overwrites the existing row. The backend returns `{status: "ok", action, row, date}` on success. Actions: `"created"`, `"updated"`, `"temps_saved"`, `"temps_noop"` (empty temps array), `"make_saved"`, `"eon_created"`, `"eon_updated"`. Temps can be saved on a date with no prior dough save — the backend appends a new Temperatures row with just the date.
 - **Backend source**: `Code.gs` is tracked in the repo under `apps-script/`. Deploy flow: edit the file via PR, merge, then manually copy into the Apps Script editor and deploy as a new version.
 - **One-time setup**: `seedSheets()` (in `Code.gs`) is run once from the Apps Script editor. It creates any missing tabs, writes headers, and seeds the Dough Bible. Idempotent — safe to re-run.
 - **History (GET)**: `loadHistory()` fetches `SCRIPT_URL` with no parameters, receives an array of the last 30 Dough Counts rows, takes the last 10, and displays them newest-first.
@@ -87,144 +99,60 @@ Sheet column header strings (used as keys in the merged JSON response):
 - `"Water 1"` through `"Water 10"`, `"Dough 1"` through `"Dough 10"`
 - `"EON Sales"`, `"EON Indi Count"`, `"EON Small Count"`, `"EON Large Count"`, `"EON Sic Count"`, `"EON Boil Count"`
 
+## Testing & CI
+
+- **Run tests**: `npm test` — zero dependencies, uses Node's built-in `node:test` runner. 35 tests in `test/`.
+- **Run lint**: `npm install` once (eslint is the only devDependency), then `npm run lint`.
+- **Syntax check**: `node --check js/*.js` (project rule before every commit). `Code.gs` needs a `.js`-extension copy first — see the CI workflow for the pattern.
+- **Harness** (`test/helpers/load.js`): the js/ files are global-scope scripts with no exports, so tests load their source into a shared `vm` context sequentially — exactly mimicking the browser's `<script>` tags. `config.js`, `utils.js`, and `calculate.js` have zero top-level DOM access, so no `document` stub is needed. Top-level `const` declarations land in the context's lexical scope (not as properties of the context object), so refs are extracted by evaluating an object literal inside the context (`getRefs`). vm-created objects have foreign prototypes — wrap them with `plain()` before `deepEqual`.
+- **Code.gs is tested too**: loaded into its own vm context with only `ContentService` stubbed; covers the validation branches and the **`BIBLE_DATA` ↔ `DOUGH_TABLE` sync** (row-for-row deep-equal across both files).
+- **CI** (`.github/workflows/ci.yml`): on every PR and push to main — `node --check` over all JS (before `npm ci`, so syntax errors fail fast even if the registry is down), then `npm ci`, `npm run lint`, `npm test`.
+- **ESLint** (`eslint.config.mjs`): flat config; all cross-file globals are declared per file group. `no-unused-vars` runs with `vars: 'local'` (functions defined in one file are called from another) and `no-redeclare` with `builtinGlobals: false` (defining a declared global in its home file is the intended pattern). When you add a new cross-file function or constant, add it to `appGlobals` in the config.
+
 ## Known quirks and gotchas
 
-- **Sicilian minimum of 2**: Hardcoded inside `calculate()`. If the math says to make fewer than 2 Sicilian balls, it is forced to 2.
+- **Sicilian minimum of 2**: Hardcoded inside `computeDough()`. If the math says to make fewer than 2 Sicilian balls, it is forced to 2.
 - **Boil display**: The UI shows "Make X trays and Y singles" (full trays plus remainder), but the batch math uses the rounded-up tray count (`ceil(boilMake / 6)`).
 - **Dollar shorthand**: `expandDollar()` multiplies numbers under 100 by 1000, so `1.7` becomes `1700` and `10` becomes `10000`. Numbers ≥ 100 are taken literally.
 - **Debounce**: Calculation is debounced at 100ms on input events via `debouncedCalculate()`.
 - **Unified active date**: A single `#activeDate` date picker at the top of the page drives both the dough save and the temperature save. The Load button fetches saved data for the selected date and populates all fields (with a confirmation dialog if fields already have data). The save click handler reads from `#activeDate` (falling back to today if empty). Auto-sync of batch count only fires when the active date matches today.
-- **Date handling**: Dates use local browser time (not UTC). `normalizeDate()` converts between `YYYY-MM-DD` and `M/D/YYYY` formats for matching.
+- **Date handling**: Dates use local browser time (not UTC). `normalizeDate()` converts between `YYYY-MM-DD` and `M/D/YYYY` formats for matching; `parseMDY()` turns `M/D/YYYY` into a Date (or `null` for garbage — the manual save shows "Invalid date", the auto-save bails silently).
 - **Duplicate row prevention**: Lives in the Apps Script backend, not in the frontend. The frontend does not check whether a row already exists before saving.
 - **Set-out logic**: When End of Night Count goes negative for Indi/Small/Large, the per-row `↓ Set out X trays` line appears AND the unified set-out alert banner above the breakdown lists every affected size (computed as `ceil(-doughLeft / perTray)`). Sicilian clamps (no set-out shown) because same-day Sicilian dough can't be used. Boil has no set-out.
-- **Theme/density baked in**: `<html data-theme="mise" data-density="compact">` is the only live combination. The Tweaks panel was removed — staff don't need to choose. Line Check theme rules still exist in `styles.css` but never match. To bring back a toggle later, restore a slim controller and switch the `data-theme` attribute.
-- **Temps section is collapsed by default**: `<section class="temp-sec">` starts without the `.open` class so its body is hidden via `.temp-sec:not(.open) .temp-body { display: none; }`. The header acts as a button (`#tempToggle`) that toggles `.open` on every tap. Closed every page load — only managers expand it.
-- **Bible and History sections are collapsed by default**: same pattern as Temps. `.bible:not(.open) #bibleBody { display: none; }` hides the whole Bible body (active-row strip cards + 27-row table) until tap. `.history-sec:not(.open) .history-body { display: none; }` hides the recent-history list. Header text flips between *"Tap to expand"* and *"Tap to collapse"* with a ▾/▴ chevron.
+- **Theme/density baked in**: `<html data-theme="mise" data-density="compact">` is the only live combination, and the CSS keys off those attributes — don't remove them. The old Line Check theme rules were deleted; restore from git history if a theme toggle ever returns.
+- **Temps, Bible, History, and Make sections are collapsed by default**: each uses the same pattern — the section starts without `.open`, its body is hidden via `:not(.open)` CSS, and the header acts as a toggle button wired through the shared `wireSectionToggle()` helper in `utils.js`. Header text flips between *"Tap to expand"* and *"Tap to collapse"* with a ▾/▴ chevron.
 - **2 PM / EON mode tabs**: a tab strip sits between Step 01 and Step 02. The active mode is held on `<html data-mode="twopm"|"eon">` so visibility is purely CSS-driven (`[data-mode="eon"] .hide-in-eon { display: none; }` and the mirror `[data-mode="twopm"] .hide-in-twopm { display: none; }`, plus `.sales-twopm` / `.sales-eon` swap rules inside Step 01). 2 PM mode is the existing morning workflow. EON mode keeps Step 00 (Active Date), Step 01 (morphed to a single `eonSales` input), Step 02 (Dough Counts), Step 05 (Temps), and Step 06 (History) visible; **Steps 03 (Recipe), 04 (By Size), and 07 (Make) hide**, and the set-out alert hides too. The save button text flips between "Compute / Save" (2 PM) and "Compare to Tomorrow" (EON); `updateSaveButtons()` reads `getMode()` and applies the right validation rules per mode (2 PM: full dollar-field validation; EON: just "any count or sales entered"). The Load button is mode-aware via `fillFieldsFromData(row)` reading EON-prefixed keys (`"EON Sales"`, `"EON Indi Count"`, …) when in EON mode. Reset always flips back to 2 PM. Count fields (`tcTrays-*`, `tcExtra-*`, `countSic`, `tcTrays-boil` etc.) are **shared** across modes — the mode only changes where the values save and which sales fields show.
-- **2 PM auto-save** (safety net so people don't walk away without saving): in 2 PM mode only, the dough save fires automatically once `currentSales` + `todayForecast` + `tomorrowForecast` are all positive (after `expandDollar`) AND Indi + Small + Large counts are all > 0 AND the save button isn't disabled by validation errors. **Sicilian and Boil counts are intentionally NOT required** — staff routinely leave them at 0. Timer windows: **15 s of idle for the first auto-save, 30 s for every subsequent auto-save** (`autoSavedOnce` flag). Every relevant input event clears the pending timer via `armAutoSaveTimer()` and re-arms with the appropriate window — so active typing pushes the save out. `disarmAutoSaveTimer()` is called from: tapping `Compute / Save` manually (which also flips `autoSavedOnce = true`), switching to the EON tab (`setMode('eon')`), and Reset (which also resets `autoSavedOnce = false`). Load-button programmatic field fills don't arm the timer because `.value = ...` doesn't fire `input` events. Auto-save success shows `Auto-saved ✓` in the button (green `.success` flash, same revert timing as manual save) via the new optional `successOverride` 6th parameter on `postToSheet`. Auto-save uses the same `buildDoughPayload(date)` helper as the click handler — they're guaranteed to produce identical rows. EON saves do **not** auto-fire.
+- **2 PM auto-save** (safety net so people don't walk away without saving): in 2 PM mode only, the dough save fires automatically once `currentSales` + `todayForecast` + `tomorrowForecast` are all positive (after `expandDollar`) AND Indi + Small + Large counts are all > 0 AND the save button isn't disabled by validation errors. **Sicilian and Boil counts are intentionally NOT required** — staff routinely leave them at 0. Timer windows: **15 s of idle for the first auto-save, 30 s for every subsequent auto-save** (`autoSavedOnce` flag). Every relevant input event clears the pending timer via `armAutoSaveTimer()` and re-arms with the appropriate window — so active typing pushes the save out. `disarmAutoSaveTimer()` is called from: tapping `Compute / Save` manually (which also flips `autoSavedOnce = true`), switching to the EON tab (`setMode('eon')`), and Reset (which also resets `autoSavedOnce = false`). Load-button programmatic field fills don't arm the timer because `.value = ...` doesn't fire `input` events. Auto-save success shows `Auto-saved ✓` in the button (green `.success` flash, same revert timing as manual save) via the optional `successOverride` 6th parameter on `postToSheet`. Auto-save uses the same `buildDoughPayload(date)` helper as the click handler — they're guaranteed to produce identical rows. EON saves do **not** auto-fire.
 - **EON Outlook (Step 08) renders after Compare to Tomorrow**: the EON save button is "Compare to Tomorrow" in EON mode — tap = save + outlook. `handleEonPost` in `apps-script/Code.gs` looks up the matching Dough Counts row and echoes back its `Tomorrow's Forecast` value (or `null` if no 2 PM save exists). `renderEonOutlook(forecast)` in `js/outlook.js` pre-fills the `#outlookForecast` input (or leaves it empty when backend returned null), sets a "source" caption underneath, then delegates the actual render to `renderOutlookRows()` which reads the input live, runs `lookup(forecast)` (Boil need is always 36, not from the table), and renders per-size rows + a bottom summary. Three summary states: "Dough is good ✓ — N leftover balls" (all `have ≥ need`), "Tomorrow we will potentially go into same-day dough by …" (any `have < need`), or "Enter tomorrow's forecast above to see the outlook" (input empty). The outlook card uses the `.hide-in-twopm` class so it only shows in EON mode; switching back to 2 PM hides it via CSS and switching back to EON re-shows the previously-rendered comparison (DOM state persists). Reset hides the outlook + clears its content. **Sicilian is treated identically to the other four sizes here** — EON-made Sicilian *is* usable tomorrow (different from the 2 PM same-night clamp, which is unrelated).
 - **Outlook forecast is editable; manual entry wins**: the `#outlookForecast` input inside the Step 08 card lets the user override the saved 2 PM forecast (e.g., to ask "what if tomorrow is busier than projected?") or enter one from scratch when no 2 PM save exists. Any keystroke flips a `data-manual="true"` flag on the input. Once flipped, subsequent Compare to Tomorrow taps still save the EON count but **do not overwrite** the manual value. The source caption (`#outlookForecastSource`) flips between "From 2 PM save", "Manual entry", and "No 2 PM save — enter manually" so the user always knows where the displayed forecast came from. Live editing re-renders the rows + summary debounced ~150 ms. Reset is the only way to drop the manual flag and return to backend-driven behavior.
-- **Actual Make card (Step 07) is collapsed by default**: same pattern as Temps. The card contains 5 ball-count inputs (one per size). Pre-first-save, inputs are blank with the calculated balls-to-make shown as a placeholder hint. After every successful Save Count, `populateMakeInputs()` (in `js/make.js`, called from the success branch in `js/save.js`) fills the inputs with the current calculated values so the manager sees solid numbers and only edits sizes that came out different. Blank fields still fall back to the placeholder on save, so the pre-first-save corner case keeps working. The card has its own `Save Actual Make` button that POSTs `{type: 'make', date, makes}` — the backend overwrites the **2pm Make Amount** row and recomputes the **Final Dough Amount at 2pm** row using the existing Dough Counts row's counts. Requires a Dough Counts row to exist for the date. Reset clears the inputs back to blank with placeholders visible.
-- **Make card uses a single ball-count input per size, not trays + extras**: The Dough Counts card uses trays + extras (`tcTrays-<size>` + `tcExtra-<size>`), but the Actual Make card uses a single `makeBalls-<size>` input. This is intentional — managers correcting an actual make think in terms of total balls, not "how many trays + leftovers." If the divergence ever feels confusing, the count card pattern can be ported over.
+- **Actual Make card (Step 07) is collapsed by default**: the card contains 5 ball-count inputs (one per size). Pre-first-save, inputs are blank with the calculated balls-to-make shown as a placeholder hint. After every successful Save Count, `populateMakeInputs()` (in `js/make.js`, called from the success branch in `js/save.js`) fills the inputs with the current calculated values so the manager sees solid numbers and only edits sizes that came out different. Blank fields still fall back to the placeholder on save, so the pre-first-save corner case keeps working. The card has its own `Save Actual Make` button that POSTs `{type: 'make', date, makes}` — the backend overwrites the **2pm Make Amount** row and recomputes the **Final Dough Amount at 2pm** row using the existing Dough Counts row's counts. Requires a Dough Counts row to exist for the date. Reset clears the inputs back to blank with placeholders visible.
+- **Make card uses a single ball-count input per size, not trays + extras**: The Dough Counts card uses trays + extras (`tcTrays-<size>` + `tcExtra-<size>`), but the Actual Make card uses a single `makeBalls-<size>` input. This is intentional — managers correcting an actual make think in terms of total balls, not "how many trays + leftovers."
 
-## Known issues (to be fixed in Phase 2)
+## Changelog (all phases complete)
 
-- ~~**Blind save**~~: ✅ Fixed — backend now returns `{status: "ok", action, row, date}` and frontend shows "Saved row N" or "Updated row N" for confirmed saves.
-- ~~**No input validation on dollar fields**~~: ✅ Fixed — dollar fields now have inline error/warning messages with range validation and cross-field checks.
-- ~~**Empty saves**~~: ✅ Fixed — backend `doPost` now rejects payloads with no date, no dough counts, and no forecast with `{status: "error", message: "..."}`. Frontend shows the error message on the save button.
-- ~~**Backdrop-blur performance**~~: ✅ Fixed — removed decorative `backdrop-filter` from 6 rules; kept only on `.header` where visually load-bearing.
-- ~~**Reset button incomplete cleanup**~~: ✅ Fixed — reset handler now fully restores temp save button (`disabled`, `textContent`, `classList`).
-
-## Plan
-
-### Phase 1 — Multi-file split (pure refactor, no behavior changes)
-
-- Step 0 — Create CLAUDE.md from real index.html ✅ complete
-- Step 1.1 — Create folder structure and empty files ✅ complete
-- Step 1.2 — Extract CSS to css/styles.css ✅ complete
-- Step 1.3 — Extract JS to js/app.js (single-file checkpoint) ✅ complete
-- Step 1.4 — Split app.js → config.js ✅ complete
-- Step 1.5 — Split app.js → utils.js ✅ complete
-- Step 1.6 — Split app.js → calculate.js ✅ complete
-- Step 1.7 — Split app.js → save.js ✅ complete
-- Step 1.8 — Split app.js → history.js ✅ complete
-- Step 1.9 — Split app.js → temps.js ✅ complete
-- Step 1.10 — Create main.js, delete app.js ✅ complete
-
-### Phase 2 — Known bug fixes
-
-- Step 2.1 — Real save confirmation ✅ complete
-- Step 2.2 — Dollar field input validation ✅ complete
-- Step 2.3 — Empty save backend guard ✅ complete
-- Step 2.4 — Fix reset handler for temp save button ✅ complete
-- Step 2.5 — Remove decorative backdrop-blur for mobile performance ✅ complete
-- Step 2.6a — Dough card layout and text changes ✅ complete
-- Step 2.6b — Set-out logic for negative Left values ✅ complete
-
-**Phase 2 complete.** All known Phase 2 fixes landed.
-
-### Phase 3 — New feature work
-
-- Step 3.1 — Unify date handling with top-level active date picker ✅ complete
-- Step 3.1-cleanup — Code review fixes: always-confirm, kill tempStatus, fix clearAllFields flicker, date validation, visual distinction, trays+singles split, innerHTML fix, dependency comments, stale rules ✅ complete
-
-### Phase 4 — Claude Design handoff implementation
-
-- Step 4.1 — Adopt redesigned `index.html` + replace `css/styles.css` with the design's Mise en Place / Line Check theme system; rewire `utils.js`, `calculate.js`, `save.js`, `temps.js`, `main.js` to new IDs (`row-<size>-*`, `heroBatchNum`, `disp_<field>`, `msg_<field>`); add `js/bible.js` for the Dough Bible reference (active rows + collapsible full table); add `js/tweaks.js` for theme/density/bible-visibility with auto `prefers-color-scheme` default. New rendering: recipe chip list, unified set-out alert banner, hero recipe + batches block, masthead date. ✅ complete
-
-### Phase 5 — Ports from abandoned branch `claude/update-dough-bible-2026-34P8C`
-
-- Step A — parseDollar negative guard: `Math.abs` + strip `-` in `js/utils.js` ✅ complete
-- Step B — stripExtraDots helper in `js/utils.js`; wired into dollar + temp input listeners in `js/main.js` ✅ complete
-- Step C — Friendlier history load error: show "Couldn’t load history" message in `.catch` of `loadHistory()` ✅ complete
-- Step D — Warn when saved/computed batch count > 10 in `activeHandleLoadedData` and `syncTempBatches` (capture rawBatches, branch status message) ✅ complete
-- Step E — Cap Sicilian `doughLeft` at zero in `js/calculate.js` so a night-need shortfall doesn't inflate tomorrow's make ✅ complete
-
-### Phase 6 — Multi-sheet Google Sheets storage
-
-- Step 6.1 — Backend split into `Dough Counts` / `Temperatures` / `Dough Bible` tabs via `SHEETS` config + idempotent `seedSheets()`; merged `doGet?date=` response keeps the frontend unchanged ✅ complete
-- Step 6.2 — `js/save.js` sends explicit `type: 'dough'` on the POST payload ✅ complete
-
-**Deployment for Phase 6** (one-time, manual): clear the existing single-sheet data, paste the new `apps-script/Code.gs` into the Apps Script editor, run `seedSheets()` once, then deploy a new version.
-
-### Phase 7 — UI simplification
-
-- Step 7.1 — Bake in Mise en Place + Compact as the only look (`<html data-theme="mise" data-density="compact">`); delete Tweaks panel, gear button, `js/tweaks.js`, and tweaks CSS ✅ complete
-- Step 7.2 — Collapse Batch Temperatures by default: section header toggles `.open` on the section, body hidden until expanded; reduces distraction for non-manager employees ✅ complete
-- Step 7.3 — Bump body font 15px → 16px and line-height 1.4 → 1.45 for legibility ✅ complete
-
-### Phase 8 — Make + 2pm tabs, collapse Bible & History
-
-- Step 8.1 — Backend: `SHEETS` extended with `make` (tab `2pm Make Amount`) and `final` (tab `Final Dough Amount at 2pm`); `handleDoughPost` upserts both via new `upsertSizeRow(sheetKey, date, sizes)` helper; `seedSheets()` creates the new tabs idempotently ✅ complete
-- Step 8.2 — Frontend: `js/save.js` reads per-size `make` from the breakdown DOM (`row-<size>-make`) via new `readMakeNum()` helper and sends `makes` + `finals` (count + make per size) on every dough save ✅ complete
-- Step 8.3 — Bible fully collapsible: `.bible:not(.open) #bibleBody` hides the entire body (strip cards + table); toggle text now matches Temps style ✅ complete
-- Step 8.4 — History collapsible: section restructured to a button-toggle header + `.history-body` wrapper; CSS + IIFE in `js/history.js` mirror the Temps pattern ✅ complete
-
-**Deployment for Phase 8** (manual): paste the new `apps-script/Code.gs` into the Apps Script editor, run `seedSheets()` once to create the two new tabs (idempotent), then deploy a new version.
-
-### Phase 9 — Actual Make correction card
-
-- Step 9.1 — Backend: new `handleMakePost(data)` route; reads the existing Dough Counts row for the date, overwrites the **2pm Make Amount** row with the supplied makes, and recomputes the **Final Dough Amount at 2pm** row using `count + make` per size. Errors out if no Dough Counts row exists for the date. ✅ complete
-- Step 9.2 — Frontend: new `js/make.js` and a Step 07 collapsed-by-default card at the bottom of the page. Five ball-count inputs (one per size) start blank with the calculated value as placeholder; blank fields fall back to placeholder on save. Separate `Save Actual Make` button POSTs `{type: 'make', date, makes}`. ✅ complete
-- Step 9.3 — `calculate()` calls `updateMakePlaceholders()` so the calc-value hints stay current; `postToSheet` recognises the new `make_saved` action; `main.js` reset handler clears the make card too. ✅ complete
-
-**Deployment for Phase 9** (manual): paste the new `apps-script/Code.gs` into the Apps Script editor (no `seedSheets()` re-run needed — the two tabs the make handler writes to already exist from Phase 8), then deploy a new version.
-
-### Phase 10 — Auto-fill the Actual Make card on Save Count
-
-- Step 10.1 — `populateMakeInputs()` in `js/make.js` writes calculated balls-to-make into the make-card inputs (sibling to `updateMakePlaceholders()` but `.value` instead of `.placeholder`); save success branch in `js/save.js` calls it on `created`/`updated` actions only. Step-07 inputs now show solid numbers after every Save Count, so the card reads as "ready to correct" instead of "empty." ✅ complete
-
-**Deployment for Phase 10**: frontend-only — no Apps Script changes.
-
-### Phase 11 — 2 PM / EON tabs + End of Night Count sheet
-
-- Step 11.1 — Backend: `SHEETS.eon` entry (tab `End of Night Count`, EON-prefixed headers); new POST type `"eon"` → `handleEonPost(data)` upserts one row per date; `getByDate` extended to merge EON rows alongside Dough Counts + Temperatures. `seedSheets()` picks up the new tab idempotently. ✅ complete
-- Step 11.2 — Frontend HTML/CSS: tab strip between Step 01 and Step 02; Step 01 sales card carries both `.sales-twopm` (3 dollar fields) and `.sales-eon` (single `eonSales` input) blocks, swapped via `[data-mode]` CSS rules. Steps 03, 04, 07 + the set-out alert tagged `.hide-in-eon`. Mode tab styling lives in a new `.mode-tabs` block. ✅ complete
-- Step 11.3 — Frontend JS: new `js/tabs.js` (`getMode`, `setMode`, click wire-up). `js/save.js` save handler + `updateSaveButtons()` branch on `getMode()` to build the right payload and apply the right validation. `js/temps.js` `fillFieldsFromData()` reads EON-prefixed keys when in EON mode and `activeHandleLoadedData()` short-circuits the batches/temps wiring. `js/calculate.js` calls `updateHint('eonSales', 'disp_eonSales')`. `js/main.js` wires the eonSales input listener and the reset handler flips back to 2 PM via `setMode('twopm')`. `postToSheet()` recognises new `eon_created`/`eon_updated` actions. ✅ complete
-
-**Deployment for Phase 11** (manual): paste the new `apps-script/Code.gs` into the Apps Script editor, run `seedSheets()` once to create the new **End of Night Count** tab (idempotent — existing tabs untouched), then deploy a new version.
-
-### Phase 12 — EON Outlook (compare night counts to tomorrow's need)
-
-- Step 12.1 — Backend: `handleEonPost` in `apps-script/Code.gs` echoes back `tomorrowForecast` from the matching Dough Counts row (or `null` if no 2 PM save exists for the date). No new sheet, no new POST type. ✅ complete
-- Step 12.2 — Frontend HTML/CSS: new Step 08 card `#eonOutlookSec` placed under the save block, tagged `.hide-in-twopm` (mirror of `.hide-in-eon`). Card body is a list of per-size rows + a bottom summary div. CSS adds the outlook row layout, color-coded diff column (`--good` / `--neg` / `--ink-mute`), and three summary states (`.good`, `.deficit`, `.warn`) plus a mobile-stacked layout below 380 px. ✅ complete
-- Step 12.3 — New `js/outlook.js`: `renderEonOutlook(forecast)` reads count inputs via `getCountValue` / `getBoilCountValue`, runs `lookup(forecast)` for the four non-boil needs (boil need hardcoded to 36), builds rows + summary; handles the `null` forecast branch with "Outlook unavailable — no 2 PM forecast saved for this date". `hideEonOutlook()` for reset. `js/save.js` success branch calls `renderEonOutlook(json.tomorrowForecast)` on `eon_created` / `eon_updated`. `js/tabs.js` and `js/save.js` rename the EON button to "Compare to Tomorrow". `js/main.js` reset handler calls `hideEonOutlook()`. ✅ complete
-- Step 12.4 — Editable forecast inside the outlook card: replace the read-only `#eonForecastDisp` subhead with a `#outlookForecast` dollar input + `#outlookForecastSource` caption. `renderEonOutlook(forecast)` now pre-fills the input (skipped if `data-manual="true"` is set, so re-Compare never overwrites a user-typed value) and delegates the visual render to a new `renderOutlookRows()` function that reads the input live. Forecast-input listener (debounced ~150 ms) re-fires `renderOutlookRows()` on every keystroke so the manager can dial the forecast and watch the per-size diff change. `hideEonOutlook()` extended to clear the input and drop the manual flag. `js/main.js` adds `outlookForecast` to the dollar-input sanitize loop and reset's disp-clear list. `js/calculate.js` adds `updateHint('outlookForecast', 'disp_outlookForecast')`. ✅ complete
-
-**Deployment for Phase 12** (manual): paste the new `apps-script/Code.gs` into the Apps Script editor (no `seedSheets()` re-run needed — no new tabs), then deploy a new version.
-
-### Phase 13 — 2 PM auto-save + "Compute / Save" rename
-
-- Step 13.1 — `js/save.js` auto-save plumbing: new module-level `autoSaveTimer` + `autoSavedOnce` flags; new `isReadyForAutoSave()` (2 PM mode, save button enabled, 3 dollar fields > 0, Indi/Small/Large counts > 0 — Sic/Boil intentionally optional); `armAutoSaveTimer()` schedules `performAutoSave` for 15 s on the first arm and 30 s thereafter; `disarmAutoSaveTimer()`; `performAutoSave()` re-checks readiness at fire-time, builds the same dough payload as the click handler via the new `buildDoughPayload(date)` helper, and POSTs through `postToSheet` with a new optional `successOverride` 6th param so the button briefly shows `Auto-saved ✓`. Manual click handler also disarms the timer and sets `autoSavedOnce = true`. `postToSheet` updated in all three success branches to honor `successOverride`. ✅ complete
-- Step 13.2 — Wiring: `js/main.js` adds a second `input` listener on every text field that calls `armAutoSaveTimer`; reset handler disarms + flips `autoSavedOnce = false` and updates the button label string to `Compute / Save`. `js/tabs.js` flips the 2 PM button label to `Compute / Save` and calls `disarmAutoSaveTimer()` when switching to EON. `index.html` default button text changed to `Compute / Save`. ✅ complete
-- Step 13.3 — Visual: `.save-btn` height bumped 56 → 72 px and font-size 14 → 17 px so the button is meaningfully more present. Applies to both modes since `#saveBtn` is shared. ✅ complete
-
-**Deployment for Phase 13**: frontend-only — no Apps Script changes. Ships via GitHub Pages on merge.
+| Phase | Summary | Backend redeploy? |
+|---|---|---|
+| 1 | Split the monolithic `index.html` into `css/styles.css` + per-concern `js/` files | — |
+| 2 | Bug fixes: real save confirmation, dollar-field validation, empty-save backend guard, reset cleanup, backdrop-blur removal, set-out logic | Yes |
+| 3 | Unified `#activeDate` picker driving dough + temp saves; code-review cleanup | — |
+| 4 | Design handoff: new HTML/CSS theme system, `bible.js`, new render pipeline (recipe chips, hero batches, masthead) | — |
+| 5 | Ports from abandoned branch: parseDollar negative guard, stripExtraDots, friendlier history error, >10 batch warning, Sicilian doughLeft clamp | — |
+| 6 | Backend split into Dough Counts / Temperatures / Dough Bible tabs (`SHEETS` config, `seedSheets()`, merged GET) | Yes + `seedSheets()` |
+| 7 | UI simplification: Mise/compact baked in, tweaks panel deleted, Temps collapsed by default, font bump | — |
+| 8 | `2pm Make Amount` + `Final Dough Amount at 2pm` tabs (auto-written on dough save); Bible + History collapsible | Yes + `seedSheets()` |
+| 9 | Actual Make correction card (POST type `make`; recomputes finals) | Yes |
+| 10 | Auto-fill the Make card inputs after every successful Save Count | — |
+| 11 | 2 PM / EON tabs + `End of Night Count` tab (POST type `eon`, merged GET) | Yes + `seedSheets()` |
+| 12 | EON Outlook card: per-size have/need/diff vs tomorrow's forecast, editable forecast input | Yes |
+| 13 | 2 PM auto-save (15 s/30 s idle windows) + "Compute / Save" rename + bigger save button | — |
+| 14 | Cleanup & robustness pass: null-guarded DOM lookups, `parseMDY` date validation, shared `wireSectionToggle`/`sheetDateToLocal`/`fetchSheetJSON` helpers, backend negative-value rejection, dead CSS deleted (Line Check theme, confirm dialog, breakdown-head), pure `computeDough()` extraction, **test suite + ESLint + GitHub Actions CI**, this file condensed | Yes (negative-value guard) |
 
 ## Rules for future prompts
 
 1. Every prompt must read this file first for project context.
-2. At the end of every step, update the "Current file structure" and "Plan" sections to reflect the new state.
+2. At the end of every step, update the "Current file structure" and "Changelog" sections to reflect the new state.
 3. Every step ends with a git commit. Do not push unless explicitly told to.
-4. Run `node --check` on all modified JS files before committing.
-5. JS files share global scope via `<script>` tags — load order matters. See dependency comments at the top of each file.
+4. Run `node --check` on all modified JS files and `npm test` before committing.
+5. JS files share global scope via `<script>` tags — load order matters. See dependency comments at the top of each file. New cross-file functions/constants must also be added to `appGlobals` in `eslint.config.mjs`.
+6. `DOUGH_TABLE` (js/config.js) and `BIBLE_DATA` (apps-script/Code.gs) must change together in the same PR — `npm test` enforces the sync.
+7. `apps-script/Code.gs` changes require a manual redeploy: paste into the Apps Script editor and deploy a new version (run `seedSheets()` only when adding tabs).
