@@ -66,6 +66,17 @@
       return parseInt(parts[0]) + '/' + parseInt(parts[1]) + '/' + parts[2];
     }
 
+    // 'M/D/YYYY' -> Date at local midnight, or null if malformed
+    function parseMDY(str) {
+      var p = String(str).split('/');
+      if (p.length !== 3) return null;
+      var m = parseInt(p[0], 10), d = parseInt(p[1], 10), y = parseInt(p[2], 10);
+      if (!isFinite(m) || !isFinite(d) || !isFinite(y)) return null;
+      var dt = new Date(y, m - 1, d);
+      dt.setHours(0, 0, 0, 0);
+      return isNaN(dt.getTime()) ? null : dt;
+    }
+
     function getField(row, sheetName, camelName) {
       // Try exact names first
       var v = row[sheetName];
