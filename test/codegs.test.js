@@ -103,6 +103,64 @@ test('upsertSizeRow clamps negative makes/finals to 0', () => {
   assert.deepEqual(plain(appended[0]), ['4/1/2026', 0, 2, 0, 0, 26]);
 });
 
+test('fixNegativeMakes clamps make rows and recomputes finals from counts', () => {
+  function fakeSheet(rows) {
+    return {
+      rows: rows,
+      getDataRange() {
+        const self = this;
+        return { getValues: () => self.rows.map(r => r.slice()) };
+      },
+      getRange(row, colStart, numRows, numCols) {
+        const self = this;
+        return {
+          setValues(vals) {
+            for (let i = 0; i < numRows; i++)
+              for (let j = 0; j < numCols; j++)
+                self.rows[row - 1 + i][colStart - 1 + j] = vals[i][j];
+          },
+          setValue(v) { self.rows[row - 1][colStart - 1] = v; }
+        };
+      },
+      appendRow(r) { this.rows.push(r); },
+      getLastRow() { return this.rows.length; }
+    };
+  }
+
+  const sizeHeaders = ['Date', 'Indi', 'Small', 'Large', 'Sicilian', 'Boil'];
+  const dough = fakeSheet([
+    ['Date', "Today's Forecast", 'Current Sales', 'Sales Left', "Tomorrow's Forecast",
+     'Indi Count', 'Small Count', 'Large Count', 'Sic Count', 'Boil Count', 'Batches'],
+    ['4/1/2026', 6000, 2000, 4000, 8000, 20, 60, 50, 3, 10, 4]
+  ]);
+  const make = fakeSheet([
+    sizeHeaders,
+    ['4/1/2026', -5, 113, -2, 2, 26],   // negatives from the old frontend
+    ['4/2/2026', -1, 0, 0, 2, 0]        // no matching Dough Counts row
+  ]);
+  const final = fakeSheet([
+    sizeHeaders,
+    ['4/1/2026', 15, 173, 48, 5, 36]    // stale: built from the negative makes
+  ]);
+  const byName = {
+    'Dough Counts': dough, '2pm Make Amount': make, 'Final Dough Amount at 2pm': final
+  };
+
+  const ctx2 = loadContext(['apps-script/Code.gs'], {
+    ContentService: ContentServiceStub,
+    Logger: { log() {} },
+    SpreadsheetApp: { getActiveSpreadsheet: () => ({ getSheetByName: n => byName[n] }) }
+  });
+  evalIn(ctx2, 'fixNegativeMakes()');
+
+  assert.deepEqual(plain(make.rows[1]), ['4/1/2026', 0, 113, 0, 2, 26]);
+  assert.deepEqual(plain(make.rows[2]), ['4/2/2026', 0, 0, 0, 2, 0]);
+  // final = counts {20,60,50,3,10} + clamped make {0,113,0,2,26}
+  assert.deepEqual(plain(final.rows[1]), ['4/1/2026', 20, 173, 50, 5, 36]);
+  // 4/2 has no Dough Counts row — no final row created
+  assert.equal(final.rows.length, 2);
+});
+
 test('handleMakePost rejects missing date, missing makes, and negatives', () => {
   assert.equal(responseOf(g.handleMakePost({})).status, 'error');
   const noMakes = responseOf(g.handleMakePost({ date: '4/1/2026' }));
