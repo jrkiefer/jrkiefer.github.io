@@ -84,6 +84,25 @@ test('handleEonPost rejects missing date, empty saves, and negatives', () => {
   assert.match(neg.message, /Negative/);
 });
 
+test('upsertSizeRow clamps negative makes/finals to 0', () => {
+  // Surplus dough used to reach the sheet as a negative make. The writer
+  // clamps so even older frontends can't store negatives.
+  const appended = [];
+  const fakeSheet = {
+    getDataRange() { return { getValues: () => [['Date', 'Indi', 'Small', 'Large', 'Sicilian', 'Boil']] }; },
+    appendRow(row) { appended.push(row); },
+    getRange() { return { setValues() {} }; },
+    getLastRow() { return 2; }
+  };
+  const ctx2 = loadContext(['apps-script/Code.gs'], {
+    ContentService: ContentServiceStub,
+    SpreadsheetApp: { getActiveSpreadsheet: () => ({ getSheetByName: () => fakeSheet }) }
+  });
+  evalIn(ctx2, 'upsertSizeRow("make", "4/1/2026", { indi: -5, small: 2, large: -1, sic: 0, boil: 26 })');
+  assert.equal(appended.length, 1);
+  assert.deepEqual(plain(appended[0]), ['4/1/2026', 0, 2, 0, 0, 26]);
+});
+
 test('handleMakePost rejects missing date, missing makes, and negatives', () => {
   assert.equal(responseOf(g.handleMakePost({})).status, 'error');
   const noMakes = responseOf(g.handleMakePost({ date: '4/1/2026' }));

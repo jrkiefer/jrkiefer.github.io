@@ -22,7 +22,9 @@
         var input = document.getElementById('makeBalls-' + t);
         if (!input) continue;
         var calcEl = document.getElementById('row-' + t + '-make');
-        var calc = calcEl ? (parseInt(calcEl.textContent, 10) || 0) : 0;
+        // Surplus shows as a negative make in the breakdown; the actual make
+        // is never negative, so clamp before using it as a hint.
+        var calc = calcEl ? Math.max(0, parseInt(calcEl.textContent, 10) || 0) : 0;
         input.placeholder = String(calc);
       }
     }
@@ -37,7 +39,7 @@
         var input = document.getElementById('makeBalls-' + t);
         if (!input) continue;
         var calcEl = document.getElementById('row-' + t + '-make');
-        var calc = calcEl ? (parseInt(calcEl.textContent, 10) || 0) : 0;
+        var calc = calcEl ? Math.max(0, parseInt(calcEl.textContent, 10) || 0) : 0;
         input.value = String(calc);
       }
     }

@@ -76,8 +76,8 @@ Note: because of the Sicilian minimum of 2 (≥ 1 tray), batches can never compu
 - **Tab `Dough Counts`**: `Date | Today's Forecast | Current Sales | Sales Left | Tomorrow's Forecast | Indi Count | Small Count | Large Count | Sic Count | Boil Count | Batches`
 - **Tab `Temperatures`**: `Date | Water 1 | Dough 1 | Water 2 | Dough 2 | … | Water 10 | Dough 10` (interleaved pairs)
 - **Tab `Dough Bible`**: `Threshold | Indi | Small | Large | Sicilian` — 27 rows mirroring `DOUGH_TABLE` in `js/config.js`. **Reference only**; the JS owns the source of truth for calculations.
-- **Tab `2pm Make Amount`**: `Date | Indi | Small | Large | Sicilian | Boil` — per-size **balls to make** as calculated (post-clamp: Sicilian min 2, Boil = `max(0, 36 - count)`). Written automatically alongside every Dough Counts save.
-- **Tab `Final Dough Amount at 2pm`**: `Date | Indi | Small | Large | Sicilian | Boil` — per-size `count + make`, i.e. how much dough is on hand once the morning batches are done. Also written automatically alongside every Dough Counts save.
+- **Tab `2pm Make Amount`**: `Date | Indi | Small | Large | Sicilian | Boil` — per-size **balls to make** as calculated (post-clamp: Sicilian min 2, Boil = `max(0, 36 - count)`, and **negative makes save as 0** — a surplus shows as a negative make in the UI breakdown, but dough is never made in negative amounts). Written automatically alongside every Dough Counts save.
+- **Tab `Final Dough Amount at 2pm`**: `Date | Indi | Small | Large | Sicilian | Boil` — per-size `count + make` (using the 0-clamped make), i.e. how much dough is on hand once the morning batches are done. Also written automatically alongside every Dough Counts save.
 - **Tab `End of Night Count`**: `Date | EON Sales | EON Indi Count | EON Small Count | EON Large Count | EON Sic Count | EON Boil Count` — captured at close from the **EON tab**. Independent of the morning Dough Counts row; one row per date, columns are EON-prefixed so the merged GET response can carry both 2 PM and EON values for the same date without collision.
 
 - **Save (POST)**: `postToSheet()` sends a POST with a JSON body (`Content-Type: text/plain` to avoid CORS preflight). On CORS failure, retries with `mode: 'no-cors'`. The backend routes by `data.type`:
@@ -111,6 +111,7 @@ Sheet column header strings (used as keys in the merged JSON response):
 
 ## Known quirks and gotchas
 
+- **Negative make clamp**: the By Size breakdown can display a *negative* make (it means surplus — you already have more than tomorrow needs), but saves clamp it to 0 in three places: `readMakeNum()` in `save.js` (dough-save payload, which also feeds the finals), the Make card placeholder/prefill reads in `make.js`, and `upsertSizeRow()` in `Code.gs` (so rows from older deployed frontends can't write negatives either).
 - **Sicilian minimum of 2**: Hardcoded inside `computeDough()`. If the math says to make fewer than 2 Sicilian balls, it is forced to 2.
 - **Boil display**: The UI shows "Make X trays and Y singles" (full trays plus remainder), but the batch math uses the rounded-up tray count (`ceil(boilMake / 6)`).
 - **Dollar shorthand**: `expandDollar()` multiplies numbers under 100 by 1000, so `1.7` becomes `1700` and `10` becomes `10000`. Numbers ≥ 100 are taken literally.
@@ -145,7 +146,7 @@ Sheet column header strings (used as keys in the merged JSON response):
 | 11 | 2 PM / EON tabs + `End of Night Count` tab (POST type `eon`, merged GET) | Yes + `seedSheets()` |
 | 12 | EON Outlook card: per-size have/need/diff vs tomorrow's forecast, editable forecast input | Yes |
 | 13 | 2 PM auto-save (15 s/30 s idle windows) + "Compute / Save" rename + bigger save button | — |
-| 14 | Cleanup & robustness pass: null-guarded DOM lookups, `parseMDY` date validation, shared `wireSectionToggle`/`sheetDateToLocal`/`fetchSheetJSON` helpers, backend negative-value rejection, dead CSS deleted (Line Check theme, confirm dialog, breakdown-head), pure `computeDough()` extraction, **test suite + ESLint + GitHub Actions CI**, this file condensed | Yes (negative-value guard) |
+| 14 | Cleanup & robustness pass: null-guarded DOM lookups, `parseMDY` date validation, shared `wireSectionToggle`/`sheetDateToLocal`/`fetchSheetJSON` helpers, backend negative-value rejection, negative-make save clamp, dead CSS deleted (Line Check theme, confirm dialog, breakdown-head), pure `computeDough()` extraction, **test suite + ESLint + GitHub Actions CI**, this file condensed | Yes (negative-value guard + make clamp) |
 
 ## Rules for future prompts
 

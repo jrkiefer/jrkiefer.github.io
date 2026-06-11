@@ -196,13 +196,15 @@ function handleDoughPost(data) {
 function upsertSizeRow(sheetKey, date, sizes) {
   if (!sizes) return;
   var sheet = getSheet(sheetKey);
+  // Dough is never made (or held) in negative amounts — clamp so rows from
+  // older frontends can't write negatives either.
   var rowData = [
     date,
-    Number(sizes.indi)  || 0,
-    Number(sizes.small) || 0,
-    Number(sizes.large) || 0,
-    Number(sizes.sic)   || 0,
-    Number(sizes.boil)  || 0
+    Math.max(0, Number(sizes.indi)  || 0),
+    Math.max(0, Number(sizes.small) || 0),
+    Math.max(0, Number(sizes.large) || 0),
+    Math.max(0, Number(sizes.sic)   || 0),
+    Math.max(0, Number(sizes.boil)  || 0)
   ];
   var row = findRowByDate(sheet, date);
   if (row !== -1) {

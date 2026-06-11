@@ -13,8 +13,10 @@
     // Read a calculated "balls to make" value from the breakdown DOM.
     // calculate() always runs before save (debounced or sync), so these are current.
     function readMakeNum(elId) {
+      // Displayed make can be negative when there's surplus dough (it conveys
+      // "you're over"), but we never make negative dough — clamp for saving.
       var el = document.getElementById(elId);
-      return el ? (parseInt(el.textContent, 10) || 0) : 0;
+      return el ? Math.max(0, parseInt(el.textContent, 10) || 0) : 0;
     }
 
     function validateDollarFields() {
