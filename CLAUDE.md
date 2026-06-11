@@ -61,7 +61,7 @@ The 9-step calculation chain inside `computeDough()` (pure, unit-tested in `test
 2. **Dough Use Tonight** = `lookup(Sales Left)` — ball counts needed for tonight's remaining sales
 3. **Dough Left** = Current Count − Dough Use Tonight (per size; Sicilian is clamped at 0)
 4. **Dough Needed Tomorrow** = `lookup(Tomorrow's Forecast)` — ball counts needed for tomorrow
-5. **Balls to Make** = Needed − Left (per size; Sicilian is floored at 2)
+5. **Balls to Make** = Needed − Left (per size; Sicilian is floored at 2, every size is floored at 0 — surplus is shown and saved as 0, never negative)
 6. **Trays Needed** = `ceil(Balls to Make / balls per tray)` per size (0 if Balls to Make ≤ 0)
 7. **Boil Balls to Make** = `max(0, 36 − current boil count)`; Boil Trays = `ceil(Boil Balls to Make / 6)`
 8. **Total Trays** = sum of all tray counts (Indi + Small + Large + Sicilian + Boil trays)
@@ -111,7 +111,7 @@ Sheet column header strings (used as keys in the merged JSON response):
 
 ## Known quirks and gotchas
 
-- **Negative make clamp**: the By Size breakdown can display a *negative* make (it means surplus — you already have more than tomorrow needs), but saves clamp it to 0 in three places: `readMakeNum()` in `save.js` (dough-save payload, which also feeds the finals), the Make card placeholder/prefill reads in `make.js`, and `upsertSizeRow()` in `Code.gs` (so rows from older deployed frontends can't write negatives either).
+- **Negative make clamp**: a surplus size (more on hand than tomorrow needs) shows and saves a make of 0, never a negative. The primary clamp lives in `computeDough()` (so the By Size breakdown, recipe chips, Make card hints, and saves all agree); `readMakeNum()` in `save.js`, the Make card reads in `make.js`, and `upsertSizeRow()` in `Code.gs` clamp again as backstops so rows from older deployed frontends can't write negatives either.
 - **Sicilian minimum of 2**: Hardcoded inside `computeDough()`. If the math says to make fewer than 2 Sicilian balls, it is forced to 2.
 - **Boil display**: The UI shows "Make X trays and Y singles" (full trays plus remainder), but the batch math uses the rounded-up tray count (`ceil(boilMake / 6)`).
 - **Dollar shorthand**: `expandDollar()` multiplies numbers under 100 by 1000, so `1.7` becomes `1700` and `10` becomes `10000`. Numbers ≥ 100 are taken literally.

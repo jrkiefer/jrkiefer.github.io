@@ -132,6 +132,8 @@
         if (t === 'sic' && doughLeft[t] < 0) doughLeft[t] = 0;
         ballsToMake[t] = tomorrowNeed[t] - doughLeft[t];
         if (t === 'sic' && ballsToMake[t] < 2) ballsToMake[t] = 2;
+        // Surplus is not actionable — never show or save a negative make.
+        if (ballsToMake[t] < 0) ballsToMake[t] = 0;
         trays[t] = ballsToMake[t] <= 0 ? 0 : Math.ceil(ballsToMake[t] / PER_TRAY[t]);
       }
 

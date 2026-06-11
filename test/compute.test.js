@@ -70,11 +70,12 @@ test('zero inputs floor at the first lookup row (the page-load state)', () => {
   assert.equal(r.batches, 4);
 });
 
-test('fully stocked: only the Sicilian minimum keeps batches at 1', () => {
+test('fully stocked: makes clamp to 0 (no negative surplus), Sicilian minimum keeps batches at 1', () => {
   const r = computeDough({
     currentSales: 0, todayForecast: 4000, tomorrowForecast: 4000,
     counts: { indi: 100, small: 300, large: 300, sic: 100 }, boilCount: 36
   });
+  assert.deepEqual(plain(r.ballsToMake), { indi: 0, small: 0, large: 0, sic: 2 });
   assert.deepEqual(plain(r.trays), { indi: 0, small: 0, large: 0, sic: 1 });
   assert.equal(r.batches, 1);
 });
