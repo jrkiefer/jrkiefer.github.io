@@ -1,0 +1,12 @@
+{
+  "name": "dough-tracker",
+  "private": true,
+  "scripts": {
+    "test": "node --test \"test/*.test.js\"",
+    "lint": "eslint js test apps-script/Code.gs eslint.config.mjs"
+  },
+  "devDependencies": {
+    "eslint": "^9",
+    "@eslint/js": "^9"
+  }
+}

@@ -22,7 +22,9 @@
         var input = document.getElementById('makeBalls-' + t);
         if (!input) continue;
         var calcEl = document.getElementById('row-' + t + '-make');
-        var calc = calcEl ? (parseInt(calcEl.textContent, 10) || 0) : 0;
+        // Surplus shows as a negative make in the breakdown; the actual make
+        // is never negative, so clamp before using it as a hint.
+        var calc = calcEl ? Math.max(0, parseInt(calcEl.textContent, 10) || 0) : 0;
         input.placeholder = String(calc);
       }
     }
@@ -37,7 +39,7 @@
         var input = document.getElementById('makeBalls-' + t);
         if (!input) continue;
         var calcEl = document.getElementById('row-' + t + '-make');
-        var calc = calcEl ? (parseInt(calcEl.textContent, 10) || 0) : 0;
+        var calc = calcEl ? Math.max(0, parseInt(calcEl.textContent, 10) || 0) : 0;
         input.value = String(calc);
       }
     }
@@ -61,19 +63,6 @@
           sanitize(this, /[^0-9]/g);
         });
       }
-    }
-
-    // Collapsible Make section: closed by default, header toggles .open
-    function wireMakeToggle() {
-      var toggle = document.getElementById('makeToggle');
-      var sec = document.getElementById('makeSec');
-      if (!toggle || !sec) return;
-      toggle.addEventListener('click', function() {
-        var isOpen = sec.classList.toggle('open');
-        toggle.setAttribute('aria-expanded', isOpen ? 'true' : 'false');
-        var lbl = toggle.querySelector('.make-toggle-label');
-        if (lbl) lbl.textContent = isOpen ? 'Tap to collapse' : 'Tap to expand';
-      });
     }
 
     // Save Make handler — POSTs {type:'make', date, makes} via postToSheet.
@@ -119,7 +108,8 @@
 
     (function initMake() {
       wireMakeInputs();
-      wireMakeToggle();
+      // Collapsible Make section: closed by default, header toggles .open
+      wireSectionToggle('makeToggle', 'makeSec', '.make-toggle-label');
       wireMakeSave();
       // Populate placeholders from the initial calculate() pass
       updateMakePlaceholders();

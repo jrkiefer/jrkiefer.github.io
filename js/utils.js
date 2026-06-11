@@ -1,4 +1,4 @@
-    // js/utils.js — no dependencies (loaded after config.js)
+    // js/utils.js — depends on: config.js (SCRIPT_URL)
     function parseDollar(str) {
       return Math.abs(parseFloat(String(str).replace(/[$,\s-]/g, '')) || 0);
     }
@@ -66,6 +66,17 @@
       return parseInt(parts[0]) + '/' + parseInt(parts[1]) + '/' + parts[2];
     }
 
+    // 'M/D/YYYY' -> Date at local midnight, or null if malformed
+    function parseMDY(str) {
+      var p = String(str).split('/');
+      if (p.length !== 3) return null;
+      var m = parseInt(p[0], 10), d = parseInt(p[1], 10), y = parseInt(p[2], 10);
+      if (!isFinite(m) || !isFinite(d) || !isFinite(y)) return null;
+      var dt = new Date(y, m - 1, d);
+      dt.setHours(0, 0, 0, 0);
+      return isNaN(dt.getTime()) ? null : dt;
+    }
+
     function getField(row, sheetName, camelName) {
       // Try exact names first
       var v = row[sheetName];
@@ -74,7 +85,7 @@
       if (v === undefined || v === null) {
         var lower = sheetName.toLowerCase().replace(/\s+/g, '');
         for (var k in row) {
-          if (row.hasOwnProperty(k) && k.toLowerCase().replace(/\s+/g, '') === lower) {
+          if (Object.prototype.hasOwnProperty.call(row, k) && k.toLowerCase().replace(/\s+/g, '') === lower) {
             v = row[k];
             break;
           }
@@ -82,6 +93,38 @@
       }
       if (v === undefined || v === null) v = 0;
       return v;
+    }
+
+    // Sheet date cell (Date object or 'YYYY-MM-DD[THH:MM:SS]' string) -> 'M/D/YYYY'
+    function sheetDateToLocal(raw) {
+      if (raw instanceof Date) {
+        return (raw.getMonth() + 1) + '/' + raw.getDate() + '/' + raw.getFullYear();
+      }
+      var s = String(raw);
+      if (/^\d{4}-\d{2}-\d{2}/.test(s)) {
+        var ds = s.indexOf('T') === -1 ? s + 'T00:00:00' : s;
+        return new Date(ds).toLocaleDateString('en-US');
+      }
+      return s;
+    }
+
+    // GET to the Apps Script backend; query like '?date=4/1/2026' (optional)
+    function fetchSheetJSON(query) {
+      return fetch(SCRIPT_URL + (query || '')).then(function(r) { return r.json(); });
+    }
+
+    // Collapsible section: toggle button flips .open on the section,
+    // aria-expanded on the button, and the "Tap to expand/collapse" label.
+    function wireSectionToggle(toggleId, sectionId, labelSelector) {
+      var toggle = document.getElementById(toggleId);
+      var sec = document.getElementById(sectionId);
+      if (!toggle || !sec) return;
+      toggle.addEventListener('click', function() {
+        var isOpen = sec.classList.toggle('open');
+        toggle.setAttribute('aria-expanded', isOpen ? 'true' : 'false');
+        var lbl = toggle.querySelector(labelSelector);
+        if (lbl) lbl.textContent = isOpen ? 'Tap to collapse' : 'Tap to expand';
+      });
     }
 
     function toShorthand(n) {

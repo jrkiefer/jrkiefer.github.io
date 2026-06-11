@@ -59,14 +59,8 @@
 
     function searchRowForDate(rows, date) {
       for (var i = 0; i < rows.length; i++) {
-        var rd = rows[i]['Date'] || rows[i]['date'] || '';
-        if (typeof rd === 'string' && /^\d{4}-\d{2}-\d{2}/.test(rd)) {
-          var ds = rd.indexOf('T') === -1 ? rd + 'T00:00:00' : rd;
-          rd = new Date(ds).toLocaleDateString('en-US');
-        } else if (rd instanceof Date) {
-          rd = (rd.getMonth()+1) + '/' + rd.getDate() + '/' + rd.getFullYear();
-        }
-        if (normalizeDate(String(rd)) === date) {
+        var rd = sheetDateToLocal(rows[i]['Date'] || rows[i]['date'] || '');
+        if (normalizeDate(rd) === date) {
           return rows[i];
         }
       }
@@ -227,9 +221,7 @@
 
       clearAllFields();
 
-      var url = SCRIPT_URL + '?date=' + encodeURIComponent(date);
-      fetch(url)
-        .then(function(r) { return r.json(); })
+      fetchSheetJSON('?date=' + encodeURIComponent(date))
         .then(function(data) {
           loadBtn.disabled = false;
           loadBtn.textContent = 'Load';
@@ -250,8 +242,7 @@
           }
 
           // {status: "not_found"} or unrecognized — fallback: fetch ALL rows
-          return fetch(SCRIPT_URL)
-            .then(function(r2) { return r2.json(); })
+          return fetchSheetJSON()
             .then(function(rows) {
               var rowData = searchRowForDate(rows, date);
               activeHandleLoadedData(rowData, date, status);
@@ -259,8 +250,7 @@
             });
         })
         .catch(function() {
-          fetch(SCRIPT_URL)
-            .then(function(r) { return r.json(); })
+          fetchSheetJSON()
             .then(function(rows) {
               loadBtn.disabled = false;
               loadBtn.textContent = 'Load';
@@ -303,17 +293,7 @@
     }
 
     // Collapsible Temps section: closed by default, header toggles .open
-    (function wireTempToggle() {
-      var toggle = document.getElementById('tempToggle');
-      var sec = document.getElementById('tempSec');
-      if (!toggle || !sec) return;
-      toggle.addEventListener('click', function() {
-        var isOpen = sec.classList.toggle('open');
-        toggle.setAttribute('aria-expanded', isOpen ? 'true' : 'false');
-        var lbl = toggle.querySelector('.temp-toggle-label');
-        if (lbl) lbl.textContent = isOpen ? 'Tap to collapse' : 'Tap to expand';
-      });
-    })();
+    wireSectionToggle('tempToggle', 'tempSec', '.temp-toggle-label');
 
     // Save Temps
     document.getElementById('tempSaveBtn').addEventListener('click', function() {

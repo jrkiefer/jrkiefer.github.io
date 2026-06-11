@@ -13,8 +13,10 @@
     // Read a calculated "balls to make" value from the breakdown DOM.
     // calculate() always runs before save (debounced or sync), so these are current.
     function readMakeNum(elId) {
+      // Displayed make can be negative when there's surplus dough (it conveys
+      // "you're over"), but we never make negative dough — clamp for saving.
       var el = document.getElementById(elId);
-      return el ? (parseInt(el.textContent, 10) || 0) : 0;
+      return el ? Math.max(0, parseInt(el.textContent, 10) || 0) : 0;
     }
 
     function validateDollarFields() {
@@ -148,7 +150,7 @@
       }
       // Temp save: disable if no temp values entered
       var tempSaveBtn = document.getElementById('tempSaveBtn');
-      if (tempSaveBtn.style.display !== 'none' && !tempSaveBtn._isSaving) {
+      if (tempSaveBtn && tempSaveBtn.style.display !== 'none' && !tempSaveBtn._isSaving) {
         var hasTemps = false;
         for (var i = 1; i <= tempBatchCount; i++) {
           var wEl = document.getElementById('tempWater-' + i);
@@ -187,7 +189,7 @@
         }
         return r.text().then(function(txt) {
           var json;
-          try { json = JSON.parse(txt); } catch(e) {}
+          try { json = JSON.parse(txt); } catch(e) { console.warn('Non-JSON response from backend:', txt); }
           if (json && json.status === 'ok') {
             var actionText = 'Saved!';
             if (json.action === 'updated') actionText = 'Updated row ' + json.row;
@@ -322,13 +324,11 @@
       isSaving = true;
       var dateEl = document.getElementById('activeDate');
       var date = dateEl && dateEl.value.trim() ? normalizeDate(dateEl.value.trim()) : normalizeDate(getTodayDate());
-      var dateParts = date.split('/');
-      if (dateParts.length === 3) {
-        var selected = new Date(parseInt(dateParts[2]), parseInt(dateParts[0]) - 1, parseInt(dateParts[1]));
-        var today = new Date(); today.setHours(0,0,0,0); selected.setHours(0,0,0,0);
-        var diffDays = Math.round((selected - today) / 86400000);
-        if (diffDays > 7 || diffDays < -365) { isSaving = false; return; }
-      }
+      var selected = parseMDY(date);
+      if (!selected) { isSaving = false; return; }
+      var today = new Date(); today.setHours(0,0,0,0);
+      var diffDays = Math.round((selected - today) / 86400000);
+      if (diffDays > 7 || diffDays < -365) { isSaving = false; return; }
       var data = buildDoughPayload(date);
       postToSheet(data, saveBtn,
         'Compute / Save',
@@ -359,19 +359,22 @@
       isSaving = true;
       var dateEl = document.getElementById('activeDate');
       var date = dateEl && dateEl.value.trim() ? normalizeDate(dateEl.value.trim()) : normalizeDate(getTodayDate());
-      // Reject dates that are obviously wrong (>1 year ago or >7 days ahead)
-      var dateParts = date.split('/');
+      // Reject dates that are malformed or obviously wrong (>1 year ago or >7 days ahead)
       var resetLabel = (mode === 'eon') ? 'Compare to Tomorrow' : 'Compute / Save';
-      if (dateParts.length === 3) {
-        var selected = new Date(parseInt(dateParts[2]), parseInt(dateParts[0]) - 1, parseInt(dateParts[1]));
-        var today = new Date(); today.setHours(0,0,0,0); selected.setHours(0,0,0,0);
-        var diffDays = Math.round((selected - today) / 86400000);
-        if (diffDays > 7 || diffDays < -365) {
-          saveBtn.textContent = diffDays > 7 ? 'Date is too far in the future' : 'Date is too far in the past';
-          saveBtn.classList.add('error');
-          resetSaveBtn(saveBtn, resetLabel, 3000);
-          return;
-        }
+      var selected = parseMDY(date);
+      if (!selected) {
+        saveBtn.textContent = 'Invalid date';
+        saveBtn.classList.add('error');
+        resetSaveBtn(saveBtn, resetLabel, 3000);
+        return;
+      }
+      var today = new Date(); today.setHours(0,0,0,0);
+      var diffDays = Math.round((selected - today) / 86400000);
+      if (diffDays > 7 || diffDays < -365) {
+        saveBtn.textContent = diffDays > 7 ? 'Date is too far in the future' : 'Date is too far in the past';
+        saveBtn.classList.add('error');
+        resetSaveBtn(saveBtn, resetLabel, 3000);
+        return;
       }
 
       var data;

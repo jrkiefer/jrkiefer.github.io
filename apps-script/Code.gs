@@ -93,6 +93,13 @@ function normalizeDate(dateStr) {
   return String(dateStr).trim();
 }
 
+function hasNegative(values) {
+  for (var i = 0; i < values.length; i++) {
+    if ((Number(values[i]) || 0) < 0) return true;
+  }
+  return false;
+}
+
 function findRowByDate(sheet, targetDate) {
   var allData = sheet.getDataRange().getValues();
   var normalized = normalizeDate(targetDate);
@@ -150,6 +157,13 @@ function handleDoughPost(data) {
   if (!hasDough && !hasForecast) {
     return jsonResponse({status: "error", message: "Empty save rejected — no dough counts or forecast"});
   }
+  // salesLeft is derived and legitimately negative when sales exceed forecast,
+  // so it's deliberately excluded from this check.
+  if (hasNegative([data.indiCount, data.smallCount, data.largeCount, data.sicCount,
+                   data.boilCount, data.todayForecast, data.tomorrowForecast,
+                   data.currentSales, data.batches])) {
+    return jsonResponse({status: "error", message: "Negative values rejected"});
+  }
 
   var sheet = getSheet("dough");
   var rowData = [
@@ -182,13 +196,15 @@ function handleDoughPost(data) {
 function upsertSizeRow(sheetKey, date, sizes) {
   if (!sizes) return;
   var sheet = getSheet(sheetKey);
+  // Dough is never made (or held) in negative amounts — clamp so rows from
+  // older frontends can't write negatives either.
   var rowData = [
     date,
-    Number(sizes.indi)  || 0,
-    Number(sizes.small) || 0,
-    Number(sizes.large) || 0,
-    Number(sizes.sic)   || 0,
-    Number(sizes.boil)  || 0
+    Math.max(0, Number(sizes.indi)  || 0),
+    Math.max(0, Number(sizes.small) || 0),
+    Math.max(0, Number(sizes.large) || 0),
+    Math.max(0, Number(sizes.sic)   || 0),
+    Math.max(0, Number(sizes.boil)  || 0)
   ];
   var row = findRowByDate(sheet, date);
   if (row !== -1) {
@@ -214,6 +230,10 @@ function handleEonPost(data) {
   var hasSales = (Number(data.eonSales) || 0) > 0;
   if (!hasCount && !hasSales) {
     return jsonResponse({status: "error", message: "Empty save rejected — no EON sales or counts"});
+  }
+  if (hasNegative([data.eonSales, data.indiCount, data.smallCount,
+                   data.largeCount, data.sicCount, data.boilCount])) {
+    return jsonResponse({status: "error", message: "Negative values rejected"});
   }
 
   var sheet = getSheet("eon");
@@ -264,6 +284,10 @@ function handleMakePost(data) {
   }
   if (!data.makes) {
     return jsonResponse({status: "error", message: "Missing makes"});
+  }
+  if (hasNegative([data.makes.indi, data.makes.small, data.makes.large,
+                   data.makes.sic, data.makes.boil])) {
+    return jsonResponse({status: "error", message: "Negative values rejected"});
   }
 
   var doughSheet = getSheet("dough");
