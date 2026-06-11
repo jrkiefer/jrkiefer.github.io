@@ -405,6 +405,66 @@ function getRecentDough() {
     .setMimeType(ContentService.MimeType.JSON);
 }
 
+// Run once from the Apps Script editor (like seedSheets). One-time data fix:
+// clamps any negative values in the 2pm Make Amount tab to 0, then recomputes
+// every Final Dough Amount at 2pm row as Dough Counts + clamped make.
+// Idempotent — safe to re-run. Rows whose date has no Dough Counts row get
+// their makes clamped but their final is left alone (logged).
+function fixNegativeMakes() {
+  var makeSheet = getSheet("make");
+  var doughSheet = getSheet("dough");
+  var report = [];
+
+  // Index Dough Counts by normalized date so each make row is one lookup.
+  var doughData = doughSheet.getDataRange().getValues();
+  var doughHeaders = doughData[0];
+  var col = {};
+  for (var h = 0; h < doughHeaders.length; h++) col[doughHeaders[h]] = h;
+  var countsByDate = {};
+  for (var i = 1; i < doughData.length; i++) {
+    countsByDate[normalizeDate(formatDate(doughData[i][0]))] = {
+      indi:  Number(doughData[i][col["Indi Count"]])  || 0,
+      small: Number(doughData[i][col["Small Count"]]) || 0,
+      large: Number(doughData[i][col["Large Count"]]) || 0,
+      sic:   Number(doughData[i][col["Sic Count"]])   || 0,
+      boil:  Number(doughData[i][col["Boil Count"]])  || 0
+    };
+  }
+
+  var makeData = makeSheet.getDataRange().getValues();
+  for (var r = 1; r < makeData.length; r++) {
+    var date = formatDate(makeData[r][0]);
+    var raw = makeData[r].slice(1, 6).map(function(v) { return Number(v) || 0; });
+    var makes = {
+      indi:  Math.max(0, raw[0]),
+      small: Math.max(0, raw[1]),
+      large: Math.max(0, raw[2]),
+      sic:   Math.max(0, raw[3]),
+      boil:  Math.max(0, raw[4])
+    };
+    var hadNegative = raw.some(function(v) { return v < 0; });
+    if (hadNegative) {
+      makeSheet.getRange(r + 1, 2, 1, 5)
+        .setValues([[makes.indi, makes.small, makes.large, makes.sic, makes.boil]]);
+      report.push("clamped makes: " + date);
+    }
+    var counts = countsByDate[normalizeDate(date)];
+    if (counts) {
+      upsertSizeRow("final", date, {
+        indi:  counts.indi  + makes.indi,
+        small: counts.small + makes.small,
+        large: counts.large + makes.large,
+        sic:   counts.sic   + makes.sic,
+        boil:  counts.boil  + makes.boil
+      });
+    } else {
+      report.push("no Dough Counts row for " + date + " — final not recomputed");
+    }
+  }
+
+  Logger.log(report.length ? report.join("\n") : "no negatives found — finals recomputed");
+}
+
 // Run once from the Apps Script editor after deploying. Idempotent: never wipes
 // existing data, never duplicates rows. Safe to re-run if a tab is missing.
 function seedSheets() {
