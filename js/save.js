@@ -31,17 +31,18 @@
       var today = expandDollar(todayRaw);
       var tomorrow = expandDollar(tomorrowRaw);
 
-      // Today's Forecast
-      if (!todayRaw) {
-        errors.todayForecast = "Enter Today's Forecast before saving";
-      } else if (today < 1000) {
-        errors.todayForecast = "Today's Forecast must be at least $1,000";
-      } else if (today > 22000) {
-        errors.todayForecast = "Today's Forecast must be at most $22,000";
-      } else if (today < 3750) {
-        warnings.todayForecast = "Today's Forecast is below the Dough Bible range \u2014 the calculation will use the lowest row";
-      } else if (today > 20750) {
-        warnings.todayForecast = "Today's Forecast is above the Dough Bible range \u2014 the calculation will use the highest row";
+      // Today's Forecast \u2014 optional: empty means a closed day ("from zero"),
+      // where nothing sells tonight and tomorrow's dough is made from scratch.
+      if (todayRaw) {
+        if (today < 1000) {
+          errors.todayForecast = "Today's Forecast must be at least $1,000 (leave empty if closed today)";
+        } else if (today > 22000) {
+          errors.todayForecast = "Today's Forecast must be at most $22,000";
+        } else if (today < 3750) {
+          warnings.todayForecast = "Today's Forecast is below the Dough Bible range \u2014 the calculation will use the lowest row";
+        } else if (today > 20750) {
+          warnings.todayForecast = "Today's Forecast is above the Dough Bible range \u2014 the calculation will use the highest row";
+        }
       }
 
       // Tomorrow's Forecast
@@ -127,9 +128,12 @@
           var validation = validateDollarFields();
           applyValidationToDOM(validation);
 
+          // Mirrors the backend's hasDough || hasForecast guard — tomorrow's
+          // forecast alone is enough (a closed "from zero" day has 0 counts).
           var hasData = getCountValue('indi') > 0 || getCountValue('small') > 0 ||
             getCountValue('large') > 0 || getCountValue('sic') > 0 || getBoilCountValue() > 0 ||
-            expandDollar(document.getElementById('todayForecast').value) > 0;
+            expandDollar(document.getElementById('todayForecast').value) > 0 ||
+            expandDollar(document.getElementById('tomorrowForecast').value) > 0;
 
           if (validation.hasErrors) {
             saveBtn.disabled = true;

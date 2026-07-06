@@ -57,17 +57,43 @@ test('boil: make is max(0, 36 - count)', () => {
   assert.equal(over.boilMake, 0);
 });
 
-test('zero inputs floor at the first lookup row (the page-load state)', () => {
-  // lookup(0) returns the $3,750 row, so even an untouched form shows a
-  // non-zero recipe. Pins the floor behavior.
+test('zero inputs: nothing used tonight, tomorrow floors at the first row (page-load state)', () => {
+  // salesLeft 0 -> no dough used tonight (no first-row round-up); tomorrow's
+  // lookup(0) still floors at the $3,750 row so an untouched form shows a
+  // non-zero recipe.
   const r = computeDough({
     currentSales: 0, todayForecast: 0, tomorrowForecast: 0,
     counts: { indi: 0, small: 0, large: 0, sic: 0 }, boilCount: 0
   });
-  assert.equal(r.tonightIdx, 0);
-  assert.deepEqual(plain(r.ballsToMake), { indi: 22, small: 104, large: 88, sic: 2 });
+  assert.equal(r.tonightIdx, -1);
+  assert.deepEqual(plain(r.doughUse), { indi: 0, small: 0, large: 0, sic: 0 });
+  assert.deepEqual(plain(r.ballsToMake), { indi: 11, small: 52, large: 44, sic: 2 });
   assert.equal(r.boilMake, 36);
-  assert.equal(r.batches, 4);
+  assert.equal(r.batches, 3);
+});
+
+test('from-zero day: closed today, tomorrow forecast drives the make exactly', () => {
+  // Shop closed today (no forecast, no sales) and 0 dough on hand: make must
+  // equal tomorrow's lookup row exactly — no phantom tonight-use, no set-out.
+  const r = computeDough({
+    currentSales: 0, todayForecast: 0, tomorrowForecast: 8000,
+    counts: { indi: 0, small: 0, large: 0, sic: 0 }, boilCount: 0
+  });
+  assert.deepEqual(plain(r.doughUse), { indi: 0, small: 0, large: 0, sic: 0 });
+  assert.deepEqual(plain(r.doughLeft), { indi: 0, small: 0, large: 0, sic: 0 }); // no negatives -> no set-out
+  assert.deepEqual(plain(r.ballsToMake), { indi: 24, small: 115, large: 106, sic: 3 }); // the $8,300 row
+  assert.equal(r.boilMake, 36);
+  assert.equal(r.batches, 4); // trays 3+15+18+1 + 6 boil = 43 -> ceil(43/11)
+});
+
+test('forecast already hit: salesLeft <= 0 uses no dough tonight', () => {
+  const r = computeDough({
+    currentSales: 5000, todayForecast: 4000, tomorrowForecast: 8000,
+    counts: { indi: 10, small: 20, large: 20, sic: 2 }, boilCount: 36
+  });
+  assert.equal(r.salesLeft, -1000);
+  assert.deepEqual(plain(r.doughUse), { indi: 0, small: 0, large: 0, sic: 0 });
+  assert.deepEqual(plain(r.doughLeft), { indi: 10, small: 20, large: 20, sic: 2 });
 });
 
 test('fully stocked: makes clamp to 0 (no negative surplus), Sicilian minimum keeps batches at 1', () => {

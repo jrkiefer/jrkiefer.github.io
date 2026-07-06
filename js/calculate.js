@@ -118,8 +118,11 @@
     // }
     function computeDough(inputs) {
       var salesLeft = inputs.todayForecast - inputs.currentSales;
-      var doughUse = lookup(salesLeft);
-      var tonightIdx = lookupIndex(salesLeft);
+      // No sales left tonight (closed day, or forecast already hit) means no
+      // dough gets used tonight — don't round 0 up to the table's first row.
+      var open = salesLeft > 0;
+      var doughUse = open ? lookup(salesLeft) : { indi: 0, small: 0, large: 0, sic: 0 };
+      var tonightIdx = open ? lookupIndex(salesLeft) : -1;
       var tomorrowNeed = lookup(inputs.tomorrowForecast);
       var tomorrowIdx = lookupIndex(inputs.tomorrowForecast);
       var doughLeft = {};
