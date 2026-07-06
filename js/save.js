@@ -31,11 +31,15 @@
       var today = expandDollar(todayRaw);
       var tomorrow = expandDollar(tomorrowRaw);
 
-      // Today's Forecast
+      // Today's Forecast \u2014 an explicit 0 means a closed day ("from zero"),
+      // where nothing sells tonight and tomorrow's dough is made from scratch.
+      // Empty still errors so a forgotten forecast can't silently pass as closed.
       if (!todayRaw) {
-        errors.todayForecast = "Enter Today's Forecast before saving";
+        errors.todayForecast = "Enter Today's Forecast before saving \u2014 0 if closed today";
+      } else if (today === 0) {
+        // closed today \u2014 valid, computeDough uses zero dough tonight
       } else if (today < 1000) {
-        errors.todayForecast = "Today's Forecast must be at least $1,000";
+        errors.todayForecast = "Today's Forecast must be at least $1,000 \u2014 or 0 if closed today";
       } else if (today > 22000) {
         errors.todayForecast = "Today's Forecast must be at most $22,000";
       } else if (today < 3750) {
@@ -127,9 +131,12 @@
           var validation = validateDollarFields();
           applyValidationToDOM(validation);
 
+          // Mirrors the backend's hasDough || hasForecast guard — tomorrow's
+          // forecast alone is enough (a closed "from zero" day has 0 counts).
           var hasData = getCountValue('indi') > 0 || getCountValue('small') > 0 ||
             getCountValue('large') > 0 || getCountValue('sic') > 0 || getBoilCountValue() > 0 ||
-            expandDollar(document.getElementById('todayForecast').value) > 0;
+            expandDollar(document.getElementById('todayForecast').value) > 0 ||
+            expandDollar(document.getElementById('tomorrowForecast').value) > 0;
 
           if (validation.hasErrors) {
             saveBtn.disabled = true;

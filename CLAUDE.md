@@ -47,7 +47,7 @@ Static site served by GitHub Pages — no build step. The JS is plain `<script>`
 
 `DOUGH_TABLE` is a 27-row array of objects. Each row has a `threshold` (dollar amount) and ball counts for `indi`, `small`, `large`, and `sic`. Thresholds range from $3,750 to $20,750.
 
-The `lookup(dollarAmount)` function performs a linear scan and returns the first entry whose `threshold >= dollarAmount` — in other words, it rounds UP to the next threshold. If the input exceeds the last threshold ($20,750), it caps at the highest row and returns that row's values. Zero or negative inputs floor at the first row — so even an untouched form shows a non-zero recipe.
+The `lookup(dollarAmount)` function performs a linear scan and returns the first entry whose `threshold >= dollarAmount` — in other words, it rounds UP to the next threshold. If the input exceeds the last threshold ($20,750), it caps at the highest row and returns that row's values. Zero or negative inputs floor at the first row. `computeDough()` bypasses the lookup entirely for tonight's use when Sales Left ≤ 0 (see "From zero day" in quirks); the floor still applies to Tomorrow's Forecast, so an untouched form shows a non-zero recipe.
 
 Boil dough does NOT use this table. Its target is always 36 regardless of forecast.
 
@@ -58,7 +58,7 @@ Boil dough does NOT use this table. Its target is always 36 regardless of foreca
 The 9-step calculation chain inside `computeDough()` (pure, unit-tested in `test/compute.test.js`):
 
 1. **Sales Left** = Today's Forecast − Current Sales
-2. **Dough Use Tonight** = `lookup(Sales Left)` — ball counts needed for tonight's remaining sales
+2. **Dough Use Tonight** = `lookup(Sales Left)` — ball counts needed for tonight's remaining sales. **If Sales Left ≤ 0 (closed day, or forecast already hit), tonight's use is 0 for every size** — it does not round up to the table's first row.
 3. **Dough Left** = Current Count − Dough Use Tonight (per size; Sicilian is clamped at 0)
 4. **Dough Needed Tomorrow** = `lookup(Tomorrow's Forecast)` — ball counts needed for tomorrow
 5. **Balls to Make** = Needed − Left (per size; Sicilian is floored at 2, every size is floored at 0 — surplus is shown and saved as 0, never negative)
@@ -112,6 +112,7 @@ Sheet column header strings (used as keys in the merged JSON response):
 
 ## Known quirks and gotchas
 
+- **From zero day (closed today)**: enter an explicit **0** in Today's Forecast on a day the shop is closed (leaving it empty still errors, so a *forgotten* forecast can't silently pass as closed). Sales Left is then ≤ 0, and `computeDough()` uses **zero** dough tonight instead of rounding 0 up to the $3,750 row, so the make equals tomorrow's lookup row exactly and no set-out alert fires. The Bible "Tonight" card shows "—". The save button enables from Tomorrow's Forecast alone once validation passes (mirroring the backend's `hasForecast` guard). Auto-save still requires all three dollar fields positive plus counts, so a from-zero save is always a manual tap.
 - **Negative make clamp**: a surplus size (more on hand than tomorrow needs) shows and saves a make of 0, never a negative. The primary clamp lives in `computeDough()` (so the By Size breakdown, recipe chips, Make card hints, and saves all agree); `readMakeNum()` in `save.js`, the Make card reads in `make.js`, and `upsertSizeRow()` in `Code.gs` clamp again as backstops so rows from older deployed frontends can't write negatives either.
 - **Sicilian minimum of 2**: Hardcoded inside `computeDough()`. If the math says to make fewer than 2 Sicilian balls, it is forced to 2.
 - **Boil display**: The UI shows "Make X trays and Y singles" (full trays plus remainder), but the batch math uses the rounded-up tray count (`ceil(boilMake / 6)`).
