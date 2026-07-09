@@ -1,460 +1,300 @@
 <!DOCTYPE html>
-<html lang="en" data-theme="mise" data-density="compact" data-mode="twopm">
+<html lang="en" data-theme="mise" data-density="compact" data-mode="twopm" data-status="new">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
   <meta name="theme-color" content="#f3ece0">
-  <title>Dough Tracker — Dough Bible 2026</title>
+  <title>Dough Tracker</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400;0,9..144,500;0,9..144,600;0,9..144,700;1,9..144,400;1,9..144,500&family=Inter+Tight:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;700&family=Archivo:wght@400;700;800;900&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400;0,9..144,500;0,9..144,600;0,9..144,700;1,9..144,400;1,9..144,500;1,9..144,700&family=Inter+Tight:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;700&family=Permanent+Marker&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="css/styles.css">
+  <script type="module" src="js/main.js"></script>
 </head>
 <body>
 
   <!-- ─── Masthead ─── -->
   <header class="masthead">
     <div class="masthead-top">
-      <span class="masthead-date" id="mastheadDate">—</span>
+      <div class="status">
+        <span class="status-dot"></span>
+        <span class="monocaps" id="statusLabel">New night</span>
+      </div>
       <button type="button" class="masthead-reset" id="resetBtn">Reset</button>
     </div>
     <h1 class="wordmark">Dough <em>Tracker</em></h1>
     <div class="subline">
-      <span>Dough Bible 2026</span>
+      <span class="monocaps" id="bibleTag">Dough Bible 2026 · auto</span>
       <span class="bullet">●</span>
-      <span>Pizzeria Ops</span>
+      <span class="monocaps">Pizzeria Ops</span>
     </div>
   </header>
 
   <main>
 
-    <!-- ─── Active Date ─── -->
+    <!-- ─── 00 Active Date ─── -->
     <section class="section">
       <div class="section-head">
-        <div class="step">
-          <span class="step-num">00</span>
-          <span class="step-title">Active Date</span>
-        </div>
-        <span class="step-sub">Pick a day</span>
+        <span class="step-num">00</span>
+        <span class="step-title">Active Date</span>
+        <span class="step-sub monocaps">Auto-loads</span>
       </div>
-      <div class="card">
-        <div class="date-card">
-          <div class="input-group">
-            <label for="activeDate">Date</label>
-            <input type="date" id="activeDate">
-          </div>
-          <button type="button" class="date-load-btn" id="activeLoadBtn">Load</button>
-        </div>
-        <div id="activeDateStatus"></div>
+      <div class="card date-card">
+        <input type="date" id="activeDate" aria-label="Active date">
       </div>
     </section>
 
-    <!-- ─── Sales & Forecast (2 PM) / End of Night Sales (EON) ─── -->
-    <section class="section">
-      <div class="section-head">
-        <div class="step">
-          <span class="step-num">01</span>
-          <span class="step-title sales-twopm-title">Sales &amp; Forecast</span>
-          <span class="step-title sales-eon-title">End of Night Sales</span>
-        </div>
-        <span class="step-sub sales-twopm-title">Dollars</span>
-        <span class="step-sub sales-eon-title">Dollars</span>
-      </div>
-      <div class="card">
-
-        <!-- 2 PM mode: current sales, today's forecast, tomorrow's forecast -->
-        <div class="sales-twopm">
-          <div class="input-group full-col">
-            <label for="currentSales">Current Sales</label>
-            <div class="dollar-field">
-              <span class="dollar-sign">$</span>
-              <input type="text" id="currentSales" inputmode="decimal" placeholder="0">
-              <span class="dollar-expanded num" id="disp_currentSales"></span>
-            </div>
-            <div class="field-msg" id="msg_currentSales"></div>
-          </div>
-
-          <div class="grid-2">
-            <div class="input-group">
-              <label for="todayForecast">Today's Forecast</label>
-              <div class="dollar-field">
-                <span class="dollar-sign">$</span>
-                <input type="text" id="todayForecast" inputmode="decimal" placeholder="10">
-                <span class="dollar-expanded num" id="disp_todayForecast"></span>
-              </div>
-              <div class="field-msg" id="msg_todayForecast"></div>
-            </div>
-            <div class="input-group">
-              <label for="tomorrowForecast">Tomorrow's Forecast</label>
-              <div class="dollar-field">
-                <span class="dollar-sign">$</span>
-                <input type="text" id="tomorrowForecast" inputmode="decimal" placeholder="10">
-                <span class="dollar-expanded num" id="disp_tomorrowForecast"></span>
-              </div>
-              <div class="field-msg" id="msg_tomorrowForecast"></div>
-            </div>
-          </div>
-
-          <div class="dollar-guide">
-            <span>Enter <strong>1.7</strong> → $1,700</span>
-            <span>Enter <strong>10</strong> → $10,000</span>
-            <span>Enter <strong>10000</strong> → $10,000</span>
-          </div>
-
-          <div class="sales-left">
-            <span class="sl-label">Sales Left Tonight</span>
-            <span class="sl-value num" id="salesLeftValue">$0</span>
-          </div>
-        </div>
-
-        <!-- EON mode: single end-of-night sales total -->
-        <div class="sales-eon">
-          <div class="input-group full-col">
-            <label for="eonSales">End of Night Sales</label>
-            <div class="dollar-field">
-              <span class="dollar-sign">$</span>
-              <input type="text" id="eonSales" inputmode="decimal" placeholder="0">
-              <span class="dollar-expanded num" id="disp_eonSales"></span>
-            </div>
-            <div class="field-msg" id="msg_eonSales"></div>
-          </div>
-          <div class="dollar-guide">
-            <span>Enter <strong>1.7</strong> → $1,700</span>
-            <span>Enter <strong>10</strong> → $10,000</span>
-            <span>Enter <strong>10000</strong> → $10,000</span>
-          </div>
-        </div>
-      </div>
-    </section>
-
-    <!-- ─── Mode Tabs (2 PM / EON) ─── -->
-    <div class="mode-tabs" role="tablist" aria-label="Save mode">
+    <!-- ─── Mode tabs ─── -->
+    <div class="mode-tabs" role="tablist" aria-label="Workflow mode">
       <button type="button" class="mode-tab active" id="tab-twopm" role="tab" aria-selected="true" data-mode="twopm">2 PM</button>
       <button type="button" class="mode-tab" id="tab-eon" role="tab" aria-selected="false" data-mode="eon">EON</button>
     </div>
 
-    <!-- ─── Dough Counts ─── -->
-    <section class="section">
+    <!-- ─── 01 Sales & Forecast (2 PM) ─── -->
+    <section class="section hide-in-eon">
       <div class="section-head">
-        <div class="step">
-          <span class="step-num">02</span>
-          <span class="step-title">Current Dough Counts</span>
-        </div>
-        <span class="step-sub">Trays + singles</span>
+        <span class="step-num">01</span>
+        <span class="step-title">Sales &amp; Forecast</span>
+        <span class="step-sub monocaps">10 = $10,000 · 6.7 = $6,700</span>
       </div>
-      <div class="card">
-        <div class="grid-2">
-
-          <div class="input-group size-input" style="--c: var(--indi)">
-            <label>Individual <span class="per-tray">11 / tray</span></label>
-            <div class="tc-row">
-              <div class="tc-group"><label>Trays</label><input type="text" id="tcTrays-indi" inputmode="numeric" placeholder="0"></div>
-              <div class="tc-group"><label>Singles</label><input type="text" id="tcExtra-indi" inputmode="numeric" placeholder="0"></div>
-            </div>
-            <div class="tc-total" id="tcTotal-indi">= <strong>0</strong> balls</div>
+      <div class="card sales-card">
+        <div class="sales-row">
+          <div>
+            <span class="eyebrow soft">Today's forecast</span>
+            <span class="money-echo" id="echo-todayForecast">&nbsp;</span>
+            <span class="field-note" id="note-todayForecast"></span>
           </div>
-
-          <div class="input-group size-input" style="--c: var(--small)">
-            <label>Small <span class="per-tray">8 / tray</span></label>
-            <div class="tc-row">
-              <div class="tc-group"><label>Trays</label><input type="text" id="tcTrays-small" inputmode="numeric" placeholder="0"></div>
-              <div class="tc-group"><label>Singles</label><input type="text" id="tcExtra-small" inputmode="numeric" placeholder="0"></div>
-            </div>
-            <div class="tc-total" id="tcTotal-small">= <strong>0</strong> balls</div>
+          <div class="field">
+            <input id="todayForecast" inputmode="decimal" placeholder="0" aria-label="Today's forecast">
+            <span class="saved-chip">✓ saved</span>
           </div>
-
-          <div class="input-group size-input" style="--c: var(--large)">
-            <label>Large <span class="per-tray">6 / tray</span></label>
-            <div class="tc-row">
-              <div class="tc-group"><label>Trays</label><input type="text" id="tcTrays-large" inputmode="numeric" placeholder="0"></div>
-              <div class="tc-group"><label>Singles</label><input type="text" id="tcExtra-large" inputmode="numeric" placeholder="0"></div>
-            </div>
-            <div class="tc-total" id="tcTotal-large">= <strong>0</strong> balls</div>
+        </div>
+        <div class="rule-dash"></div>
+        <div class="sales-row">
+          <div>
+            <span class="eyebrow soft">Current sales</span>
+            <span class="money-echo" id="echo-currentSales">&nbsp;</span>
+            <span class="field-note" id="note-currentSales"></span>
           </div>
-
-          <div class="input-group size-input" style="--c: var(--sic)">
-            <label>Sicilian <span class="per-tray">min 2 balls</span></label>
-            <div class="tc-row">
-              <div class="tc-group"><label>Balls</label><input type="text" id="countSic" inputmode="numeric" placeholder="0"></div>
-            </div>
+          <div class="field">
+            <input id="currentSales" inputmode="decimal" placeholder="0" aria-label="Current sales">
+            <span class="saved-chip">✓ saved</span>
           </div>
-
-          <div class="input-group size-input full-col" style="--c: var(--boil)">
-            <label>Boil Dough <span class="per-tray">target 36 · 6 / tray</span></label>
-            <div class="tc-row">
-              <div class="tc-group"><label>Trays</label><input type="text" id="tcTrays-boil" inputmode="numeric" placeholder="0"></div>
-              <div class="tc-group"><label>Singles</label><input type="text" id="tcExtra-boil" inputmode="numeric" placeholder="0"></div>
-            </div>
-            <div class="tc-total" id="tcTotal-boil">= <strong>0</strong> balls</div>
+        </div>
+        <div class="sales-left">
+          <span class="eyebrow soft">Sales left tonight</span>
+          <div class="sales-left-box">
+            <span class="sales-left-value" id="salesLeftValue">—</span>
+            <span class="sales-left-note" id="salesLeftNote"></span>
           </div>
-
+        </div>
+        <div class="rule-dash"></div>
+        <div class="sales-row">
+          <div>
+            <span class="eyebrow soft">Tomorrow's forecast</span>
+            <span class="money-echo" id="echo-tomorrowForecast">&nbsp;</span>
+            <span class="field-note" id="note-tomorrowForecast"></span>
+          </div>
+          <div class="field">
+            <input id="tomorrowForecast" inputmode="decimal" placeholder="0" aria-label="Tomorrow's forecast">
+            <span class="saved-chip">✓ saved</span>
+          </div>
         </div>
       </div>
     </section>
 
-    <!-- ─── Set-out Alert ─── -->
-    <div class="alert hidden hide-in-eon" id="setoutAlert">
-      <div class="alert-icon">!</div>
-      <div class="alert-body">
-        <div class="alert-title">Set out from freezer</div>
-        <ul id="setoutList"></ul>
-      </div>
-    </div>
-
-    <!-- ─── Save ─── -->
-    <div class="save-wrap">
-      <button type="button" class="save-btn" id="saveBtn" disabled>Compute / Save</button>
-      <div class="save-hint" id="saveHint">Enter dough counts first</div>
-    </div>
-
-    <!-- ─── EON Outlook (EON mode only, revealed by renderEonOutlook after save) ─── -->
-    <section class="section hide-in-twopm" id="eonOutlookSec" style="display:none">
+    <!-- ─── 01 End of Night Sales (EON) ─── -->
+    <section class="section hide-in-twopm">
       <div class="section-head">
-        <div class="step">
-          <span class="step-num">08</span>
-          <span class="step-title">EON Outlook</span>
-        </div>
-        <span class="step-sub">vs tomorrow's need</span>
+        <span class="step-num">01</span>
+        <span class="step-title">End of Night Sales</span>
+        <span class="step-sub monocaps">Dollars</span>
       </div>
-      <div class="card">
+      <div class="card sales-card">
+        <div class="sales-row">
+          <div>
+            <span class="eyebrow soft">Final sales</span>
+            <span class="money-echo" id="echo-eonSales">&nbsp;</span>
+          </div>
+          <div class="field">
+            <input id="eonSales" inputmode="decimal" placeholder="0" aria-label="End of night sales">
+            <span class="saved-chip">✓ saved</span>
+          </div>
+        </div>
+        <div class="eon-delta" id="eonDelta"></div>
+      </div>
+    </section>
+
+    <!-- ─── 02 Current Dough Counts (one instance per mode) ─── -->
+    <section class="section hide-in-eon">
+      <div class="section-head">
+        <span class="step-num">02</span>
+        <span class="step-title">Current Dough Counts</span>
+        <span class="step-sub monocaps">Trays + singles</span>
+      </div>
+      <div class="counts-grid" id="counts-tp"></div>
+    </section>
+
+    <section class="section hide-in-twopm">
+      <div class="section-head">
+        <span class="step-num">02</span>
+        <span class="step-title">Current Dough Counts</span>
+        <span class="step-sub monocaps">Closing count</span>
+      </div>
+      <div class="counts-grid" id="counts-eon"></div>
+    </section>
+
+    <!-- ─── 03 The Day's Work (2 PM) ─── -->
+    <section class="section hide-in-eon">
+      <div class="section-head">
+        <span class="step-num">03</span>
+        <span class="step-title">The Day's Work</span>
+        <span class="step-sub monocaps">Trays to make</span>
+      </div>
+      <div class="card dayswork-card">
+        <span class="eyebrow">Trays</span>
+        <div class="tray-chips" id="trayChips"></div>
+        <div class="hero-split"></div>
+        <div class="hero hidden" id="heroWrap">
+          <span class="hero-num" id="heroNum">0</span>
+          <div>
+            <span class="eyebrow">Batches</span>
+            <div class="hero-words" id="heroWords"></div>
+            <div class="hero-note" id="heroNote"></div>
+            <div class="hero-warn" id="heroBoilWarn"></div>
+          </div>
+        </div>
+        <div class="hero-empty" id="heroEmpty">Set sales and both forecasts to get the batch count.</div>
+      </div>
+      <div class="setout hidden" id="setoutAlert">
+        <span class="eyebrow">Set out now — tonight dips into same-day dough</span>
+        <div class="setout-list" id="setoutList"></div>
+      </div>
+    </section>
+
+    <!-- ─── 04 By Size (2 PM) ─── -->
+    <section class="section hide-in-eon">
+      <div class="section-head">
+        <span class="step-num">04</span>
+        <span class="step-title">By Size</span>
+        <span class="step-sub monocaps">Tonight → EON → tomorrow</span>
+      </div>
+      <div class="card bysize-card">
+        <span class="marker-note">E−D!!!</span>
+        <div class="plan-grid head">
+          <span class="eyebrow"></span>
+          <span class="eyebrow">have</span>
+          <span class="eyebrow">use</span>
+          <span class="eyebrow">left</span>
+          <span class="eyebrow">need</span>
+          <span class="eyebrow">make</span>
+          <span class="eyebrow">trays</span>
+        </div>
+        <div id="bysizeRows"></div>
+        <div class="boil-row">
+          <div class="plan-size"><span class="dot sm"></span><span class="monocaps">BOIL</span></div>
+          <div class="boil-stats">
+            <div><span class="eyebrow">have</span><div><span class="num" id="bs-boil-have">—</span></div></div>
+            <div><span class="eyebrow">target</span><div><span class="num">36</span></div></div>
+            <div><span class="eyebrow">make</span><div><span class="num" id="bs-boil-make">—</span></div></div>
+          </div>
+          <div class="boil-trays">
+            <span class="boil-trays-num" id="bs-boil-trays">—</span>
+            <span class="monocaps">whole trays only</span>
+          </div>
+        </div>
+        <div class="bysize-foot" id="bysizeFoot">Fill in the counts, sales, and both forecasts to get tonight's make.</div>
+      </div>
+    </section>
+
+    <!-- ─── 08 EON Outlook ─── -->
+    <section class="section hide-in-twopm">
+      <div class="section-head">
+        <span class="step-num">08</span>
+        <span class="step-title">EON Outlook</span>
+        <span class="step-sub monocaps">Have vs tomorrow's need</span>
+      </div>
+      <div class="card outlook-card">
         <div class="outlook-forecast">
-          <label for="outlookForecast">Tomorrow's Forecast</label>
-          <div class="dollar-field">
-            <span class="dollar-sign">$</span>
-            <input type="text" id="outlookForecast" inputmode="decimal" placeholder="0">
-            <span class="dollar-expanded num" id="disp_outlookForecast"></span>
+          <div>
+            <span class="eyebrow soft">Tomorrow's forecast</span>
+            <span class="outlook-source" id="outlookSource">&nbsp;</span>
           </div>
-          <div class="outlook-forecast-source" id="outlookForecastSource">—</div>
+          <div class="field">
+            <input id="outlookForecast" inputmode="decimal" placeholder="0" aria-label="Outlook forecast">
+            <span class="saved-chip">✓ saved</span>
+          </div>
         </div>
-        <ul class="outlook-list" id="outlookList"></ul>
+        <div class="rule-dash"></div>
+        <div id="outlookRows"></div>
         <div class="outlook-summary" id="outlookSummary"></div>
+        <div class="outlook-empty hidden" id="outlookEmpty">Enter tomorrow's forecast above to see the outlook.</div>
       </div>
     </section>
 
-    <!-- ─── Hero: recipe + batches ─── -->
-    <section class="section hide-in-eon">
-      <div class="section-head">
-        <div class="step">
-          <span class="step-num">03</span>
-          <span class="step-title">Tomorrow's Recipe</span>
-        </div>
-        <span class="step-sub">Make this</span>
-      </div>
-      <div class="hero">
-        <div class="hero-recipe">
-          <div class="eyebrow">Balls to make</div>
-          <h2>The Day's Work</h2>
-          <div class="recipe-list" id="recipeList"></div>
-        </div>
-        <div class="hero-batches">
-          <div class="hero-batch-num num" id="heroBatchNum">0</div>
-          <div class="hero-batch-meta">
-            <div class="lab">Batches</div>
-            <div class="big" id="heroBatchesWord">No batches needed</div>
-            <div class="detail" id="heroTotalTrays">0 trays</div>
-          </div>
-        </div>
-      </div>
-    </section>
+    <!-- ─── Collapsibles ─── -->
 
-    <!-- ─── Breakdown ─── -->
-    <section class="section hide-in-eon">
-      <div class="section-head">
-        <div class="step">
-          <span class="step-num">04</span>
-          <span class="step-title">By Size</span>
-        </div>
-        <span class="step-sub">Tonight → End of Night → Tomorrow</span>
-      </div>
-      <div class="breakdown">
-
-        <div class="size-row" style="--c: var(--indi)">
-          <div class="name-col"><span class="swatch"></span><span class="lbl">Individual</span></div>
-          <div class="math">
-            <div class="math-cell"><span class="k">Use</span><span class="v num" id="row-indi-tonight">0</span></div>
-            <div class="math-cell"><span class="k">Left</span><span class="v num" id="row-indi-left">0</span></div>
-            <div class="math-cell"><span class="k">Need</span><span class="v num" id="row-indi-need">0</span></div>
-          </div>
-          <div class="make-col">
-            <div><span class="make-num num" id="row-indi-make">0</span> <span class="make-unit">balls</span></div>
-            <span class="make-trays num"><strong id="row-indi-trays">0</strong> trays</span>
-          </div>
-          <div class="setout hidden" id="row-indi-setout">↓ Set out <strong><span class="so-num">0</span></strong> trays from freezer</div>
-        </div>
-
-        <div class="size-row" style="--c: var(--small)">
-          <div class="name-col"><span class="swatch"></span><span class="lbl">Small</span></div>
-          <div class="math">
-            <div class="math-cell"><span class="k">Use</span><span class="v num" id="row-small-tonight">0</span></div>
-            <div class="math-cell"><span class="k">Left</span><span class="v num" id="row-small-left">0</span></div>
-            <div class="math-cell"><span class="k">Need</span><span class="v num" id="row-small-need">0</span></div>
-          </div>
-          <div class="make-col">
-            <div><span class="make-num num" id="row-small-make">0</span> <span class="make-unit">balls</span></div>
-            <span class="make-trays num"><strong id="row-small-trays">0</strong> trays</span>
-          </div>
-          <div class="setout hidden" id="row-small-setout">↓ Set out <strong><span class="so-num">0</span></strong> trays from freezer</div>
-        </div>
-
-        <div class="size-row" style="--c: var(--large)">
-          <div class="name-col"><span class="swatch"></span><span class="lbl">Large</span></div>
-          <div class="math">
-            <div class="math-cell"><span class="k">Use</span><span class="v num" id="row-large-tonight">0</span></div>
-            <div class="math-cell"><span class="k">Left</span><span class="v num" id="row-large-left">0</span></div>
-            <div class="math-cell"><span class="k">Need</span><span class="v num" id="row-large-need">0</span></div>
-          </div>
-          <div class="make-col">
-            <div><span class="make-num num" id="row-large-make">0</span> <span class="make-unit">balls</span></div>
-            <span class="make-trays num"><strong id="row-large-trays">0</strong> trays</span>
-          </div>
-          <div class="setout hidden" id="row-large-setout">↓ Set out <strong><span class="so-num">0</span></strong> trays from freezer</div>
-        </div>
-
-        <div class="size-row sic-row" style="--c: var(--sic)">
-          <div class="name-col"><span class="swatch"></span><span class="lbl">Sicilian</span></div>
-          <div class="math">
-            <div class="math-cell"><span class="k">Use</span><span class="v num" id="row-sic-tonight">0</span></div>
-            <div class="math-cell"><span class="k">Left</span><span class="v num" id="row-sic-left">0</span></div>
-            <div class="math-cell"><span class="k">Need</span><span class="v num" id="row-sic-need">0</span></div>
-          </div>
-          <div class="make-col">
-            <div><span class="make-num num" id="row-sic-make">0</span> <span class="make-unit">balls</span></div>
-            <span class="make-trays num"><strong id="row-sic-trays">0</strong> trays</span>
-          </div>
-          <div class="setout hidden" id="row-sic-setout"></div>
-        </div>
-
-        <div class="size-row boil" style="--c: var(--boil)">
-          <div class="name-col"><span class="swatch"></span><span class="lbl">Boil</span></div>
-          <div class="math">
-            <div class="math-cell"><span class="k">Have</span><span class="v num" id="row-boil-have">0</span></div>
-            <div class="math-cell"><span class="k">Target</span><span class="v num" id="row-boil-target">36</span></div>
-            <div class="math-cell"><span class="k">Make</span><span class="v num" id="row-boil-make">0</span></div>
-          </div>
-          <div class="make-col">
-            <div><span class="make-num num" id="row-boil-trays">0</span></div>
-            <span class="make-trays num">trays + singles</span>
-          </div>
-        </div>
-
-      </div>
-    </section>
-
-    <!-- ─── Dough Bible reference (collapsed by default) ─── -->
-    <div class="bible" id="bible">
-      <button type="button" class="bible-head" id="bibleHead" aria-expanded="false" aria-controls="bibleBody" style="width:100%; cursor:pointer; display:flex; align-items:center; justify-content:space-between; text-align:left;">
-        <span class="name">Dough <em>Bible</em></span>
-        <span class="toggle">Tap to expand</span>
+    <section class="collapse dashed" id="bibleSec">
+      <button type="button" class="collapse-head" id="bibleToggle" aria-expanded="false" aria-controls="bibleBody">
+        <span class="collapse-title">Dough <em>Bible</em></span>
+        <span class="collapse-hint monocaps" data-hint>Tap to expand ▾</span>
       </button>
-      <div id="bibleBody">
-      <div class="bible-active">
-        <div class="row-card tonight">
-          <span class="k">Tonight's Use</span>
-          <div class="thresh" id="bibleTonightThresh">—</div>
-          <div class="counts" id="bibleTonightCounts"></div>
+      <div class="collapse-body" id="bibleBody">
+        <div class="bible-pills">
+          <button type="button" class="bible-pill" id="biblePill-regular" data-bible="regular">Bible '26</button>
+          <button type="button" class="bible-pill" id="biblePill-peach" data-bible="peach">Peach '24</button>
+          <span class="monocaps bible-auto-tag hidden" id="bibleAutoTag">auto · Jul 1 – Aug 31 = Peach</span>
         </div>
-        <div class="row-card tomorrow">
-          <span class="k">Tomorrow's Need</span>
-          <div class="thresh" id="bibleTomorrowThresh">—</div>
-          <div class="counts" id="bibleTomorrowCounts"></div>
+        <div class="bible-table-wrap">
+          <table class="bible-table" id="bibleTable-regular">
+            <thead><tr><th class="eyebrow">Sales</th><th class="eyebrow">Indi</th><th class="eyebrow">Sm</th><th class="eyebrow">Lg</th><th class="eyebrow">Sic</th></tr></thead>
+            <tbody></tbody>
+          </table>
+          <table class="bible-table hidden" id="bibleTable-peach">
+            <thead><tr><th class="eyebrow">Sales</th><th class="eyebrow">Indi</th><th class="eyebrow">Sm</th><th class="eyebrow">Lg</th><th class="eyebrow">Sic</th></tr></thead>
+            <tbody></tbody>
+          </table>
         </div>
-      </div>
-      <div class="bible-table-wrap">
-        <table class="bible-table">
-          <thead>
-            <tr><th>Threshold</th><th>Indi</th><th>Sm</th><th>Lg</th><th>Sic</th></tr>
-          </thead>
-          <tbody id="bibleTableBody"></tbody>
-        </table>
-      </div>
-      </div><!-- /#bibleBody -->
-    </div>
-
-    <!-- ─── Temperatures (collapsed by default) ─── -->
-    <section class="section temp-sec" id="tempSec">
-      <button type="button" class="section-head temp-toggle" id="tempToggle" aria-expanded="false" aria-controls="tempBody">
-        <div class="step">
-          <span class="step-num">05</span>
-          <span class="step-title">Batch Temperatures</span>
-        </div>
-        <span class="step-sub temp-toggle-label">Tap to expand</span>
-      </button>
-      <div class="card temp-body" id="tempBody">
-        <div class="temp-batch-field">
-          <div class="input-group">
-            <label for="tempBatchField">Batches</label>
-            <input type="text" id="tempBatchField" inputmode="numeric" placeholder="0" value="0">
-          </div>
-        </div>
-        <div id="tempInputs" style="margin-top:10px;"></div>
-        <button type="button" class="temp-save-btn" id="tempSaveBtn" style="display:none">Save Temperatures</button>
       </div>
     </section>
 
-    <!-- ─── History (collapsed by default) ─── -->
-    <section class="section history-sec" id="historySec">
-      <button type="button" class="section-head history-toggle" id="historyToggle" aria-expanded="false" aria-controls="historyBody">
-        <div class="step">
-          <span class="step-num">06</span>
-          <span class="step-title">Recent History</span>
-        </div>
-        <span class="step-sub history-toggle-label">Tap to expand</span>
+    <section class="collapse" id="tempsSec">
+      <button type="button" class="collapse-head" id="tempsToggle" aria-expanded="false" aria-controls="tempsBody">
+        <span class="step-num">05</span>
+        <span class="collapse-title">Batch Temperatures</span>
+        <span class="collapse-hint monocaps" data-hint>Tap to expand ▾</span>
       </button>
-      <div class="history-body" id="historyBody">
+      <div class="collapse-body" id="tempsBody">
+        <p class="collapse-sub">Water temp in, dough temp out of the mixer — per batch.</p>
+        <div id="tempRows"></div>
+      </div>
+    </section>
+
+    <section class="collapse" id="historySec">
+      <button type="button" class="collapse-head" id="historyToggle" aria-expanded="false" aria-controls="historyBody">
+        <span class="step-num">06</span>
+        <span class="collapse-title">Recent History</span>
+        <span class="collapse-hint monocaps" data-hint>Tap to expand ▾</span>
+      </button>
+      <div class="collapse-body" id="historyBody">
+        <button type="button" class="history-load" id="historyLoadBtn">Load history</button>
         <div id="historyList"></div>
       </div>
     </section>
 
-    <!-- ─── Actual Make (manager correction, collapsed by default) ─── -->
-    <section class="section make-sec hide-in-eon" id="makeSec">
-      <button type="button" class="section-head make-toggle" id="makeToggle" aria-expanded="false" aria-controls="makeBody">
-        <div class="step">
-          <span class="step-num">07</span>
-          <span class="step-title">Actual Make Amount</span>
-        </div>
-        <span class="step-sub make-toggle-label">Tap to expand</span>
+    <section class="collapse" id="makeSec">
+      <button type="button" class="collapse-head" id="makeToggle" aria-expanded="false" aria-controls="makeBody">
+        <span class="step-num">07</span>
+        <span class="collapse-title">Actual Make Amount</span>
+        <span class="collapse-hint monocaps" data-hint>Tap to expand ▾</span>
       </button>
-      <div class="card make-body" id="makeBody">
-        <p class="make-hint">Enter the actual balls made for any sizes that came out different from the recipe. Blank fields keep the calculated value. Numbers in light gray are the calculated suggestion.</p>
-        <div class="grid-2">
-          <div class="input-group make-input" style="--c: var(--indi)">
-            <label>Individual</label>
-            <input type="text" id="makeBalls-indi" inputmode="numeric" placeholder="0">
-          </div>
-          <div class="input-group make-input" style="--c: var(--small)">
-            <label>Small</label>
-            <input type="text" id="makeBalls-small" inputmode="numeric" placeholder="0">
-          </div>
-          <div class="input-group make-input" style="--c: var(--large)">
-            <label>Large</label>
-            <input type="text" id="makeBalls-large" inputmode="numeric" placeholder="0">
-          </div>
-          <div class="input-group make-input" style="--c: var(--sic)">
-            <label>Sicilian</label>
-            <input type="text" id="makeBalls-sic" inputmode="numeric" placeholder="0">
-          </div>
-          <div class="input-group make-input full-col" style="--c: var(--boil)">
-            <label>Boil</label>
-            <input type="text" id="makeBalls-boil" inputmode="numeric" placeholder="0">
-          </div>
-        </div>
-        <button type="button" class="make-save-btn" id="makeSaveBtn">Save Actual Make</button>
-        <div class="make-status" id="makeStatus"></div>
+      <div class="collapse-body" id="makeBody">
+        <p class="collapse-sub">Balls per size — only if the real make differed. Calculated make is the default.</p>
+        <div id="makeRows"></div>
       </div>
     </section>
 
   </main>
 
-  <script src="js/config.js"></script>
-  <script src="js/utils.js"></script>
-  <script src="js/bible.js"></script>
-  <script src="js/calculate.js"></script>
-  <script src="js/save.js"></script>
-  <script src="js/history.js"></script>
-  <script src="js/temps.js"></script>
-  <script src="js/make.js"></script>
-  <script src="js/tabs.js"></script>
-  <script src="js/outlook.js"></script>
-  <script src="js/main.js"></script>
 </body>
 </html>
