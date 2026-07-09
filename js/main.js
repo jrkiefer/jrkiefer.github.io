@@ -4,7 +4,7 @@
 
 import { createStore } from './store.js';
 import * as api from './api.js';
-import { computePlan, effectiveMake, autoBibleFor } from './calc.js';
+import { computePlan, effectiveMake, autoBibleFor, parseSales, fmtDate } from './calc.js';
 import { BIBLES } from './config.js';
 import { $, setText } from './ui/fields.js';
 import * as sales from './ui/sales.js';
@@ -12,6 +12,10 @@ import { createCounts } from './ui/counts.js';
 import * as dayswork from './ui/dayswork.js';
 import * as bysize from './ui/bysize.js';
 import * as outlook from './ui/outlook.js';
+import * as bible from './ui/bible.js';
+import * as temps from './ui/temps.js';
+import * as history from './ui/history.js';
+import * as make from './ui/make.js';
 
 const STATUS_LABELS = {
   new: 'New night',
@@ -22,7 +26,40 @@ const STATUS_LABELS = {
 };
 
 const store = createStore({ api, storage: window.localStorage });
-const ctx = { patch: store.patch };
+
+// History fetch + mapping lives here so history.js stays render-only
+// (UI modules never import api or touch storage).
+async function loadHistoryEntries() {
+  const rows = await api.getHistory();
+  return (Array.isArray(rows) ? rows : []).slice(0, 10).map((row) => {
+    const mdy = api.sheetDateToLocal(row.Date ?? row.date ?? '');
+    const iso = api.mdyToISO(mdy);
+    const batchesRaw = Number(row.Batches ?? row.batches);
+    let eonSales = null;
+    try {
+      const entry = JSON.parse(window.localStorage.getItem(`dough:${iso}`));
+      eonSales = parseSales(entry?.record?.eon?.sales ?? '');
+    } catch { /* no local copy */ }
+    return {
+      iso,
+      label: iso ? fmtDate(iso) : mdy,
+      batches: Number.isFinite(batchesRaw) ? batchesRaw : null,
+      eonSales,
+    };
+  });
+}
+
+const ctx = {
+  patch: store.patch,
+  history: {
+    load: loadHistoryEntries,
+    openDate: (iso) => {
+      $('activeDate').value = iso;
+      store.setDate(iso);
+      window.scrollTo({ top: 0 });
+    },
+  },
+};
 
 let mode = 'twopm';
 let lastState = store.getState();
@@ -33,6 +70,10 @@ sales.init(ctx);
 dayswork.init();
 bysize.init();
 outlook.init(ctx);
+bible.init(ctx);
+temps.init(ctx);
+history.init(ctx);
+make.init(ctx);
 const parts = [
   sales,
   createCounts('tp', (r) => r.twopm.counts, ctx),
@@ -40,6 +81,9 @@ const parts = [
   dayswork,
   bysize,
   outlook,
+  bible,
+  temps,
+  make,
 ];
 
 function deriveView(state) {

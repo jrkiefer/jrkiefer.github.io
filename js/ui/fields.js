@@ -43,3 +43,16 @@ export function setInputValue(input, v) {
   input.value = v;
   markHasValue(input);
 }
+
+// Shared collapsible wiring: sections start closed (.open toggles the
+// body via CSS), the header is the toggle, the hint flips with a chevron.
+export function wireCollapse(sectionId, toggleId) {
+  const sec = $(sectionId);
+  const btn = $(toggleId);
+  const hint = btn.querySelector('[data-hint]');
+  btn.addEventListener('click', () => {
+    const open = sec.classList.toggle('open');
+    btn.setAttribute('aria-expanded', String(open));
+    if (hint) hint.textContent = open ? 'Tap to collapse ▴' : 'Tap to expand ▾';
+  });
+}
