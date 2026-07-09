@@ -12,8 +12,8 @@ const ContentServiceStub = {
 
 const gs = loadContext(['apps-script/Code.gs'], { ContentService: ContentServiceStub });
 const g = getRefs(gs, [
-  'SHEETS', 'BIBLE_DATA', 'formatDate', 'normalizeDate', 'hasNegative',
-  'handleDoughPost', 'handleEonPost', 'handleMakePost'
+  'SHEETS', 'BIBLE_DATA', 'PEACH_BIBLE_DATA', 'formatDate', 'normalizeDate',
+  'hasNegative', 'handleDoughPost', 'handleEonPost', 'handleMakePost'
 ]);
 
 function responseOf(output) {
@@ -36,17 +36,111 @@ test('hasNegative: detects negatives, ignores garbage', () => {
   assert.equal(g.hasNegative(['abc', undefined]), false); // coerce to 0
 });
 
-test('BIBLE_DATA mirrors BIBLES.regular row for row', () => {
-  // CI-enforced sync: editing one without the other fails here.
+test('both bible tables mirror js/config.js row for row', () => {
+  // CI-enforced sync: editing one side without the other fails here.
   assert.deepEqual(plain(g.BIBLE_DATA), BIBLES.regular.rows);
+  assert.deepEqual(plain(g.PEACH_BIBLE_DATA), BIBLES.peach.rows);
 });
 
 test('SHEETS headers match the row widths the handlers write', () => {
-  assert.equal(g.SHEETS.dough.headers.length, 11);
+  assert.equal(g.SHEETS.dough.headers.length, 12); // v2: + Bible column
+  assert.equal(g.SHEETS.dough.headers[11], 'Bible');
   assert.equal(g.SHEETS.temps.headers.length, 21);
   assert.equal(g.SHEETS.make.headers.length, 6);
   assert.equal(g.SHEETS.final.headers.length, 6);
   assert.equal(g.SHEETS.eon.headers.length, 7);
+  assert.equal(g.SHEETS.peachBible.headers.length, 5);
+});
+
+test('handleDoughPost writes the Bible column (blank for old frontends)', () => {
+  const appended = [];
+  const fakeSheet = {
+    getDataRange() { return { getValues: () => [g.SHEETS.dough.headers] }; },
+    appendRow(row) { appended.push(row); },
+    getRange() { return { setValues() {} }; },
+    getLastRow() { return appended.length + 1; }
+  };
+  const ctx2 = loadContext(['apps-script/Code.gs'], {
+    ContentService: ContentServiceStub,
+    console: { error() {} },
+    SpreadsheetApp: { getActiveSpreadsheet: () => ({ getSheetByName: () => fakeSheet }) }
+  });
+  const { handleDoughPost } = getRefs(ctx2, ['handleDoughPost']);
+  handleDoughPost({ date: '4/1/2026', todayForecast: 9000, bible: 'peach' });
+  handleDoughPost({ date: '4/2/2026', todayForecast: 9000 }); // pre-v2 payload
+  assert.equal(appended[0].length, 12);
+  assert.equal(appended[0][11], 'peach');
+  assert.equal(appended[1][11], '');
+});
+
+test('seedSheets: creates the Peach tab, appends the Bible header, idempotent', () => {
+  function fakeSheet(rows) {
+    return {
+      rows,
+      getDataRange() { return { getValues: () => this.rows.map((r) => r.slice()) }; },
+      getRange(row, col, numRows, numCols) {
+        const self = this;
+        return {
+          getValue: () => (self.rows[row - 1] ? self.rows[row - 1][col - 1] : '') ?? '',
+          setValue(v) {
+            while (self.rows.length < row) self.rows.push([]);
+            self.rows[row - 1][col - 1] = v;
+          },
+          setValues(vals) {
+            for (let i = 0; i < (numRows ?? vals.length); i++) {
+              while (self.rows.length < row + i) self.rows.push([]);
+              for (let j = 0; j < (numCols ?? vals[i].length); j++) {
+                self.rows[row - 1 + i][col - 1 + j] = vals[i][j];
+              }
+            }
+          }
+        };
+      },
+      appendRow(r) { this.rows.push(r); },
+      getLastRow() { return this.rows.length; },
+      setFrozenRows() {}
+    };
+  }
+  // a live pre-v2 spreadsheet: 11-column dough tab with data, no Peach tab
+  const byName = {
+    'Dough Counts': fakeSheet([
+      g.SHEETS.dough.headers.slice(0, 11),
+      ['4/1/2026', 9000, 3000, 6000, 10000, 33, 112, 168, 6, 24, 3]
+    ]),
+    Temperatures: fakeSheet([plain(g.SHEETS.temps.headers)]),
+    'Dough Bible': fakeSheet([plain(g.SHEETS.bible.headers), [3750, 11, 52, 44, 2]]),
+    '2pm Make Amount': fakeSheet([plain(g.SHEETS.make.headers)]),
+    'Final Dough Amount at 2pm': fakeSheet([plain(g.SHEETS.final.headers)]),
+    'End of Night Count': fakeSheet([plain(g.SHEETS.eon.headers)])
+  };
+  const ss = {
+    getSheetByName: (n) => byName[n] ?? null,
+    insertSheet: (n) => { byName[n] = fakeSheet([]); return byName[n]; }
+  };
+  const ctx2 = loadContext(['apps-script/Code.gs'], {
+    ContentService: ContentServiceStub,
+    Logger: { log() {} },
+    SpreadsheetApp: { getActiveSpreadsheet: () => ss }
+  });
+
+  evalIn(ctx2, 'seedSheets()');
+  const peach = byName['Peach Bible'];
+  assert.ok(peach, 'Peach Bible tab created');
+  assert.deepEqual(plain(peach.rows[0]), plain(g.SHEETS.peachBible.headers));
+  assert.equal(peach.rows.length, 31); // headers + 30 rows
+  assert.deepEqual(plain(peach.rows[1]), [3000, 20, 56, 51, 2]);
+  assert.equal(byName['Dough Counts'].rows[0][11], 'Bible'); // header appended
+  assert.equal(byName['Dough Counts'].rows[1][11], undefined); // data untouched
+
+  // run again — nothing changes
+  const before = JSON.stringify(plain({
+    dough: byName['Dough Counts'].rows, peach: peach.rows
+  }));
+  evalIn(ctx2, 'seedSheets()');
+  const after = JSON.stringify(plain({
+    dough: byName['Dough Counts'].rows, peach: peach.rows
+  }));
+  assert.equal(after, before);
 });
 
 test('handleDoughPost rejects missing date and empty saves', () => {
