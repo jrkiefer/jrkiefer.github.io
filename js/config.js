@@ -1,43 +1,59 @@
-    // js/config.js — no dependencies (loaded first)
-    const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbysGE_0ynpVxJNdmvsfPjAdkQA3Lng7YMDp1OjP-EXbdx3xqEixgjwCKxVeSisECo-j/exec';
-    const SHEET_URL = 'https://docs.google.com/spreadsheets/d/1MVjVlKd3pwXB_JkHZkP00FnM0fBerfwStfqJ-GBza0M/edit?gid=0#gid=0';
+// js/config.js — constants only, no logic. Imported by calc/api/ui/main.
 
-    const DOUGH_TABLE = [
-      { threshold: 3750,  indi: 11, small: 52,  large: 44,  sic: 2 },
-      { threshold: 4000,  indi: 12, small: 58,  large: 50,  sic: 2 },
-      { threshold: 4400,  indi: 13, small: 63,  large: 56,  sic: 2 },
-      { threshold: 4800,  indi: 14, small: 69,  large: 62,  sic: 2 },
-      { threshold: 5200,  indi: 15, small: 74,  large: 65,  sic: 2 },
-      { threshold: 5700,  indi: 17, small: 81,  large: 72,  sic: 2 },
-      { threshold: 6300,  indi: 18, small: 88,  large: 79,  sic: 2 },
-      { threshold: 6800,  indi: 20, small: 94,  large: 87,  sic: 3 },
-      { threshold: 7200,  indi: 21, small: 101, large: 94,  sic: 3 },
-      { threshold: 7800,  indi: 22, small: 108, large: 99,  sic: 3 },
-      { threshold: 8300,  indi: 24, small: 115, large: 106, sic: 3 },
-      { threshold: 9100,  indi: 26, small: 125, large: 117, sic: 3 },
-      { threshold: 10000, indi: 28, small: 136, large: 126, sic: 4 },
-      { threshold: 10700, indi: 30, small: 146, large: 137, sic: 4 },
-      { threshold: 11500, indi: 32, small: 156, large: 148, sic: 4 },
-      { threshold: 12250, indi: 34, small: 166, large: 159, sic: 4 },
-      { threshold: 13000, indi: 37, small: 177, large: 166, sic: 5 },
-      { threshold: 13900, indi: 39, small: 187, large: 177, sic: 5 },
-      { threshold: 14750, indi: 41, small: 197, large: 188, sic: 5 },
-      { threshold: 15500, indi: 43, small: 206, large: 195, sic: 5 },
-      { threshold: 16250, indi: 44, small: 214, large: 205, sic: 6 },
-      { threshold: 17000, indi: 44, small: 225, large: 216, sic: 6 },
-      { threshold: 17750, indi: 44, small: 235, large: 225, sic: 6 },
-      { threshold: 18500, indi: 44, small: 246, large: 237, sic: 6 },
-      { threshold: 19250, indi: 44, small: 255, large: 247, sic: 6 },
-      { threshold: 20000, indi: 44, small: 266, large: 256, sic: 7 },
-      { threshold: 20750, indi: 44, small: 276, large: 267, sic: 7 },
-    ];
+export const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbysGE_0ynpVxJNdmvsfPjAdkQA3Lng7YMDp1OjP-EXbdx3xqEixgjwCKxVeSisECo-j/exec';
+export const SHEET_URL = 'https://docs.google.com/spreadsheets/d/1MVjVlKd3pwXB_JkHZkP00FnM0fBerfwStfqJ-GBza0M/edit?gid=0#gid=0';
 
-    const PER_TRAY = { indi: 11, small: 8, large: 6, sic: 3 };
-    const TRAYS_PER_BATCH = 11;
-    const TYPES = ['indi', 'small', 'large', 'sic'];
-    const TYPE_LABELS = { indi: 'Individual', small: 'Small', large: 'Large', sic: 'Sicilian' };
-    const TYPE_COLORS = { indi: '#FF9800', small: '#2196F3', large: '#9C27B0', sic: '#4CAF50' };
-    const TYPE_SHORT = { indi: 'Indi', small: 'Sm', large: 'Lg', sic: 'Sic' };
+// The five dough sizes. Colors are the canonical kitchen colors from the
+// Mise en Place CSS tokens. Sicilian is counted loose (balls only, no trays).
+export const SIZES = [
+  { id: 'indi', label: 'Individual', chip: 'INDI', perTray: 11, color: '#2f6b3a' },
+  { id: 'small', label: 'Small', chip: 'SM', perTray: 8, color: '#b3321b' },
+  { id: 'large', label: 'Large', chip: 'LG', perTray: 6, color: '#1b6fa8' },
+  { id: 'sic', label: 'Sicilian', chip: 'SIC', perTray: 3, color: '#c94a7a', looseOnly: true, note: 'min 2 balls' },
+];
+export const BOIL = { id: 'boil', label: 'Boil Dough', chip: 'BOIL', perTray: 6, target: 36, color: '#7a3b8e' };
+export const ALL = [...SIZES, BOIL];
 
-    const BOIL_TARGET = 36;
-    const BOIL_PER_TRAY = 6;
+export const TRAYS_PER_BATCH = 11;
+export const SIC_MIN = 2;
+export const SIC_MIN_WAIVER = 10; // 10+ Sicilians on hand → no minimum
+export const PEACH_MONTHS = [7, 8]; // Peach bible auto-default July 1 – Aug 31
+export const MAX_BATCH_TEMPS = 10;
+
+// The Dough Bibles. Row format: [threshold, indi, small, large, sic].
+// Both tables verified against the physical binder (July 2026).
+// BIBLE_DATA / PEACH_BIBLE_DATA in apps-script/Code.gs mirror these —
+// npm test enforces the sync, change them together.
+export const BIBLES = {
+  regular: {
+    label: 'Dough Bible 2026',
+    short: "Bible '26",
+    rows: [
+      [3750, 11, 52, 44, 2], [4000, 12, 58, 50, 2], [4400, 13, 63, 56, 2],
+      [4800, 14, 69, 62, 2], [5200, 15, 74, 65, 2], [5700, 17, 81, 72, 2],
+      [6300, 18, 88, 79, 2], [6800, 20, 94, 87, 3], [7200, 21, 101, 94, 3],
+      [7800, 22, 108, 99, 3], [8300, 24, 115, 106, 3], [9100, 26, 125, 117, 3],
+      [10000, 28, 136, 126, 4], [10700, 30, 146, 137, 4], [11500, 32, 156, 148, 4],
+      [12250, 34, 166, 159, 4], [13000, 37, 177, 166, 5], [13900, 39, 187, 177, 5],
+      [14750, 41, 197, 188, 5], [15500, 43, 206, 195, 5], [16250, 44, 214, 205, 6],
+      [17000, 44, 225, 216, 6], [17750, 44, 235, 225, 6], [18500, 44, 246, 237, 6],
+      [19250, 44, 255, 247, 6], [20000, 44, 266, 256, 7], [20750, 44, 276, 267, 7],
+    ],
+  },
+  peach: {
+    label: 'Peach Bible 2024',
+    short: "Peach '24",
+    rows: [
+      [3000, 20, 56, 51, 2], [3500, 20, 66, 61, 2], [4000, 21, 75, 66, 3],
+      [4500, 21, 85, 70, 3], [5000, 22, 96, 74, 3], [5500, 22, 106, 82, 3],
+      [6000, 24, 115, 91, 3], [6500, 25, 124, 97, 3], [7000, 26, 132, 103, 3],
+      [7500, 27, 141, 109, 3], [8000, 28, 151, 114, 4], [8500, 28, 160, 120, 4],
+      [9000, 29, 170, 127, 4], [9500, 29, 179, 133, 4], [10000, 30, 188, 137, 4],
+      [10500, 30, 197, 140, 4], [11000, 31, 204, 145, 5], [11500, 31, 211, 150, 5],
+      [12000, 32, 218, 155, 5], [12500, 32, 226, 159, 6], [13000, 33, 234, 162, 6],
+      [13500, 33, 243, 164, 6], [14000, 34, 253, 166, 6], [14500, 34, 262, 168, 6],
+      [15000, 35, 271, 169, 6], [15500, 35, 281, 171, 6], [16000, 36, 290, 173, 6],
+      [16500, 36, 300, 175, 6], [17000, 37, 309, 177, 6], [17500, 37, 318, 179, 6],
+    ],
+  },
+};

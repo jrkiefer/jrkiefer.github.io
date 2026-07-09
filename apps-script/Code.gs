@@ -4,7 +4,8 @@ var SHEETS = {
   dough: {
     name: "Dough Counts",
     headers: ["Date","Today's Forecast","Current Sales","Sales Left","Tomorrow's Forecast",
-              "Indi Count","Small Count","Large Count","Sic Count","Boil Count","Batches"]
+              "Indi Count","Small Count","Large Count","Sic Count","Boil Count","Batches",
+              "Bible"]
   },
   temps: {
     name: "Temperatures",
@@ -15,6 +16,10 @@ var SHEETS = {
   },
   bible: {
     name: "Dough Bible",
+    headers: ["Threshold","Indi","Small","Large","Sicilian"]
+  },
+  peachBible: {
+    name: "Peach Bible",
     headers: ["Threshold","Indi","Small","Large","Sicilian"]
   },
   make: {
@@ -32,7 +37,8 @@ var SHEETS = {
   }
 };
 
-// Mirror of DOUGH_TABLE in js/config.js. Update both together.
+// Mirror of BIBLES.regular.rows in js/config.js. Update both together —
+// npm test enforces the sync.
 var BIBLE_DATA = [
   [3750,  11, 52,  44,  2],
   [4000,  12, 58,  50,  2],
@@ -61,6 +67,42 @@ var BIBLE_DATA = [
   [19250, 44, 255, 247, 6],
   [20000, 44, 266, 256, 7],
   [20750, 44, 276, 267, 7]
+];
+
+// Mirror of BIBLES.peach.rows in js/config.js (Peach Dough Bible 2024,
+// auto-default July 1 – Aug 31). Update both together — npm test enforces
+// the sync. Reference only, like the Dough Bible tab.
+var PEACH_BIBLE_DATA = [
+  [3000,  20, 56,  51,  2],
+  [3500,  20, 66,  61,  2],
+  [4000,  21, 75,  66,  3],
+  [4500,  21, 85,  70,  3],
+  [5000,  22, 96,  74,  3],
+  [5500,  22, 106, 82,  3],
+  [6000,  24, 115, 91,  3],
+  [6500,  25, 124, 97,  3],
+  [7000,  26, 132, 103, 3],
+  [7500,  27, 141, 109, 3],
+  [8000,  28, 151, 114, 4],
+  [8500,  28, 160, 120, 4],
+  [9000,  29, 170, 127, 4],
+  [9500,  29, 179, 133, 4],
+  [10000, 30, 188, 137, 4],
+  [10500, 30, 197, 140, 4],
+  [11000, 31, 204, 145, 5],
+  [11500, 31, 211, 150, 5],
+  [12000, 32, 218, 155, 5],
+  [12500, 32, 226, 159, 6],
+  [13000, 33, 234, 162, 6],
+  [13500, 33, 243, 164, 6],
+  [14000, 34, 253, 166, 6],
+  [14500, 34, 262, 168, 6],
+  [15000, 35, 271, 169, 6],
+  [15500, 35, 281, 171, 6],
+  [16000, 36, 290, 173, 6],
+  [16500, 36, 300, 175, 6],
+  [17000, 37, 309, 177, 6],
+  [17500, 37, 318, 179, 6]
 ];
 
 function getSheet(key) {
@@ -169,7 +211,8 @@ function handleDoughPost(data) {
   var rowData = [
     data.date, data.todayForecast, data.currentSales, data.salesLeft,
     data.tomorrowForecast, data.indiCount, data.smallCount,
-    data.largeCount, data.sicCount, data.boilCount, data.batches
+    data.largeCount, data.sicCount, data.boilCount, data.batches,
+    data.bible || ""  // 'regular' / 'peach'; older frontends send nothing
   ];
 
   var existingRow = findRowByDate(sheet, data.date);
@@ -486,6 +529,22 @@ function seedSheets() {
     if (key === "bible" && sheet.getLastRow() < 2) {
       sheet.getRange(2, 1, BIBLE_DATA.length, BIBLE_DATA[0].length).setValues(BIBLE_DATA);
       report.push("seeded " + BIBLE_DATA.length + " bible rows");
+    }
+    if (key === "peachBible" && sheet.getLastRow() < 2) {
+      sheet.getRange(2, 1, PEACH_BIBLE_DATA.length, PEACH_BIBLE_DATA[0].length).setValues(PEACH_BIBLE_DATA);
+      report.push("seeded " + PEACH_BIBLE_DATA.length + " peach bible rows");
+    }
+  }
+
+  // Additive migration: pre-v2 deployments have an 11-column Dough Counts
+  // tab. The header-writing branch above only runs on empty sheets, so
+  // append the Bible column header to the live tab here.
+  var doughSheet = ss.getSheetByName(SHEETS.dough.name);
+  if (doughSheet && doughSheet.getLastRow() > 0) {
+    var bibleCol = SHEETS.dough.headers.indexOf("Bible") + 1;
+    if (doughSheet.getRange(1, bibleCol).getValue() !== "Bible") {
+      doughSheet.getRange(1, bibleCol).setValue("Bible");
+      report.push("appended Bible column header to " + SHEETS.dough.name);
     }
   }
 

@@ -1,112 +1,193 @@
-    // js/main.js — depends on: all other JS files (loaded last)
+// js/main.js — the only place store and UI meet. Builds the store, derives
+// one view per state change, routes update/hydrate to the UI modules, and
+// owns the app-level bits: date, mode tabs, two-tap reset, unload flushes.
 
-    // Masthead date — e.g. "MON · APR 21 2026"
-    (function setMastheadDate() {
-      var el = document.getElementById('mastheadDate');
-      if (!el) return;
-      var now = new Date();
-      var DOW = ['SUN','MON','TUE','WED','THU','FRI','SAT'];
-      var MON = ['JAN','FEB','MAR','APR','MAY','JUN','JUL','AUG','SEP','OCT','NOV','DEC'];
-      el.textContent = DOW[now.getDay()] + ' · ' + MON[now.getMonth()] + ' ' + now.getDate() + ' ' + now.getFullYear();
-    })();
+import { createStore } from './store.js';
+import * as api from './api.js';
+import { computePlan, effectiveMake, autoBibleFor, parseSales, fmtDate } from './calc.js';
+import { BIBLES } from './config.js';
+import { $, setText } from './ui/fields.js';
+import * as sales from './ui/sales.js';
+import { createCounts } from './ui/counts.js';
+import * as dayswork from './ui/dayswork.js';
+import * as bysize from './ui/bysize.js';
+import * as outlook from './ui/outlook.js';
+import * as bible from './ui/bible.js';
+import * as temps from './ui/temps.js';
+import * as history from './ui/history.js';
+import * as make from './ui/make.js';
 
-    // Live calculation on every input change (debounced); also re-arm the
-    // 2 PM auto-save timer so any keystroke pushes the auto-save window out.
-    document.querySelectorAll('input[type="text"]').forEach(function(input) {
-      input.addEventListener('input', debouncedCalculate);
-      input.addEventListener('input', armAutoSaveTimer);
-    });
+const STATUS_LABELS = {
+  new: 'New night',
+  loading: 'Loading',
+  local: 'Saved on phone',
+  synced: 'Synced',
+  offline: 'Offline — will retry',
+};
 
-    // Dollar fields: allow digits, decimal, comma, dollar sign
-    ['currentSales', 'todayForecast', 'tomorrowForecast', 'eonSales', 'outlookForecast'].forEach(function(id) {
-      var el = document.getElementById(id);
-      if (!el) return;
-      el.addEventListener('input', function() {
-        sanitize(this, /[^0-9.,$]/g);
-        stripExtraDots(this);
-      });
-    });
+const store = createStore({ api, storage: window.localStorage });
 
-    // Integer fields: allow digits only
-    ['tcTrays-indi', 'tcExtra-indi', 'tcTrays-small', 'tcExtra-small',
-     'tcTrays-large', 'tcExtra-large', 'countSic',
-     'tcTrays-boil', 'tcExtra-boil'].forEach(function(id) {
-      var el = document.getElementById(id);
-      if (!el) return;
-      el.addEventListener('input', function() {
-        sanitize(this, /[^0-9]/g);
-      });
-    });
+// History fetch + mapping lives here so history.js stays render-only
+// (UI modules never import api or touch storage).
+async function loadHistoryEntries() {
+  const rows = await api.getHistory();
+  return (Array.isArray(rows) ? rows : []).slice(0, 10).map((row) => {
+    const mdy = api.sheetDateToLocal(row.Date ?? row.date ?? '');
+    const iso = api.mdyToISO(mdy);
+    const batchesRaw = Number(row.Batches ?? row.batches);
+    let eonSales = null;
+    try {
+      const entry = JSON.parse(window.localStorage.getItem(`dough:${iso}`));
+      eonSales = parseSales(entry?.record?.eon?.sales ?? '');
+    } catch { /* no local copy */ }
+    return {
+      iso,
+      label: iso ? fmtDate(iso) : mdy,
+      batches: Number.isFinite(batchesRaw) ? batchesRaw : null,
+      eonSales,
+    };
+  });
+}
 
-    // Temperature fields (dynamic) — delegated listener for sanitization + recalculation
-    document.getElementById('tempInputs').addEventListener('input', function(e) {
-      if (e.target.tagName === 'INPUT') {
-        sanitize(e.target, /[^0-9.]/g);
-        stripExtraDots(e.target);
-      }
-      debouncedCalculate();
-    });
+const ctx = {
+  patch: store.patch,
+  history: {
+    load: loadHistoryEntries,
+    openDate: (iso) => {
+      $('activeDate').value = iso;
+      store.setDate(iso);
+      window.scrollTo({ top: 0 });
+    },
+  },
+};
 
-    // Run once on load so results are always visible
-    calculate();
+let mode = 'twopm';
+let lastState = store.getState();
 
-    // ── Reset ──
-    document.getElementById('resetBtn').addEventListener('click', function() {
-      document.querySelectorAll('input[type="text"]').forEach(function(input) { input.value = ''; });
+/* ─── UI modules ─── */
 
-      // Clear inline dollar expansions
-      ['disp_currentSales', 'disp_todayForecast', 'disp_tomorrowForecast', 'disp_eonSales', 'disp_outlookForecast'].forEach(function(id) {
-        var el = document.getElementById(id); if (el) el.textContent = '';
-      });
+sales.init(ctx);
+dayswork.init();
+bysize.init();
+outlook.init(ctx);
+bible.init(ctx);
+temps.init(ctx);
+history.init(ctx);
+make.init(ctx);
+const parts = [
+  sales,
+  createCounts('tp', (r) => r.twopm.counts, ctx),
+  createCounts('eon', (r) => r.eon.counts, ctx),
+  dayswork,
+  bysize,
+  outlook,
+  bible,
+  temps,
+  make,
+];
 
-      // Clear field validation rings + messages
-      ['currentSales', 'todayForecast', 'tomorrowForecast', 'eonSales'].forEach(function(id) {
-        var input = document.getElementById(id);
-        if (!input) return;
-        var wrap = input.closest('.dollar-field') || input;
-        wrap.classList.remove('field-invalid', 'field-warning');
-        var msg = document.getElementById('msg_' + id);
-        if (msg) { msg.classList.remove('error', 'warning'); msg.textContent = ''; }
-      });
+function deriveView(state) {
+  const autoBible = autoBibleFor(state.date || api.todayISO());
+  const bibleId = state.record.bible ?? autoBible;
+  const plan = computePlan(state.record, bibleId);
+  const eff = effectiveMake(state.record, plan);
+  return { ...state, autoBible, bibleId, plan, eff, mode };
+}
 
-      // Hide set-out alert banner
-      var alert = document.getElementById('setoutAlert');
-      if (alert) { alert.classList.add('hidden'); }
+function updateAll(view) {
+  for (const p of parts) p.update?.(view);
+}
 
-      // Reset save states + flip back to the default 2 PM tab
-      if (typeof setMode === 'function') setMode('twopm');
-      isSaving = false;
-      saveBtn.disabled = false;
-      saveBtn.textContent = 'Compute / Save';
-      saveBtn.classList.remove('error', 'success');
-      // Disarm any pending auto-save and reset the once-flag so the next
-      // time conditions are met we use the 15s window again.
-      if (typeof disarmAutoSaveTimer === 'function') disarmAutoSaveTimer();
-      autoSavedOnce = false;
-      var tempSaveBtnEl = document.getElementById('tempSaveBtn');
-      if (tempSaveBtnEl) {
-        tempSaveBtnEl._isSaving = false;
-        tempSaveBtnEl.disabled = false;
-        tempSaveBtnEl.textContent = 'Save Temperatures';
-        tempSaveBtnEl.classList.remove('error', 'success');
-      }
-      var makeSaveBtnEl = document.getElementById('makeSaveBtn');
-      if (makeSaveBtnEl) {
-        makeSaveBtnEl._isSaving = false;
-        makeSaveBtnEl.disabled = false;
-        makeSaveBtnEl.textContent = 'Save Actual Make';
-        makeSaveBtnEl.classList.remove('error', 'success');
-      }
-      var makeStatusEl = document.getElementById('makeStatus');
-      if (makeStatusEl) { makeStatusEl.textContent = ''; makeStatusEl.classList.remove('error'); }
+function hydrateAll(view) {
+  for (const p of parts) p.hydrate?.(view);
+}
 
-      // Reset active date and temp section
-      document.getElementById('activeDate').value = getTodayDate();
-      document.getElementById('activeDateStatus').innerHTML = '';
-      document.getElementById('tempBatchField').value = '0';
-      tempBatchManuallySet = false;
-      renderTempInputs(0);
-      lastAutoBatches = 0;
-      if (typeof hideEonOutlook === 'function') hideEonOutlook();
-      calculate();
-    });
+/* ─── mode tabs ─── */
+
+function setMode(m) {
+  mode = m;
+  document.documentElement.setAttribute('data-mode', m);
+  for (const tab of document.querySelectorAll('.mode-tab')) {
+    const active = tab.dataset.mode === m;
+    tab.classList.toggle('active', active);
+    tab.setAttribute('aria-selected', String(active));
+  }
+}
+
+function has2pmData(record) {
+  if (record.twopm.tomorrowForecast !== '') return true;
+  return Object.values(record.twopm.counts).some((c) => c.trays !== '' || c.singles !== '');
+}
+
+for (const tab of document.querySelectorAll('.mode-tab')) {
+  tab.addEventListener('click', () => {
+    setMode(tab.dataset.mode); // manual taps always win
+    updateAll(deriveView(lastState));
+  });
+}
+
+/* ─── store → UI ─── */
+
+store.subscribe((state, meta) => {
+  lastState = state;
+  document.documentElement.setAttribute('data-status', state.status);
+  setText($('statusLabel'), STATUS_LABELS[state.status] ?? state.status);
+
+  const view = deriveView(state);
+  setText($('bibleTag'), BIBLES[view.bibleId].label + (state.record.bible == null ? ' · auto' : ''));
+
+  if (meta.reason === 'load') {
+    // auto-select EON when the date already has 2 PM data
+    setMode(has2pmData(state.record) ? 'eon' : 'twopm');
+  }
+  if (meta.reason === 'reset') setMode('twopm');
+
+  const rehydrate = meta.reason === 'load' || meta.reason === 'reset'
+    || (meta.reason === 'status' && state.status === 'loading'); // clear while loading
+  if (rehydrate) hydrateAll(deriveView(state)); // mode may have changed
+
+  updateAll(deriveView(state));
+});
+
+/* ─── two-tap reset ─── */
+
+const resetBtn = $('resetBtn');
+let resetTimer = null;
+
+function disarmReset() {
+  if (resetTimer) clearTimeout(resetTimer);
+  resetTimer = null;
+  resetBtn.classList.remove('armed');
+  resetBtn.textContent = 'Reset';
+}
+
+resetBtn.addEventListener('click', () => {
+  if (!resetTimer) {
+    resetBtn.classList.add('armed');
+    resetBtn.textContent = 'Tap again';
+    resetTimer = setTimeout(disarmReset, 2500);
+    return;
+  }
+  disarmReset();
+  store.reset();
+});
+
+/* ─── active date ─── */
+
+const dateInput = $('activeDate');
+dateInput.value = api.todayISO();
+dateInput.addEventListener('change', () => {
+  if (dateInput.value) store.setDate(dateInput.value);
+});
+
+/* ─── sync lifecycle ─── */
+
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'hidden') store.flush({ keepalive: true });
+});
+window.addEventListener('pagehide', () => store.flush({ keepalive: true }));
+window.addEventListener('online', () => store.flush());
+
+/* ─── boot ─── */
+
+store.setDate(api.todayISO()).then(() => store.retryUnsynced());
