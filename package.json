@@ -1,6 +1,7 @@
 {
   "name": "dough-tracker",
   "private": true,
+  "type": "module",
   "scripts": {
     "test": "node --test \"test/*.test.js\"",
     "lint": "eslint js test apps-script/Code.gs eslint.config.mjs"

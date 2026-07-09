@@ -1,7 +1,7 @@
-'use strict';
-const { test } = require('node:test');
-const assert = require('node:assert/strict');
-const { loadContext, getRefs, evalIn, plain } = require('./helpers/load');
+import { test } from 'node:test';
+import assert from 'node:assert/strict';
+import { loadContext, getRefs, evalIn, plain } from './helpers/load.js';
+import { BIBLES } from '../js/config.js';
 
 // Stub only what the validation branches reach — they return before any
 // SpreadsheetApp call.
@@ -36,19 +36,9 @@ test('hasNegative: detects negatives, ignores garbage', () => {
   assert.equal(g.hasNegative(['abc', undefined]), false); // coerce to 0
 });
 
-test('BIBLE_DATA mirrors DOUGH_TABLE row for row', () => {
+test('BIBLE_DATA mirrors BIBLES.regular row for row', () => {
   // CI-enforced sync: editing one without the other fails here.
-  const fe = loadContext(['js/config.js']);
-  const { DOUGH_TABLE } = getRefs(fe, ['DOUGH_TABLE']);
-  assert.equal(g.BIBLE_DATA.length, DOUGH_TABLE.length);
-  for (let i = 0; i < DOUGH_TABLE.length; i++) {
-    const row = DOUGH_TABLE[i];
-    assert.deepEqual(
-      plain(g.BIBLE_DATA[i]),
-      [row.threshold, row.indi, row.small, row.large, row.sic],
-      'BIBLE_DATA out of sync with DOUGH_TABLE at row ' + i
-    );
-  }
+  assert.deepEqual(plain(g.BIBLE_DATA), BIBLES.regular.rows);
 });
 
 test('SHEETS headers match the row widths the handlers write', () => {
