@@ -18,7 +18,7 @@ jobs:
       - name: Syntax check (node --check)
         run: |
           set -e
-          for f in js/*.js; do node --check "$f"; done
+          for f in $(find js v1/js -name '*.js'); do node --check "$f"; done
           cp apps-script/Code.gs /tmp/Code.check.js
           node --check /tmp/Code.check.js
       - run: npm ci

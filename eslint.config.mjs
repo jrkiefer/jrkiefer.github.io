@@ -38,6 +38,9 @@ const appGlobals = {
 };
 
 export default [
+  // v1/ is the frozen pre-rebuild snapshot; design/ holds the approved
+  // React reference build — neither is shipped code.
+  { ignores: ['v1/**', 'design/**'] },
   js.configs.recommended,
   {
     files: ['js/**/*.js'],
