@@ -11,6 +11,7 @@ import * as sales from './ui/sales.js';
 import { createCounts } from './ui/counts.js';
 import * as dayswork from './ui/dayswork.js';
 import * as bysize from './ui/bysize.js';
+import * as outlook from './ui/outlook.js';
 
 const STATUS_LABELS = {
   new: 'New night',
@@ -31,12 +32,14 @@ let lastState = store.getState();
 sales.init(ctx);
 dayswork.init();
 bysize.init();
+outlook.init(ctx);
 const parts = [
   sales,
   createCounts('tp', (r) => r.twopm.counts, ctx),
   createCounts('eon', (r) => r.eon.counts, ctx),
   dayswork,
   bysize,
+  outlook,
 ];
 
 function deriveView(state) {
