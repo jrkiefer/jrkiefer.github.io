@@ -749,6 +749,17 @@ input[type="date"] {
 
 /* ─── Dough Bible ─── */
 
+/* quick toggle below the Active Date — peach season only */
+.bible-quick {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 10px 12px;
+}
+.bible-quick-label { display: flex; flex-direction: column; gap: 2px; }
+.bible-quick .bible-pills { padding: 0; }
+
 .bible-pills {
   display: flex;
   align-items: center;

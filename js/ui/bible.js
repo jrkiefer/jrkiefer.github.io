@@ -1,7 +1,8 @@
 // js/ui/bible.js — the Dough Bible reference card: regular/peach pill
 // toggle (stamped on the night's record; auto tag when following the
 // July–August default), both tables built once, tonight/tomorrow row
-// highlights on the active table.
+// highlights on the active table. Also owns the quick toggle below the
+// Active Date, which surfaces only while the date is in peach season.
 
 import { BIBLES } from '../config.js';
 import { money } from '../calc.js';
@@ -20,17 +21,24 @@ export function init(ctx) {
         row.slice(1).map((n) => `<td>${n}</td>`).join('');
       tbody.appendChild(tr);
     });
-    $(`biblePill-${id}`).addEventListener('click', () => ctx.patch((r) => { r.bible = id; }));
+    const stamp = () => ctx.patch((r) => { r.bible = id; });
+    $(`biblePill-${id}`).addEventListener('click', stamp);
+    $(`bibleQuickPill-${id}`).addEventListener('click', stamp);
   }
 }
 
 export function update(view) {
-  const { bibleId, plan, record } = view;
+  const { bibleId, plan, record, autoBible } = view;
   for (const id of IDS) {
-    $(`biblePill-${id}`).classList.toggle('active', bibleId === id);
-    $(`bibleTable-${id}`).classList.toggle('hidden', bibleId !== id);
+    const active = bibleId === id;
+    $(`biblePill-${id}`).classList.toggle('active', active);
+    $(`bibleQuickPill-${id}`).classList.toggle('active', active);
+    $(`bibleTable-${id}`).classList.toggle('hidden', !active);
   }
   $('bibleAutoTag').classList.toggle('hidden', record.bible != null);
+  // The quick toggle lives below the Active Date, peach season only.
+  $('bibleQuick').classList.toggle('hidden', autoBible !== 'peach');
+  $('bibleQuickAutoTag').classList.toggle('hidden', record.bible != null);
 
   const tonightTier = plan.use && plan.use.tier > 0 ? plan.use.tier : null;
   const tomorrowTier = plan.need && plan.need.tier > 0 ? plan.need.tier : null;
