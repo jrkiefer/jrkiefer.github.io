@@ -43,6 +43,7 @@ This is **v2**, a from-scratch rebuild (July 2026) governed by MASTERPLAN.md and
 - The one exception: the outlook forecast mirror may write its own input, guarded by the manual-entry flag and `document.activeElement`.
 - Saved chips are pure CSS off one shared signal: `html[data-status="synced"] .field.has-value .saved-chip`.
 - Mode visibility is pure CSS off `<html data-mode="twopm"|"eon">` (`.hide-in-eon` / `.hide-in-twopm`). 2 PM and EON have **separate count state** (`counts.js` is instantiated once per mode); both stay hydrated so switching modes is one attribute flip. EON auto-selects on load when the date already has 2 PM data; manual taps always win until the next load. Reset always returns to 2 PM.
+- **Quick bible toggle** (`#bibleQuick`, owned by `ui/bible.js`): a second regular/peach pill row directly below the Active Date, shown **only while the active date is in peach season** (`autoBibleFor(date) === 'peach'`), both modes. Same state as the Bible-card pills (`record.bible`); the Bible card stays the year-round home of the toggle.
 
 ## The data layer
 
@@ -161,7 +162,7 @@ Wire format (all POSTs `Content-Type: text/plain` to dodge the CORS preflight; o
 | v2·5 | Collapsibles: dual bible card, temps, history, actual make; two-tap reset | — |
 | v2·6 | Backend: Bible column + Peach Bible tab + seedSheets migration steps; dual sync test | **Yes + `seedSheets()`** |
 | v2·7 | Cutover: v2 at root, `/v1/` fallback, CLAUDE.md rewritten | — |
-| v2·8 | (pending, after ~2 weeks of clean nights) polish from real use; remove `/v1/` | — |
+| v2·8 | Polish from real use (in progress): peach-season quick bible toggle below the date. Still pending: remove `/v1/` after ~2 weeks of clean nights | — |
 
 ## Rules for future prompts
 
