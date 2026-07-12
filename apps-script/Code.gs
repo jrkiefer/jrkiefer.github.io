@@ -167,22 +167,37 @@ function readRowAsObject(sheet, rowNumber) {
 
 function doPost(e) {
   var raw = e.postData.contents || e.postData.getDataAsString();
-  var data = JSON.parse(raw);
+  var data;
+  try {
+    data = JSON.parse(raw);
+  } catch (err) {
+    return jsonResponse({status: "error", message: "Invalid JSON body"});
+  }
   var type = data.type || "dough";
 
-  if (type === "temps") {
-    return handleTempsPost(data);
+  // One write at a time. Every handler upserts via findRowByDate-then-append;
+  // without the lock, two concurrent saves for the same date (two phones, or
+  // a keepalive flush racing the boot retry) can both miss the lookup and
+  // both append, duplicating the date's row.
+  var lock = LockService.getScriptLock();
+  lock.waitLock(30000);
+  try {
+    if (type === "temps") {
+      return handleTempsPost(data);
+    }
+    if (type === "make") {
+      return handleMakePost(data);
+    }
+    if (type === "eon") {
+      return handleEonPost(data);
+    }
+    if (type === "dough") {
+      return handleDoughPost(data);
+    }
+    return jsonResponse({status: "error", message: "Unknown type: " + type});
+  } finally {
+    lock.releaseLock();
   }
-  if (type === "make") {
-    return handleMakePost(data);
-  }
-  if (type === "eon") {
-    return handleEonPost(data);
-  }
-  if (type === "dough") {
-    return handleDoughPost(data);
-  }
-  return jsonResponse({status: "error", message: "Unknown type: " + type});
 }
 
 function handleDoughPost(data) {
@@ -377,16 +392,25 @@ function handleTempsPost(data) {
     return jsonResponse({status: "ok", action: "temps_noop", date: data.date});
   }
 
+  // Full-row upsert, one write. Header layout: A=Date, B=Water 1, C=Dough 1,
+  // D=Water 2, ... Cells beyond the payload are written blank so a shorter
+  // re-save can't leave stale batches behind (one row per date, like every
+  // other tab).
+  var pairs = (SHEETS.temps.headers.length - 1) / 2;
+  var rowData = [data.date];
+  for (var j = 0; j < pairs; j++) {
+    var t = data.temps[j];
+    rowData.push(t && t.water != null ? t.water : "",
+                 t && t.dough != null ? t.dough : "");
+  }
+
   var sheet = getSheet("temps");
   var row = findRowByDate(sheet, data.date);
-  if (row === -1) {
-    sheet.appendRow([data.date]);
+  if (row !== -1) {
+    sheet.getRange(row, 1, 1, rowData.length).setValues([rowData]);
+  } else {
+    sheet.appendRow(rowData);
     row = sheet.getLastRow();
-  }
-  for (var j = 0; j < data.temps.length; j++) {
-    // Header layout: A=Date, B=Water 1, C=Dough 1, D=Water 2, E=Dough 2, ...
-    sheet.getRange(row, 2 + (j * 2)).setValue(data.temps[j].water);
-    sheet.getRange(row, 3 + (j * 2)).setValue(data.temps[j].dough);
   }
   return jsonResponse({status: "ok", action: "temps_saved", row: row, date: data.date});
 }
