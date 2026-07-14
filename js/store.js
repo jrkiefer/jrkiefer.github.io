@@ -198,6 +198,12 @@ export function createStore({ api, storage, now = Date.now, debounceMs = 2500 })
     const serverRow = server && server.status === 'found' && server.data ? server.data : null;
     hasServerDoughRow = !!(serverRow && serverRow["Today's Forecast"] !== undefined);
 
+    // A patch or reset that landed while the GET was in flight is the
+    // newest unsynced local state — local-wins applies to it too. It's
+    // already persisted and its debounce is armed; the arriving copy
+    // (and the pre-patch `local` snapshot) must not clobber it.
+    if (updatedAt > 0) return;
+
     if (local && local.updatedAt > (local.syncedAt || 0)) {
       // Unsynced local edits win wholesale over whatever the server has.
       record = local.record;

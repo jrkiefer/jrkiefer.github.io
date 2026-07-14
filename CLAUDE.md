@@ -18,6 +18,7 @@ This is **v2**, a from-scratch rebuild (July 2026) governed by MASTERPLAN.md and
 - `v1/` — byte-identical snapshot of the pre-rebuild live site (temporary fallback; still fully functional against the backend)
 - `qr-code.png` — QR code image for scanning
 - `MASTERPLAN.md` — the v2 build plan and decision log
+- `README.md` — one-screen repo intro; this file is the real documentation
 - `package.json` / `package-lock.json` — test + lint scripts; eslint is the only devDependency; `"type": "module"`
 - `eslint.config.mjs` — flat config: `js/**` + `test/**` are modules, `apps-script/` is script-goal, `v1/**` and `design/**` ignored
 - `.github/workflows/ci.yml` — CI on every PR and push to main: `node --check` over `js/` and `v1/js/` (before `npm ci`, so syntax errors fail fast), then `npm ci`, `npm run lint`, `npm test`
@@ -32,7 +33,7 @@ This is **v2**, a from-scratch rebuild (July 2026) governed by MASTERPLAN.md and
   - `main.js` — the only place store and UI meet: view derivation, mode tabs, two-tap reset, date input, unload/online flush wiring, boot
 - `apps-script/`
   - `Code.gs` — version-controlled copy of the Google Apps Script backend; deploy by manually copying into the Apps Script editor
-- `test/` — Node's built-in `node:test`, plain ES-module imports (78 tests)
+- `test/` — Node's built-in `node:test`, plain ES-module imports (84 tests)
   - `helpers/load.js` — vm harness kept ONLY for Code.gs (not a module) and for vm-loading `v1/js/*` in parity tests
   - `calc.test.js`, `api.test.js`, `store.test.js`, `codegs.test.js`
 
@@ -60,7 +61,7 @@ Record shape (one per date, all raw input strings):
 
 - Every `patch` JSON-clones the record, stamps `updatedAt`, and writes `localStorage["dough:<YYYY-MM-DD>"] = {v:2, record, updatedAt, syncedAt}` **synchronously** — that write is the moment data is safe. A 2.5 s trailing debounce then flushes to the backend.
 - `flush` is single-flight with a rerun flag. It builds up to four payloads per record via `api.buildPayloads` and sends them **in order dough → make → temps → eon** (the make correction needs the dough row to exist server-side; it's skipped if dough fails). A per-type serialized-payload ack cache stops unchanged payloads from re-posting. A backend `{status:'error'}` rejection is terminal for that payload version (warned, retried only after the record changes); a network failure sets status `offline` and the payload retries on the next flush/`online` event.
-- Payloads are **gated on the deployed backend's non-empty rules** so a background sync can never trip "Empty save rejected": dough needs a count or forecast > 0; eon needs sales or a count > 0; temps needs a value; make needs an entered actualMake field.
+- Payloads are **gated on the deployed backend's non-empty rules** so a background sync can never trip "Empty save rejected": dough needs a count or forecast > 0; eon needs sales or a count > 0; temps needs a value; make needs an entered actualMake field AND a ready plan (or every actualMake field entered) — otherwise the un-entered sizes would post as zeros and clobber the server's saved makes. HTTP 4xx/5xx responses count as network failures (retried), not as landed saves.
 - Unload safety: `visibilitychange`(hidden) and `pagehide` fire a keepalive fetch flush (fire-and-forget, never marked synced); a boot-time `retryUnsynced()` re-sends any date whose local copy has `syncedAt < updatedAt`. Server upserts make duplicate sends harmless.
 - Changing the date auto-loads (no Load button): local entry with unsynced edits wins wholesale; otherwise the server's merged GET wins, with `actualMake` and the outlook fields carried over from a fully-synced local copy (the sheet never stores them); otherwise blank. Network failure falls back to the local copy with status `offline`.
 - **Reset is two-tap** (armed 2.5 s) and blanks only the open date's record, stamping `updatedAt` with `syncedAt: 0` so local-wins blocks the server copy from resurrecting the cleared data. Sheet rows are NOT deleted — there's no backend API for that.
@@ -126,7 +127,7 @@ Wire format (all POSTs `Content-Type: text/plain` to dodge the CORS preflight; o
 
 ## Testing & CI
 
-- `npm test` — 78 tests, zero dependencies, Node's built-in `node:test`, plain ES-module imports.
+- `npm test` — 84 tests, zero dependencies, Node's built-in `node:test`, plain ES-module imports.
 - `npm run lint` — eslint (flat config). `node --check` on all JS before every commit (Code.gs needs a `.js`-extension copy — see the CI workflow).
 - `test/calc.test.js` — lookup/table invariants for both bibles, computePlan fixtures (including real sheet-export nights), every v2 rule (waiver, whole-tray boil, extras splits, closed-tomorrow), outlook rounding, and a **v1-parity suite** that vm-loads `v1/js/` computeDough and asserts identical plans on identical inputs (boil balls aside — whole-tray by design).
 - `test/api.test.js` — payload building/gating, hydration mapping, transport fallbacks (mocked global fetch).
@@ -163,6 +164,7 @@ Wire format (all POSTs `Content-Type: text/plain` to dodge the CORS preflight; o
 | v2·6 | Backend: Bible column + Peach Bible tab + seedSheets migration steps; dual sync test | **Yes + `seedSheets()`** |
 | v2·7 | Cutover: v2 at root, `/v1/` fallback, CLAUDE.md rewritten | — |
 | v2·8 | Polish from real use (in progress): peach-season quick bible toggle below the date. Still pending: remove `/v1/` after ~2 weeks of clean nights | — |
+| v2·9 | Review hardening: mid-load typing no longer clobbered by the arriving GET; make correction gated on a ready plan; HTTP 4xx/5xx retried instead of counted as synced; backend LockService around doPost + full-row temps upsert (stale cells cleared); single view derivation per store event, same-pill bible tap no-op, dead CSS removed, real README | **Yes** |
 
 ## Rules for future prompts
 

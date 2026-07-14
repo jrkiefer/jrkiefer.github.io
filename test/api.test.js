@@ -125,6 +125,24 @@ test('buildPayloads: make correction only when an Actual Make is entered', () =>
   });
 });
 
+test('buildPayloads: a partial Actual Make on a not-ready plan sends no correction', () => {
+  // With the plan not ready, effectiveMake's calc side is null for the
+  // un-entered sizes — a payload here would overwrite the server's saved
+  // makes with zeros.
+  const r = fullRecord();
+  r.twopm.currentSales = ''; // plan not ready
+  r.actualMake.small = '104';
+  assert.equal('make' in buildPayloads('2026-04-01', r), false);
+});
+
+test('buildPayloads: a fully-entered Actual Make sends even when the plan is not ready', () => {
+  const r = fullRecord();
+  r.twopm.currentSales = '';
+  r.actualMake = { indi: '16', small: '104', large: '106', sic: '2', boil: '30' };
+  const p = buildPayloads('2026-04-01', r);
+  assert.deepEqual(p.make.makes, { indi: 16, small: 104, large: 106, sic: 2, boil: 30 });
+});
+
 test('buildPayloads: temps trim trailing blanks, keep interior ones positionally', () => {
   const r = blankRecord();
   r.temps = [
@@ -238,6 +256,7 @@ async function withFetch(impl, fn) {
 const jsonResponse = (obj) => ({
   type: 'basic',
   status: 200,
+  ok: true,
   text: async () => JSON.stringify(obj),
 });
 
@@ -263,6 +282,16 @@ test('post: opaque response counts as landed', async () => {
     () => post({ type: 'dough' })
   );
   assert.deepEqual(res, { ok: true, opaque: true });
+});
+
+test('post: an HTTP error response is a retryable failure, not a landed save', async () => {
+  // fetch resolves on 4xx/5xx — treating those as landed would mark the
+  // record synced and silently drop the save.
+  const res = await withFetch(
+    async () => ({ type: 'basic', status: 500, ok: false, text: async () => 'Internal Server Error' }),
+    () => post({ type: 'dough' })
+  );
+  assert.deepEqual(res, { ok: false, network: true });
 });
 
 test('post: network throw falls back to a no-cors retry', async () => {

@@ -133,20 +133,21 @@ store.subscribe((state, meta) => {
   document.documentElement.setAttribute('data-status', state.status);
   setText($('statusLabel'), STATUS_LABELS[state.status] ?? state.status);
 
-  const view = deriveView(state);
-  setText($('bibleTag'), BIBLES[view.bibleId].label + (state.record.bible == null ? ' · auto' : ''));
-
   if (meta.reason === 'load') {
     // auto-select EON when the date already has 2 PM data
     setMode(has2pmData(state.record) ? 'eon' : 'twopm');
   }
   if (meta.reason === 'reset') setMode('twopm');
 
+  // Derive once, after any mode change — the view carries the mode.
+  const view = deriveView(state);
+  setText($('bibleTag'), BIBLES[view.bibleId].label + (state.record.bible == null ? ' · auto' : ''));
+
   const rehydrate = meta.reason === 'load' || meta.reason === 'reset'
     || (meta.reason === 'status' && state.status === 'loading'); // clear while loading
-  if (rehydrate) hydrateAll(deriveView(state)); // mode may have changed
+  if (rehydrate) hydrateAll(view);
 
-  updateAll(deriveView(state));
+  updateAll(view);
 });
 
 /* ─── two-tap reset ─── */

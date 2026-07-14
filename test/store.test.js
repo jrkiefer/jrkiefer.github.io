@@ -266,6 +266,36 @@ test('setDate: network failure falls back to the local copy, offline', async (t)
   assert.equal(s.status, 'offline');
 });
 
+test('setDate: typing during a slow load wins over the arriving server row', async (t) => {
+  let release;
+  const gate = new Promise((r) => { release = r; });
+  const { store } = harness(t, {
+    getImpl: async () => { await gate; return { status: 'found', data: serverRow }; },
+  });
+  const loading = store.setDate('2026-04-02');
+  store.patch((r) => { r.eon.sales = '5.24'; }); // typing while the GET is in flight
+  release();
+  await loading;
+  const s = store.getState();
+  assert.equal(s.record.eon.sales, '5.24'); // the keystrokes survive
+  assert.equal(s.record.twopm.todayForecast, ''); // stale server row discarded
+  assert.equal(s.status, 'local');
+});
+
+test('setDate: a reset during a slow load is not resurrected by the arriving row', async (t) => {
+  let release;
+  const gate = new Promise((r) => { release = r; });
+  const { store } = harness(t, {
+    getImpl: async () => { await gate; return { status: 'found', data: serverRow }; },
+  });
+  const loading = store.setDate('2026-04-02');
+  store.reset();
+  release();
+  await loading;
+  assert.equal(store.getState().record.twopm.todayForecast, '');
+  assert.equal(store.getState().status, 'new');
+});
+
 test('setDate: a superseded load never lands', async (t) => {
   let releaseFirst;
   const firstGate = new Promise((r) => { releaseFirst = r; });

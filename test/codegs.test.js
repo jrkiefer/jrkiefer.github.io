@@ -245,6 +245,39 @@ test('fixNegativeMakes clamps make rows and recomputes finals from counts', () =
   assert.equal(final.rows.length, 2);
 });
 
+test('handleTempsPost: full-row upsert — a shorter re-save clears stale cells', () => {
+  const rows = [plain(g.SHEETS.temps.headers)];
+  const sheet = {
+    getDataRange() { return { getValues: () => rows.map((r) => r.slice()) }; },
+    getRange(row, col, numRows, numCols) {
+      return {
+        setValues(vals) {
+          for (let i = 0; i < numRows; i++)
+            for (let j = 0; j < numCols; j++)
+              rows[row - 1 + i][col - 1 + j] = vals[i][j];
+        }
+      };
+    },
+    appendRow(r) { rows.push(r); },
+    getLastRow() { return rows.length; }
+  };
+  const ctx2 = loadContext(['apps-script/Code.gs'], {
+    ContentService: ContentServiceStub,
+    SpreadsheetApp: { getActiveSpreadsheet: () => ({ getSheetByName: () => sheet }) }
+  });
+  const { handleTempsPost } = getRefs(ctx2, ['handleTempsPost']);
+
+  handleTempsPost({ date: '4/1/2026', temps: [{ water: 58, dough: 78 }, { water: 56, dough: 80 }] });
+  assert.equal(rows.length, 2);
+  assert.equal(rows[1].length, 21); // full width, one write
+  assert.deepEqual(plain(rows[1].slice(0, 5)), ['4/1/2026', 58, 78, 56, 80]);
+  assert.ok(rows[1].slice(5).every((c) => c === ''));
+
+  handleTempsPost({ date: '4/1/2026', temps: [{ water: 60, dough: 79 }] });
+  assert.equal(rows.length, 2); // upserted, not appended
+  assert.deepEqual(plain(rows[1].slice(0, 5)), ['4/1/2026', 60, 79, '', '']); // stale pair cleared
+});
+
 test('handleMakePost rejects missing date, missing makes, and negatives', () => {
   assert.equal(responseOf(g.handleMakePost({})).status, 'error');
   const noMakes = responseOf(g.handleMakePost({ date: '4/1/2026' }));

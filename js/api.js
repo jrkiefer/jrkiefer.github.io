@@ -65,6 +65,9 @@ export async function post(payload, { keepalive = false } = {}) {
   try {
     const r = await fetch(SCRIPT_URL, opts);
     if (r.type === 'opaque' || r.status === 0) return { ok: true, opaque: true };
+    // fetch resolves on HTTP errors — a 4xx/5xx never carried the save,
+    // so report it as retryable rather than letting it count as synced.
+    if (!r.ok) return { ok: false, network: true };
     let json = null;
     try { json = JSON.parse(await r.text()); } catch { /* non-JSON body — assume landed */ }
     if (json && json.status === 'error') {
@@ -148,7 +151,11 @@ export function buildPayloads(dateISO, record) {
   }
 
   // --- actual make correction ---
-  if (Object.values(record.actualMake).some((v) => v !== '')) {
+  // Needs a ready plan (or a fully-entered correction): while the plan is
+  // not ready, effectiveMake's calc side is null for the un-entered sizes,
+  // and the payload would overwrite the server's saved makes with zeros.
+  const actual = Object.values(record.actualMake);
+  if (actual.some((v) => v !== '') && (plan.ready || actual.every((v) => v !== ''))) {
     const eff = effectiveMake(record, plan);
     const makes = {};
     for (const s of ALL) makes[s.id] = Math.max(0, eff[s.id].balls ?? 0);

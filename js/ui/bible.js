@@ -10,6 +10,8 @@ import { $, setText, wireCollapse } from './fields.js';
 
 const IDS = ['regular', 'peach'];
 
+let activeBible = null; // effective bibleId from the last update(view)
+
 export function init(ctx) {
   wireCollapse('bibleSec', 'bibleToggle');
   for (const id of IDS) {
@@ -21,7 +23,13 @@ export function init(ctx) {
         row.slice(1).map((n) => `<td>${n}</td>`).join('');
       tbody.appendChild(tr);
     });
-    const stamp = () => ctx.patch((r) => { r.bible = id; });
+    // Tapping the already-active pill is a no-op: for a given date the
+    // auto default never changes, so stamping it would only churn the
+    // record (localStorage write + a pointless save cycle).
+    const stamp = () => {
+      if (activeBible === id) return;
+      ctx.patch((r) => { r.bible = id; });
+    };
     $(`biblePill-${id}`).addEventListener('click', stamp);
     $(`bibleQuickPill-${id}`).addEventListener('click', stamp);
   }
@@ -29,6 +37,7 @@ export function init(ctx) {
 
 export function update(view) {
   const { bibleId, plan, record, autoBible } = view;
+  activeBible = bibleId;
   for (const id of IDS) {
     const active = bibleId === id;
     $(`biblePill-${id}`).classList.toggle('active', active);

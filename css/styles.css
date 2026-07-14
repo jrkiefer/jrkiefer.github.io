@@ -858,8 +858,6 @@ input[type="date"] {
   color: var(--ink-mute);
   font-variant-numeric: tabular-nums;
 }
-.history-open-tag { margin-left: 8px; font-size: 8px; color: var(--accent); }
-
 .history-note {
   padding-top: 10px;
   font-family: var(--font-mono);
