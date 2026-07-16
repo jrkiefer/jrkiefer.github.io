@@ -338,6 +338,30 @@ test('July 14 2026 regression: the slow night lands on 5 batches by either route
   assert.equal(sum, 55);
 });
 
+test('real night 6/20/2026 (from the sheet export): both rows round down, batches floor to 3', () => {
+  // The biggest swing in the 61-night April–July backtest: use $9,400 →
+  // $9,100 (drop exactly $300) AND need $8,500 → $8,300, then 34 trays
+  // (remainder 1) floor to 3 batches with a −1 LG cut. The saved sheet
+  // row (pinned-up math) said 4 batches.
+  const r = record2pm({ cs: 2100, tf: 11500, tmf: 8500, counts: { indi: 38, small: 133, large: 131, sic: 4 }, boil: 33 });
+  const p = computePlan(r, 'regular');
+  assert.equal(p.salesLeft, 9400);
+  assert.equal(p.use.tier, 9100);
+  assert.equal(p.need.tier, 8300);
+  assert.deepEqual(
+    [p.rows.indi.make, p.rows.small.make, p.rows.large.make, p.rows.sic.make],
+    [12, 107, 92, 2]
+  );
+  assert.equal(p.boilTrays, 1);
+  assert.equal(p.totalTrays, 34);
+  assert.equal(p.rounding.batches, 'down');
+  assert.equal(p.batches, 3);
+  assert.equal(p.cutNote, '−1 LG');
+  assert.deepEqual(p.finalTrays, { indi: 2, small: 14, large: 15, sic: 1 });
+  const sum = p.finalTrays.indi + p.finalTrays.small + p.finalTrays.large + p.finalTrays.sic + p.boilTrays;
+  assert.equal(sum, p.batches * 11);
+});
+
 test('batch auto-down boundary: 5 trays over rounds down, 6 rounds up', () => {
   // $5,200 row → 24 pizza trays; the boil count steers the remainder.
   const at27 = computePlan(record2pm({ cs: 0, tf: 0, tmf: 5200, boil: 18 }), 'regular');

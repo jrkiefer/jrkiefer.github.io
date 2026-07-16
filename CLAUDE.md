@@ -33,7 +33,7 @@ This is **v2**, a from-scratch rebuild (July 2026) governed by MASTERPLAN.md and
   - `main.js` — the only place store and UI meet: view derivation, mode tabs, two-tap reset, date input, unload/online flush wiring, boot
 - `apps-script/`
   - `Code.gs` — version-controlled copy of the Google Apps Script backend; deploy by manually copying into the Apps Script editor
-- `test/` — Node's built-in `node:test`, plain ES-module imports (97 tests)
+- `test/` — Node's built-in `node:test`, plain ES-module imports (98 tests)
   - `helpers/load.js` — vm harness kept ONLY for Code.gs (not a module) and for vm-loading `v1/js/*` in parity tests
   - `calc.test.js`, `api.test.js`, `store.test.js`, `codegs.test.js`
 
@@ -131,7 +131,7 @@ Wire format (all POSTs `Content-Type: text/plain` to dodge the CORS preflight; o
 
 ## Testing & CI
 
-- `npm test` — 97 tests, zero dependencies, Node's built-in `node:test`, plain ES-module imports.
+- `npm test` — 98 tests, zero dependencies, Node's built-in `node:test`, plain ES-module imports.
 - `npm run lint` — eslint (flat config). `node --check` on all JS before every commit (Code.gs needs a `.js`-extension copy — see the CI workflow).
 - `test/calc.test.js` — lookup/table invariants for both bibles, computePlan fixtures (including real sheet-export nights), every v2 rule (waiver, whole-tray boil, extras/cut splits, closed-tomorrow, the full slow-day rounding matrix incl. the July 14 2026 regression night), outlook rounding, and a **v1-parity suite** that vm-loads `v1/js/` computeDough and asserts identical plans on identical inputs (boil balls aside — whole-tray by design; rounding pinned `up` since v1 always rounded up). Pre-v2·10 fixtures that fall on slow days pin `fr`/`br` `'up'` to keep their reference numbers.
 - `test/api.test.js` — payload building/gating (incl. raw-vs-resolved rounding fields), hydration mapping, transport fallbacks (mocked global fetch).
@@ -172,7 +172,7 @@ Wire format (all POSTs `Content-Type: text/plain` to dodge the CORS preflight; o
 | v2·7 | Cutover: v2 at root, `/v1/` fallback, CLAUDE.md rewritten | — |
 | v2·8 | Polish from real use (in progress): peach-season quick bible toggle below the date. Still pending: remove `/v1/` after ~2 weeks of clean nights | — |
 | v2·9 | Review hardening: mid-load typing no longer clobbered by the arriving GET; make correction gated on a ready plan; HTTP 4xx/5xx retried instead of counted as synced; backend LockService around doPost + full-row temps upsert (stale cells cleared); single view derivation per store event, same-pill bible tap no-op, dead CSS removed, real README | **Yes** |
-| v2·10 | Slow-day rounding (decided with Jacob after the July 14 six-batch night): under-$12k gate auto-rounds the bible lookups down (≤ $300 drop cap) and the batches down (≤ 5 trays past a whole batch, never below 1); manual round up/down pills on the Bible + Day's Work cards (`forecastRound`/`batchRound`, raw-persisted); lean-large 60/40 extras split replaces "1 SM rest LG", with the mirrored cut split on round-down nights; Forecast/Batch Rounding sheet columns | **Yes + `seedSheets()`** |
+| v2·10 | Slow-day rounding (decided with Jacob after the July 14 six-batch night): under-$12k gate auto-rounds the bible lookups down (≤ $300 drop cap) and the batches down (≤ 5 trays past a whole batch, never below 1); manual round up/down pills on the Bible + Day's Work cards (`forecastRound`/`batchRound`, raw-persisted); lean-large 60/40 extras split replaces "1 SM rest LG", with the mirrored cut split on round-down nights; Forecast/Batch Rounding sheet columns. Backtested against the 61-night Apr–Jul sheet export: 15 nights drop exactly one batch, none change any other way; 6/20 (both rows + batch floor) pinned as a fixture | **Yes + `seedSheets()`** |
 
 ## Rules for future prompts
 
