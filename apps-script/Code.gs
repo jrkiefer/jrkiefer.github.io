@@ -34,6 +34,22 @@ var SHEETS = {
     name: "End of Night Count",
     headers: ["Date","EON Sales",
               "EON Indi Count","EON Small Count","EON Large Count","EON Sic Count","EON Boil Count"]
+  },
+  // v2·11 derived tabs — rebuilt wholesale by rebuildDoughUse(), never
+  // written by the app. Reference/analysis only, safe to wipe and refill.
+  doughUse: {
+    name: "Dough Use",
+    headers: ["Date","Bible","Prev Count","AM Sales",
+              "AM Indi","AM Small","AM Large","AM Sic","AM Boil",
+              "PM Sales","PM Indi","PM Small","PM Large","PM Sic","PM Boil"]
+  },
+  newBible: {
+    name: "New Dough Bible",
+    headers: ["Sales","Indi","Small","Large","Sicilian"]
+  },
+  newPeachBible: {
+    name: "New Peach Bible",
+    headers: ["Sales","Indi","Small","Large","Sicilian"]
   }
 };
 
@@ -578,4 +594,238 @@ function seedSheets() {
   }
 
   Logger.log(report.length ? report.join("\n") : "all sheets already seeded — no-op");
+}
+
+// ─── Dough Use + data-driven bibles (v2·11) ─────────────────────────────
+// AM use = last night's EON count − today's 2 PM count, paired with the
+// 2 PM Current Sales. PM use = Final-at-2pm − EON count, paired with
+// EON Sales − Current Sales. rebuildDoughUse() rewrites the three derived
+// tabs from scratch — run it any time from the 🍕 menu or the editor.
+
+function onOpen() {
+  SpreadsheetApp.getUi()
+    .createMenu("🍕 Dough Tracker")
+    .addItem("Rebuild Dough Use + New Bibles", "rebuildDoughUse")
+    .addToUi();
+}
+
+// Days-since-epoch for a sheet Date cell or an M/D/YYYY string.
+function dateDayKey(v) {
+  if (v instanceof Date) return Math.round(v.getTime() / 86400000);
+  var p = String(v).split("/");
+  if (p.length === 3) {
+    var t = new Date(Number(p[2]), Number(p[0]) - 1, Number(p[1]));
+    if (!isNaN(t.getTime())) return Math.round(t.getTime() / 86400000);
+  }
+  return null;
+}
+
+// Blank/garbage cells → null; numbers (including 0) pass through.
+function numCell(v) {
+  if (v === "" || v == null) return null;
+  var n = Number(v);
+  return isFinite(n) ? n : null;
+}
+
+// The night's bible: the stamped Dough Counts cell wins, else the month
+// rule (July–August = peach) — same resolution the app uses.
+function bibleLabelFor(dateCell, bibleCell) {
+  if (bibleCell === "regular" || bibleCell === "peach") return bibleCell;
+  var m = dateCell instanceof Date
+    ? dateCell.getMonth() + 1
+    : parseInt(String(dateCell).split("/")[0], 10);
+  return m === 7 || m === 8 ? "peach" : "regular";
+}
+
+// Least squares use = a + b·sales; slope clamped ≥ 0 so more sales never
+// means less dough. Null under 3 observations — a blank column beats a
+// made-up one.
+function fitLine(points) {
+  var n = points.length;
+  if (n < 3) return null;
+  var sx = 0, sy = 0, sxx = 0, sxy = 0;
+  for (var i = 0; i < n; i++) {
+    sx += points[i][0]; sy += points[i][1];
+    sxx += points[i][0] * points[i][0];
+    sxy += points[i][0] * points[i][1];
+  }
+  var den = n * sxx - sx * sx;
+  if (den === 0) return null;
+  var b = (n * sxy - sx * sy) / den;
+  if (b < 0) b = 0;
+  return { a: (sy - b * sx) / n, b: b };
+}
+
+// Sales tiers $2,000 → $22,000 every $300, endpoints exact (the final
+// step is $200 so the chart tops out at exactly $22,000).
+function newBibleTiers() {
+  var tiers = [];
+  for (var t = 2000; t <= 22000; t += 300) tiers.push(t);
+  if (tiers[tiers.length - 1] !== 22000) tiers.push(22000);
+  return tiers;
+}
+
+function rebuildDoughUse() {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var doughRows = getSheet("dough").getDataRange().getValues();
+  var eonRows = getSheet("eon").getDataRange().getValues();
+  var makeRows = getSheet("make").getDataRange().getValues();
+  var finalRows = getSheet("final").getDataRange().getValues();
+
+  // Index the source tabs by day. EON rows count only when at least one
+  // count cell is filled (early rows exist with nothing in them).
+  var eonByDay = {};
+  var eonDays = [];
+  var i, c, day;
+  for (i = 1; i < eonRows.length; i++) {
+    day = dateDayKey(eonRows[i][0]);
+    if (day == null) continue;
+    var counts = [];
+    var any = false;
+    for (c = 0; c < 5; c++) {
+      var n = numCell(eonRows[i][2 + c]);
+      counts.push(n);
+      if (n != null) any = true;
+    }
+    if (!any) continue;
+    eonByDay[day] = { sales: numCell(eonRows[i][1]), counts: counts, label: formatDate(eonRows[i][0]) };
+    eonDays.push(day);
+  }
+  eonDays.sort(function (x, y) { return x - y; });
+
+  // A make row must exist for the date or the Final row is count-only
+  // (pre-make-era artifact) and PM use would be meaningless.
+  var makeByDay = {};
+  for (i = 1; i < makeRows.length; i++) {
+    day = dateDayKey(makeRows[i][0]);
+    if (day == null) continue;
+    for (c = 1; c <= 5; c++) {
+      if (numCell(makeRows[i][c]) != null) { makeByDay[day] = true; break; }
+    }
+  }
+  var finalByDay = {};
+  for (i = 1; i < finalRows.length; i++) {
+    day = dateDayKey(finalRows[i][0]);
+    if (day == null) continue;
+    var fv = [];
+    for (c = 1; c <= 5; c++) fv.push(numCell(finalRows[i][c]));
+    finalByDay[day] = fv;
+  }
+
+  var entries = [];
+  for (i = 1; i < doughRows.length; i++) {
+    day = dateDayKey(doughRows[i][0]);
+    if (day != null) entries.push({ day: day, row: doughRows[i] });
+  }
+  entries.sort(function (x, y) { return x.day - y.day; });
+
+  // pts[label][sizeIndex] — fit observations (pizza sizes only). Cells
+  // stay raw in the tab; only sales-paired, non-negative values feed fits.
+  var pts = { regular: [[], [], [], []], peach: [[], [], [], []] };
+  var used = { regular: { am: 0, pm: 0 }, peach: { am: 0, pm: 0 } };
+  var useRows = [];
+
+  for (i = 0; i < entries.length; i++) {
+    day = entries[i].day;
+    var row = entries[i].row;
+    var label = bibleLabelFor(row[0], row[11]);
+    var cs = numCell(row[2]);
+    var counts2pm = [];
+    for (c = 0; c < 5; c++) counts2pm.push(numCell(row[5 + c]));
+
+    // AM: most recent EON-with-counts strictly before this date, ≤ 7 days
+    // back (dough just sits over closed days — still this morning's use).
+    var prevDay = null;
+    for (var k = eonDays.length - 1; k >= 0; k--) {
+      if (eonDays[k] < day) {
+        if (day - eonDays[k] <= 7) prevDay = eonDays[k];
+        break;
+      }
+    }
+    var am = [null, null, null, null, null];
+    if (prevDay != null) {
+      var pv = eonByDay[prevDay].counts;
+      for (c = 0; c < 5; c++) {
+        if (pv[c] != null && counts2pm[c] != null) am[c] = pv[c] - counts2pm[c];
+      }
+    }
+
+    // PM: needs this date's EON counts, a real make row, and a Final row.
+    var pm = [null, null, null, null, null];
+    var pmSales = null;
+    var tonight = eonByDay[day];
+    if (tonight && makeByDay[day] && finalByDay[day]) {
+      for (c = 0; c < 5; c++) {
+        if (finalByDay[day][c] != null && tonight.counts[c] != null) {
+          pm[c] = finalByDay[day][c] - tonight.counts[c];
+        }
+      }
+      // EON sales of 0 means "never entered" (v1 artifact), and sales
+      // below the 2 PM number is an entry error — no pairing either way.
+      if (tonight.sales != null && tonight.sales > 0 && cs != null && tonight.sales >= cs) {
+        pmSales = tonight.sales - cs;
+      }
+    }
+
+    var amUsed = false, pmUsed = false;
+    for (c = 0; c < 4; c++) {
+      if (cs != null && cs > 0 && am[c] != null && am[c] >= 0) {
+        pts[label][c].push([cs, am[c]]);
+        amUsed = true;
+      }
+      if (pmSales != null && pmSales > 0 && pm[c] != null && pm[c] >= 0) {
+        pts[label][c].push([pmSales, pm[c]]);
+        pmUsed = true;
+      }
+    }
+    if (amUsed) used[label].am++;
+    if (pmUsed) used[label].pm++;
+
+    var out = [formatDate(row[0]), label, prevDay != null ? eonByDay[prevDay].label : "", cs != null ? cs : ""];
+    for (c = 0; c < 5; c++) out.push(am[c] != null ? am[c] : "");
+    out.push(pmSales != null ? pmSales : "");
+    for (c = 0; c < 5; c++) out.push(pm[c] != null ? pm[c] : "");
+    useRows.push(out);
+  }
+
+  writeDerivedTab(ss, "doughUse", useRows, null);
+  writeNewBible(ss, "newBible", pts.regular, used.regular);
+  writeNewBible(ss, "newPeachBible", pts.peach, used.peach);
+
+  var summary = "Dough Use: " + useRows.length + " dates · new bibles from " +
+    (used.regular.am + used.regular.pm) + " regular + " +
+    (used.peach.am + used.peach.pm) + " peach dayparts";
+  if (ss.toast) ss.toast(summary, "🍕 Dough Tracker", 8);
+  Logger.log(summary);
+}
+
+// Full rewrite of a derived tab: clear, headers, rows. Creates the tab if
+// seedSheets hasn't run yet.
+function writeDerivedTab(ss, key, rows, note) {
+  var cfg = SHEETS[key];
+  var sheet = ss.getSheetByName(cfg.name);
+  if (!sheet) sheet = ss.insertSheet(cfg.name);
+  sheet.clearContents();
+  sheet.getRange(1, 1, 1, cfg.headers.length).setValues([cfg.headers]);
+  if (rows.length) sheet.getRange(2, 1, rows.length, cfg.headers.length).setValues(rows);
+  if (note) sheet.getRange(1, cfg.headers.length + 2).setValue(note);
+  return sheet;
+}
+
+function writeNewBible(ss, key, sizePts, usedCounts) {
+  var tiers = newBibleTiers();
+  var fits = [];
+  for (var s = 0; s < 4; s++) fits.push(fitLine(sizePts[s]));
+  var rows = [];
+  for (var t = 0; t < tiers.length; t++) {
+    var out = [tiers[t]];
+    for (s = 0; s < 4; s++) {
+      out.push(fits[s] ? Math.max(0, Math.round(fits[s].a + fits[s].b * tiers[t])) : "");
+    }
+    rows.push(out);
+  }
+  var note = "rebuilt " + formatDate(new Date()) + " · " + usedCounts.am +
+    " mornings + " + usedCounts.pm + " evenings" +
+    (fits.every(function (f) { return f; }) ? "" : " · blank columns need 3+ observations");
+  writeDerivedTab(ss, key, rows, note);
 }

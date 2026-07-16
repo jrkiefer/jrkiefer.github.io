@@ -33,7 +33,7 @@ This is **v2**, a from-scratch rebuild (July 2026) governed by MASTERPLAN.md and
   - `main.js` — the only place store and UI meet: view derivation, mode tabs, two-tap reset, date input, unload/online flush wiring, boot
 - `apps-script/`
   - `Code.gs` — version-controlled copy of the Google Apps Script backend; deploy by manually copying into the Apps Script editor
-- `test/` — Node's built-in `node:test`, plain ES-module imports (97 tests)
+- `test/` — Node's built-in `node:test`, plain ES-module imports (104 tests)
   - `helpers/load.js` — vm harness kept ONLY for Code.gs (not a module) and for vm-loading `v1/js/*` in parity tests
   - `calc.test.js`, `api.test.js`, `store.test.js`, `codegs.test.js`
 
@@ -109,7 +109,7 @@ Cross-cutting rules:
 
 ## Google Sheets integration
 
-`SCRIPT_URL` points to a Google Apps Script web app. The spreadsheet has **seven tabs**; `SHEETS` in `Code.gs` is the single source of truth for names + headers:
+`SCRIPT_URL` points to a Google Apps Script web app. The spreadsheet has **ten tabs**; `SHEETS` in `Code.gs` is the single source of truth for names + headers:
 
 - **Dough Counts**: `Date | Today's Forecast | Current Sales | Sales Left | Tomorrow's Forecast | Indi Count | Small Count | Large Count | Sic Count | Boil Count | Batches | Bible | Forecast Rounding | Batch Rounding` (Bible appended in v2 — `regular`/`peach`; the rounding pair in v2·10 — **raw** `up`/`down`, blank = auto, deliberately NOT the resolved policy so auto stays live after a reload; all blank from old frontends)
 - **Temperatures**: `Date | Water 1 | Dough 1 | … | Water 10 | Dough 10`
@@ -117,6 +117,9 @@ Cross-cutting rules:
 - **2pm Make Amount**: `Date | Indi | Small | Large | Sicilian | Boil` — raw calculated balls-to-make, clamped ≥ 0 (extras never save; a real extras make lands via the Actual Make correction). Written alongside every dough save when the plan is ready.
 - **Final Dough Amount at 2pm**: same columns — count + make per size. Also written alongside dough saves; recomputed by make corrections.
 - **End of Night Count**: `Date | EON Sales | EON Indi Count | … | EON Boil Count` — EON-prefixed so the merged GET carries both records without collision.
+- **Dough Use** (v2·11, derived): `Date | Bible | Prev Count | AM Sales | AM Indi…AM Boil | PM Sales | PM Indi…PM Boil`. AM use = last night's EON count − today's 2 PM count, paired with 2 PM Current Sales (Prev Count shows which EON date it reached back to, ≤ 7 days — closed-day gaps included). PM use = Final-at-2pm − EON count, paired with EON Sales − Current Sales (blank when EON sales is 0/missing or below the 2 PM number; PM requires a real 2pm Make Amount row — early Final rows are count-only). Raw values, negatives included.
+- **New Dough Bible** and **New Peach Bible** (v2·11, derived): `Sales | Indi | Small | Large | Sicilian`, 68 rows $2,000 → $22,000 every $300 (final step $200 so the top is exactly $22,000). Per-size least-squares fit over that bible's sales-paired, non-negative AM+PM observations, slope clamped ≥ 0, whole balls; a size column with < 3 observations stays blank. Boil never appears (fixed-target size). A note cell (G1) records the rebuild date + observation counts.
+- The three derived tabs are **reference/analysis only** — the app never reads or writes them, and `rebuildDoughUse()` (Sheet menu **🍕 Dough Tracker → Rebuild Dough Use + New Bibles**, added by `onOpen`; also runnable from the editor) wipes and refills them from Dough Counts/EON/Make/Final. Safe to re-run any time; each night's bible label = the Dough Counts Bible cell, else the month rule.
 
 Wire format (all POSTs `Content-Type: text/plain` to dodge the CORS preflight; opaque responses count as landed; one no-cors retry on network throw):
 
@@ -131,12 +134,12 @@ Wire format (all POSTs `Content-Type: text/plain` to dodge the CORS preflight; o
 
 ## Testing & CI
 
-- `npm test` — 97 tests, zero dependencies, Node's built-in `node:test`, plain ES-module imports.
+- `npm test` — 104 tests, zero dependencies, Node's built-in `node:test`, plain ES-module imports.
 - `npm run lint` — eslint (flat config). `node --check` on all JS before every commit (Code.gs needs a `.js`-extension copy — see the CI workflow).
 - `test/calc.test.js` — lookup/table invariants for both bibles, computePlan fixtures (including real sheet-export nights), every v2 rule (waiver, whole-tray boil, extras/cut splits, closed-tomorrow, the full slow-day rounding matrix incl. the July 14 2026 regression night), outlook rounding, and a **v1-parity suite** that vm-loads `v1/js/` computeDough and asserts identical plans on identical inputs (boil balls aside — whole-tray by design; rounding pinned `up` since v1 always rounded up). Pre-v2·10 fixtures that fall on slow days pin `fr`/`br` `'up'` to keep their reference numbers.
 - `test/api.test.js` — payload building/gating (incl. raw-vs-resolved rounding fields), hydration mapping, transport fallbacks (mocked global fetch).
 - `test/store.test.js` — the sync state machine with mocked fetch/storage and `node:test` mock timers: debounce, ordering, ack cache, offline recovery, mid-flight edits, merge matrix, reset semantics, boot retry.
-- `test/codegs.test.js` — Code.gs in a vm context: validation branches, **dual bible sync**, Bible + rounding columns, seedSheets idempotency (pre-v2 and v2·6-era tabs).
+- `test/codegs.test.js` — Code.gs in a vm context: validation branches, **dual bible sync**, Bible + rounding columns, seedSheets idempotency (pre-v2 and v2·6-era tabs), the v2·11 Dough Use derivation gates + new-bible fits + rebuild idempotency + menu registration.
 
 ## Known quirks and gotchas
 
@@ -172,7 +175,8 @@ Wire format (all POSTs `Content-Type: text/plain` to dodge the CORS preflight; o
 | v2·7 | Cutover: v2 at root, `/v1/` fallback, CLAUDE.md rewritten | — |
 | v2·8 | Polish from real use (in progress): peach-season quick bible toggle below the date. Still pending: remove `/v1/` after ~2 weeks of clean nights | — |
 | v2·9 | Review hardening: mid-load typing no longer clobbered by the arriving GET; make correction gated on a ready plan; HTTP 4xx/5xx retried instead of counted as synced; backend LockService around doPost + full-row temps upsert (stale cells cleared); single view derivation per store event, same-pill bible tap no-op, dead CSS removed, real README | **Yes** |
-| v2·10 | Slow-day rounding (decided with Jacob after the July 14 six-batch night): under-$12k gate auto-rounds the bible lookups down (≤ $300 drop cap) and the batches down (≤ 5 trays past a whole batch, never below 1); manual round up/down pills on the Bible + Day's Work cards (`forecastRound`/`batchRound`, raw-persisted); lean-large 60/40 extras split replaces "1 SM rest LG", with the mirrored cut split on round-down nights; Forecast/Batch Rounding sheet columns | **Yes + `seedSheets()`** |
+| v2·10 | Slow-day rounding (decided with Jacob after the July 14 six-batch night): under-$12k gate auto-rounds the bible lookups down (≤ $300 drop cap) and the batches down (≤ 5 trays past a whole batch, never below 1); manual round up/down pills on the Bible + Day's Work cards (`forecastRound`/`batchRound`, raw-persisted); lean-large 60/40 extras split replaces "1 SM rest LG", with the mirrored cut split on round-down nights; Forecast/Batch Rounding sheet columns. Backtested against the 61-night Apr–Jul sheet export: 15 nights drop exactly one batch, none change any other way; 6/20 (both rows + batch floor) pinned as a fixture | **Yes + `seedSheets()`** |
+| v2·11 | Dough Use + data-driven bibles, all backend-side (no js/ changes): derived **Dough Use** tab (AM use = last EON − 2 PM count w/ 2 PM sales; PM use = Final − EON w/ EON−2 PM sales, gated on a real make row), **New Dough Bible**/**New Peach Bible** ($2,000–$22,000 by $300, per-size best-fit line over that bible's observations, blank under 3 obs), rebuilt wholesale by `rebuildDoughUse()` via the 🍕 sheet menu (`onOpen`). Prototyped against the 61-night export: 34 mornings + 22 evenings (8 sales-paired) | **Yes + `seedSheets()`** |
 
 ## Rules for future prompts
 
