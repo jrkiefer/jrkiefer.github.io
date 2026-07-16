@@ -52,6 +52,10 @@ test('SHEETS headers match the row widths the handlers write', () => {
   assert.equal(g.SHEETS.final.headers.length, 6);
   assert.equal(g.SHEETS.eon.headers.length, 7);
   assert.equal(g.SHEETS.peachBible.headers.length, 5);
+  // v2·11 derived tabs
+  assert.equal(g.SHEETS.doughUse.headers.length, 15);
+  assert.equal(g.SHEETS.newBible.headers.length, 5);
+  assert.equal(g.SHEETS.newPeachBible.headers.length, 5);
 });
 
 test('handleDoughPost writes the Bible + rounding columns (blank for old frontends)', () => {
@@ -106,7 +110,8 @@ function fakeGridSheet(rows) {
     },
     appendRow(r) { this.rows.push(r); },
     getLastRow() { return this.rows.length; },
-    setFrozenRows() {}
+    setFrozenRows() {},
+    clearContents() { this.rows = []; }
   };
 }
 
@@ -184,6 +189,152 @@ test('seedSheets: a v2·6-era 12-column tab gains only the rounding headers', ()
   assert.equal(dough.rows[1][11], 'peach'); // data untouched
   assert.equal(dough.rows[1][12], undefined);
   assert.equal(dough.rows[1][13], undefined);
+});
+
+/* ---------------- Dough Use + new bibles (v2·11) ---------------- */
+
+// A five-night fixture exercising every derivation gate: no prior EON on
+// the first night, a v1 zero EON-sales artifact, a missing make row, a
+// stamped peach night in June, and a morning past the 7-day reach-back.
+function doughUseSpreadsheet() {
+  const byName = {
+    'Dough Counts': fakeGridSheet([
+      plain(g.SHEETS.dough.headers),
+      ['6/1/2026', 9000, 2000, 7000, 9000, 20, 100, 80, 5, 24, 3, '', '', ''],
+      ['6/2/2026', 9000, 3000, 6000, 9000, 30, 80, 60, 2, '', 3, '', '', ''],
+      ['6/3/2026', 9000, 2200, 6800, 9000, 15, 60, 45, 2, 18, 3, '', '', ''],
+      ['6/5/2026', 9000, 2500, 6500, 9000, 10, 50, 40, 3, 12, 3, 'peach', '', ''],
+      ['7/3/2026', 9000, 4000, 5000, 9000, 12, 55, 42, 2, 15, 3, '', '', '']
+    ]),
+    'End of Night Count': fakeGridSheet([
+      plain(g.SHEETS.eon.headers),
+      ['6/1/2026', 12000, 25, 90, 70, 4, 30],
+      ['6/2/2026', 0, 40, 70, 50, 1, 20], // sales never entered (v1 artifact)
+      ['6/3/2026', 13000, 30, 80, 60, 3, 24],
+      ['6/9/2026', '', '', '', '', '', ''] // row exists, nothing counted
+    ]),
+    '2pm Make Amount': fakeGridSheet([
+      plain(g.SHEETS.make.headers),
+      ['6/1/2026', 10, 50, 40, 2, 12],
+      ['6/2/2026', 5, 20, 15, 2, 6]
+      // no 6/3 make row → its count-only Final row must not produce PM use
+    ]),
+    'Final Dough Amount at 2pm': fakeGridSheet([
+      plain(g.SHEETS.final.headers),
+      ['6/1/2026', 30, 150, 120, 7, 36],
+      ['6/2/2026', 35, 100, 75, 4, 26],
+      ['6/3/2026', 15, 60, 45, 2, 18]
+    ]),
+    Temperatures: fakeGridSheet([plain(g.SHEETS.temps.headers)]),
+    'Dough Bible': fakeGridSheet([plain(g.SHEETS.bible.headers), [3750, 11, 52, 44, 2]]),
+    'Peach Bible': fakeGridSheet([plain(g.SHEETS.peachBible.headers), [3000, 20, 56, 51, 2]])
+  };
+  return { byName, ctx: seedContextFor(byName) };
+}
+
+test('rebuildDoughUse: AM/PM derivation with every gate', () => {
+  const { byName, ctx: ctx2 } = doughUseSpreadsheet();
+  evalIn(ctx2, 'rebuildDoughUse()');
+  const rows = byName['Dough Use'].rows;
+  assert.deepEqual(plain(rows[0]), plain(g.SHEETS.doughUse.headers));
+  assert.equal(rows.length, 6); // header + 5 dates
+  // 6/1: no prior EON → AM blank; PM = Final − EON, sales 12000 − 2000.
+  assert.deepEqual(plain(rows[1]), ['6/1/2026', 'regular', '', 2000,
+    '', '', '', '', '', 10000, 5, 60, 50, 3, 6]);
+  // 6/2: AM vs last night (negative indi kept raw, blank boil propagates);
+  // PM computed but EON sales 0 → no sales pairing.
+  assert.deepEqual(plain(rows[2]), ['6/2/2026', 'regular', '6/1/2026', 3000,
+    -5, 10, 10, 2, '', '', -5, 30, 25, 3, 6]);
+  // 6/3: AM fine; PM blank — Final exists but no make row (count-only artifact).
+  assert.deepEqual(plain(rows[3]), ['6/3/2026', 'regular', '6/2/2026', 2200,
+    25, 10, 5, -1, 2, '', '', '', '', '', '']);
+  // 6/5: stamped peach in June — the label carries; prev reaches back 2 days.
+  assert.deepEqual(plain(rows[4]), ['6/5/2026', 'peach', '6/3/2026', 2500,
+    20, 30, 20, 0, 12, '', '', '', '', '', '']);
+  // 7/3: month rule → peach; nearest EON is 30 days back → AM blank too.
+  assert.deepEqual(plain(rows[5]), ['7/3/2026', 'peach', '', 4000,
+    '', '', '', '', '', '', '', '', '', '', '']);
+});
+
+test('rebuildDoughUse: new bibles fit only sales-paired, non-negative observations', () => {
+  const { byName, ctx: ctx2 } = doughUseSpreadsheet();
+  evalIn(ctx2, 'rebuildDoughUse()');
+  const nb = byName['New Dough Bible'].rows;
+  assert.deepEqual(plain(nb[0]).slice(0, 5), plain(g.SHEETS.newBible.headers));
+  assert.equal(nb.length, 69); // header + 68 tiers
+  assert.equal(nb[1][0], 2000);
+  assert.equal(nb[2][0], 2300);
+  assert.equal(nb[67][0], 21800);
+  assert.equal(nb[68][0], 22000); // exact endpoint, final step $200
+  // Regular observations: small/large get 3 points (6/1 PM + 6/2 AM + 6/3 AM);
+  // indi loses one to the −5 negative and sic to the −1 → 2 points → blank.
+  assert.equal(nb[1][1], ''); // indi under 3 observations
+  assert.equal(nb[1][4], ''); // sic under 3 observations
+  assert.equal(nb[1][2], 6); // small fit at $2,000
+  assert.equal(nb[68][2], 140); // small fit at $22,000
+  assert.equal(nb[1][3], 4); // large fit at $2,000
+  assert.equal(nb[68][3], 119); // large fit at $22,000
+  // Peach has a single morning (6/5) → every column blank, grid still full.
+  const pb = byName['New Peach Bible'].rows;
+  assert.equal(pb.length, 69);
+  assert.equal(pb[1][0], 2000);
+  for (const col of [1, 2, 3, 4]) assert.equal(pb[1][col], '', 'peach col ' + col);
+  // The note cell marks the thin data.
+  assert.match(String(byName['New Peach Bible'].rows[0][6] ?? ''), /1 mornings \+ 0 evenings/);
+});
+
+test('rebuildDoughUse: rerunning is a clean rewrite (idempotent)', () => {
+  const { byName, ctx: ctx2 } = doughUseSpreadsheet();
+  evalIn(ctx2, 'rebuildDoughUse()');
+  const snapshot = (name) => JSON.stringify(plain(byName[name].rows).map((r) => r.slice(0, 5)));
+  const first = ['Dough Use', 'New Dough Bible', 'New Peach Bible'].map(snapshot);
+  evalIn(ctx2, 'rebuildDoughUse()');
+  const second = ['Dough Use', 'New Dough Bible', 'New Peach Bible'].map(snapshot);
+  assert.deepEqual(second, first);
+  assert.equal(byName['Dough Use'].rows.length, 6); // rewritten, not appended
+});
+
+test('fitLine: exact line, slope clamp, and not-enough-data guards', () => {
+  const ctx2 = seedContextFor({});
+  const fit = (pts) => plain(evalIn(ctx2, `fitLine(${JSON.stringify(pts)})`));
+  assert.deepEqual(fit([[1000, 20], [2000, 30], [3000, 40]]), { a: 10, b: 0.01 });
+  assert.deepEqual(fit([[1000, 50], [2000, 40], [3000, 30]]), { a: 40, b: 0 }); // never negative slope
+  assert.equal(fit([[1, 1], [2, 2]]), null); // under 3 observations
+  assert.equal(fit([[5, 1], [5, 2], [5, 3]]), null); // no sales spread
+  const tiers = plain(evalIn(ctx2, 'newBibleTiers()'));
+  assert.equal(tiers.length, 68);
+  assert.equal(tiers[1] - tiers[0], 300);
+});
+
+test('onOpen registers the rebuild menu', () => {
+  const calls = [];
+  const menu = {
+    addItem(label, fn) { calls.push(['addItem', label, fn]); return this; },
+    addToUi() { calls.push(['addToUi']); }
+  };
+  const ctx2 = loadContext(['apps-script/Code.gs'], {
+    ContentService: ContentServiceStub,
+    SpreadsheetApp: {
+      getUi: () => ({ createMenu(name) { calls.push(['createMenu', name]); return menu; } })
+    }
+  });
+  evalIn(ctx2, 'onOpen()');
+  assert.deepEqual(plain(calls), [
+    ['createMenu', '\ud83c\udf55 Dough Tracker'],
+    ['addItem', 'Rebuild Dough Use + New Bibles', 'rebuildDoughUse'],
+    ['addToUi']
+  ]);
+});
+
+test('seedSheets creates the v2·11 derived tabs with headers', () => {
+  const byName = {};
+  const ctx2 = seedContextFor(byName);
+  evalIn(ctx2, 'seedSheets()');
+  for (const key of ['doughUse', 'newBible', 'newPeachBible']) {
+    const name = plain(evalIn(ctx2, `SHEETS.${key}.name`));
+    assert.ok(byName[name], name + ' created');
+    assert.deepEqual(plain(byName[name].rows[0]), plain(evalIn(ctx2, `SHEETS.${key}.headers`)));
+  }
 });
 
 test('handleDoughPost rejects missing date and empty saves', () => {
