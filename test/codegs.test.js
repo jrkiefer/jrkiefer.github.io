@@ -53,7 +53,7 @@ test('SHEETS headers match the row widths the handlers write', () => {
   assert.equal(g.SHEETS.eon.headers.length, 7);
   assert.equal(g.SHEETS.peachBible.headers.length, 5);
   // v2·11 derived tabs
-  assert.equal(g.SHEETS.doughUse.headers.length, 15);
+  assert.equal(g.SHEETS.doughUse.headers.length, 16); // + PM Make OK trust flag
   assert.equal(g.SHEETS.newBible.headers.length, 5);
   assert.equal(g.SHEETS.newPeachBible.headers.length, 5);
 });
@@ -69,7 +69,7 @@ test('handleDoughPost writes the Bible + rounding columns (blank for old fronten
   const ctx2 = loadContext(['apps-script/Code.gs'], {
     ContentService: ContentServiceStub,
     console: { error() {} },
-    SpreadsheetApp: { getActiveSpreadsheet: () => ({ getSheetByName: () => fakeSheet }) }
+    SpreadsheetApp: { getActiveSpreadsheet: () => ({ getSheetByName: (n) => (n === 'Dough Counts' ? fakeSheet : null) }) }
   });
   const { handleDoughPost } = getRefs(ctx2, ['handleDoughPost']);
   handleDoughPost({
@@ -105,15 +105,31 @@ function fakeGridSheet(rows) {
               self.rows[row - 1 + i][col - 1 + j] = vals[i][j];
             }
           }
-        }
+        },
+        setFormulas(vals) { this.setValues(vals); },
+        setFormula(f) { this.setValues([[f]]); },
+        setNumberFormat() {}
       };
     },
     appendRow(r) { this.rows.push(r); },
     getLastRow() { return this.rows.length; },
     setFrozenRows() {},
-    clearContents() { this.rows = []; }
+    clearContents() { this.rows = []; },
+    setConditionalFormatRules(rules) { this.cfRules = rules; }
   };
 }
+
+// Recording stub for SpreadsheetApp.newConditionalFormatRule().
+function fakeCfBuilder() {
+  const rule = {};
+  return {
+    whenFormulaSatisfied(f) { rule.formula = f; return this; },
+    setBackground(c) { rule.color = c; return this; },
+    setRanges(r) { rule.ranges = r; return this; },
+    build() { return rule; }
+  };
+}
+
 
 function seedContextFor(byName) {
   const ss = {
@@ -123,7 +139,11 @@ function seedContextFor(byName) {
   return loadContext(['apps-script/Code.gs'], {
     ContentService: ContentServiceStub,
     Logger: { log() {} },
-    SpreadsheetApp: { getActiveSpreadsheet: () => ss }
+    console: { error() {} },
+    SpreadsheetApp: {
+      getActiveSpreadsheet: () => ss,
+      newConditionalFormatRule: fakeCfBuilder
+    }
   });
 }
 
@@ -217,7 +237,7 @@ function doughUseSpreadsheet() {
       plain(g.SHEETS.make.headers),
       ['6/1/2026', 10, 50, 40, 2, 12],
       ['6/2/2026', 5, 20, 15, 2, 6]
-      // no 6/3 make row → its count-only Final row must not produce PM use
+      // no 6/3 make row → its count-only Final must be flagged, not trusted
     ]),
     'Final Dough Amount at 2pm': fakeGridSheet([
       plain(g.SHEETS.final.headers),
@@ -232,73 +252,113 @@ function doughUseSpreadsheet() {
   return { byName, ctx: seedContextFor(byName) };
 }
 
-test('rebuildDoughUse: AM/PM derivation with every gate', () => {
+test('rebuildDoughUse: one live formula row per date', () => {
   const { byName, ctx: ctx2 } = doughUseSpreadsheet();
   evalIn(ctx2, 'rebuildDoughUse()');
-  const rows = byName['Dough Use'].rows;
-  assert.deepEqual(plain(rows[0]), plain(g.SHEETS.doughUse.headers));
-  assert.equal(rows.length, 6); // header + 5 dates
-  // 6/1: no prior EON → AM blank; PM = Final − EON, sales 12000 − 2000.
-  assert.deepEqual(plain(rows[1]), ['6/1/2026', 'regular', '', 2000,
-    '', '', '', '', '', 10000, 5, 60, 50, 3, 6]);
-  // 6/2: AM vs last night (negative indi kept raw, blank boil propagates);
-  // PM computed but EON sales 0 → no sales pairing.
-  assert.deepEqual(plain(rows[2]), ['6/2/2026', 'regular', '6/1/2026', 3000,
-    -5, 10, 10, 2, '', '', -5, 30, 25, 3, 6]);
-  // 6/3: AM fine; PM blank — Final exists but no make row (count-only artifact).
-  assert.deepEqual(plain(rows[3]), ['6/3/2026', 'regular', '6/2/2026', 2200,
-    25, 10, 5, -1, 2, '', '', '', '', '', '']);
-  // 6/5: stamped peach in June — the label carries; prev reaches back 2 days.
-  assert.deepEqual(plain(rows[4]), ['6/5/2026', 'peach', '6/3/2026', 2500,
-    20, 30, 20, 0, 12, '', '', '', '', '', '']);
-  // 7/3: month rule → peach; nearest EON is 30 days back → AM blank too.
-  assert.deepEqual(plain(rows[5]), ['7/3/2026', 'peach', '', 4000,
-    '', '', '', '', '', '', '', '', '', '', '']);
+  const du = byName['Dough Use'];
+  assert.equal(du.rows.length, 6); // header + 5 dates, chronological
+  assert.deepEqual(plain(du.rows.slice(1).map((r) => r[0])),
+    ['6/1/2026', '6/2/2026', '6/3/2026', '6/5/2026', '7/3/2026']);
+  const row2 = plain(du.rows[1]);
+  assert.equal(row2.length, 16);
+  assert.match(row2[1], /MONTH\(\$A2\)=7/); // bible: stamped cell else month rule
+  assert.match(row2[2], /MAXIFS\('End of Night Count'!\$A:\$A/); // prev count
+  assert.match(row2[2], /">="&\$A2-7/); // 7-day reach-back window
+  assert.match(row2[4], /'End of Night Count'!\$C:\$C/); // AM indi: prev EON count
+  assert.match(row2[4], /'Dough Counts'!\$F:\$F/); // AM indi: today's 2 PM count
+  assert.match(row2[9], /IF\(OR\(e="",e<=0,c="",e<c\)/); // PM sales guards
+  assert.match(row2[10], /'Final Dough Amount at 2pm'!\$B:\$B/); // PM indi
+  assert.match(row2[15], /'2pm Make Amount'!\$B:\$F/); // make-backed trust flag
+  assert.match(plain(du.rows[2])[1], /\$A3/); // row anchors thread through
 });
 
-test('rebuildDoughUse: new bibles fit only sales-paired, non-negative observations', () => {
+test('buildNewBibleTab: tier grid wired to live per-size fit helpers', () => {
   const { byName, ctx: ctx2 } = doughUseSpreadsheet();
   evalIn(ctx2, 'rebuildDoughUse()');
-  const nb = byName['New Dough Bible'].rows;
-  assert.deepEqual(plain(nb[0]).slice(0, 5), plain(g.SHEETS.newBible.headers));
-  assert.equal(nb.length, 69); // header + 68 tiers
-  assert.equal(nb[1][0], 2000);
-  assert.equal(nb[2][0], 2300);
-  assert.equal(nb[67][0], 21800);
-  assert.equal(nb[68][0], 22000); // exact endpoint, final step $200
-  // Regular observations: small/large get 3 points (6/1 PM + 6/2 AM + 6/3 AM);
-  // indi loses one to the −5 negative and sic to the −1 → 2 points → blank.
-  assert.equal(nb[1][1], ''); // indi under 3 observations
-  assert.equal(nb[1][4], ''); // sic under 3 observations
-  assert.equal(nb[1][2], 6); // small fit at $2,000
-  assert.equal(nb[68][2], 140); // small fit at $22,000
-  assert.equal(nb[1][3], 4); // large fit at $2,000
-  assert.equal(nb[68][3], 119); // large fit at $22,000
-  // Peach has a single morning (6/5) → every column blank, grid still full.
-  const pb = byName['New Peach Bible'].rows;
-  assert.equal(pb.length, 69);
-  assert.equal(pb[1][0], 2000);
-  for (const col of [1, 2, 3, 4]) assert.equal(pb[1][col], '', 'peach col ' + col);
-  // The note cell marks the thin data.
-  assert.match(String(byName['New Peach Bible'].rows[0][6] ?? ''), /1 mornings \+ 0 evenings/);
+  const nb = byName['New Dough Bible'];
+  assert.equal(nb.rows.length, 69); // header + 68 tiers
+  assert.equal(nb.rows[1][0], 2000);
+  assert.equal(nb.rows[2][0], 2300);
+  assert.equal(nb.rows[67][0], 21800);
+  assert.equal(nb.rows[68][0], 22000); // exact endpoint, final step $200
+  const indiTier = plain(nb.rows[1])[1];
+  assert.match(indiTier, /IF\(\$H\$2<3,"",MAX\(0,ROUND\(\$I\$2\+\$J\$2\*\$A2\)\)\)/);
+  assert.match(plain(nb.rows[1])[4], /\$H\$5/); // sic reads helper row 5
+  const helper = plain(nb.rows[1])[7]; // H2 — the spilling {n, a, b} fit
+  assert.match(helper, /MAKEARRAY\(n,n/);
+  assert.match(helper, /MEDIAN\(sl\)/);
+  assert.match(helper, /l="regular"/);
+  assert.match(helper, /'Dough Use'!\$P\$2:\$P/); // PM rows need a make behind them
+  assert.match(plain(byName['New Peach Bible'].rows[1])[7], /l="peach"/);
 });
 
-test('rebuildDoughUse: rerunning is a clean rewrite (idempotent)', () => {
+test('rebuildDoughUse: dated stubs appear once; rerun rewrites in place', () => {
   const { byName, ctx: ctx2 } = doughUseSpreadsheet();
   evalIn(ctx2, 'rebuildDoughUse()');
-  const snapshot = (name) => JSON.stringify(plain(byName[name].rows).map((r) => r.slice(0, 5)));
-  const first = ['Dough Use', 'New Dough Bible', 'New Peach Bible'].map(snapshot);
+  const eon = byName['End of Night Count'];
+  const make = byName['2pm Make Amount'];
+  assert.equal(plain(eon.rows[5][0]), '6/5/2026'); // dough date with no EON row
+  assert.equal(plain(eon.rows[6][0]), '7/3/2026');
+  assert.equal(eon.rows.length, 7);
+  assert.equal(plain(make.rows[3][0]), '6/3/2026'); // EON counts but no make data
+  assert.equal(make.rows.length, 4);
   evalIn(ctx2, 'rebuildDoughUse()');
-  const second = ['Dough Use', 'New Dough Bible', 'New Peach Bible'].map(snapshot);
-  assert.deepEqual(second, first);
+  assert.equal(eon.rows.length, 7); // stubs never duplicate
+  assert.equal(make.rows.length, 4);
   assert.equal(byName['Dough Use'].rows.length, 6); // rewritten, not appended
 });
 
-test('fitLine: exact line, slope clamp, and not-enough-data guards', () => {
+test('installLiveFlags: red conditional-format rules on all three tabs', () => {
+  const { byName, ctx: ctx2 } = doughUseSpreadsheet();
+  evalIn(ctx2, 'rebuildDoughUse()');
+  const du = byName['Dough Use'];
+  const eon = byName['End of Night Count'];
+  const make = byName['2pm Make Amount'];
+  assert.equal(du.cfRules.length, 2);
+  assert.match(plain(du.cfRules[0].formula), /ISNUMBER\(E2\),E2<0/); // negative AM
+  assert.match(plain(du.cfRules[1].formula), /OR\(K2<0,\$P2=FALSE\)/); // negative or untrusted PM
+  assert.equal(plain(du.cfRules[0].color), '#f4c7c3');
+  assert.equal(eon.cfRules.length, 2);
+  assert.match(plain(eon.cfRules[0].formula), /INDIRECT\("'Dough Counts'!\$A:\$A"\)/);
+  assert.match(plain(eon.cfRules[0].formula), /N\(\$B2\)<=0/); // missing or zero sales
+  assert.match(plain(eon.cfRules[1].formula), /C2=""/); // missing count cells
+  assert.equal(make.cfRules.length, 1);
+  assert.match(plain(make.cfRules[0].formula), /'End of Night Count'!\$C:\$G/);
+});
+
+test('every generated formula is balanced and well-formed', () => {
+  // Sheets formulas can't execute in CI — at minimum they must parse.
+  const ctx2 = seedContextFor({});
+  const check = (f, tag) => {
+    assert.match(f, /^=/, tag);
+    assert.equal((f.match(/\(/g) || []).length, (f.match(/\)/g) || []).length, tag + ' parens');
+    assert.equal((f.match(/"/g) || []).length % 2, 0, tag + ' quotes');
+  };
+  plain(evalIn(ctx2, 'doughUseRowFormulas(7)')).forEach((f, i) => check(f, 'dough use col ' + i));
+  check(plain(evalIn(ctx2, 'fitSpillFormula("regular", "E", "K")')), 'regular fit');
+  check(plain(evalIn(ctx2, 'fitSpillFormula("peach", "H", "N")')), 'peach fit');
+});
+
+test('handleDoughPost keeps Dough Use current without the button', () => {
+  const { byName, ctx: ctx2 } = doughUseSpreadsheet();
+  evalIn(ctx2, 'rebuildDoughUse()'); // seeds the tab
+  const { handleDoughPost } = getRefs(ctx2, ['handleDoughPost']);
+  handleDoughPost({ date: '7/4/2026', todayForecast: 9000 });
+  const du = byName['Dough Use'];
+  assert.equal(du.rows.length, 7);
+  assert.equal(plain(du.rows[6])[0], '7/4/2026');
+  assert.match(plain(du.rows[6])[1], /\$A7/); // formulas anchored to its own row
+  handleDoughPost({ date: '7/4/2026', todayForecast: 9500 });
+  assert.equal(du.rows.length, 7); // upsert, not append
+});
+
+test('fitLine (robust median): exact line, outlier resistance, clamps, guards', () => {
   const ctx2 = seedContextFor({});
   const fit = (pts) => plain(evalIn(ctx2, `fitLine(${JSON.stringify(pts)})`));
   assert.deepEqual(fit([[1000, 20], [2000, 30], [3000, 40]]), { a: 10, b: 0.01 });
   assert.deepEqual(fit([[1000, 50], [2000, 40], [3000, 30]]), { a: 40, b: 0 }); // never negative slope
+  // One wild night doesn't bend the line — the median slope holds 0.01.
+  assert.deepEqual(fit([[1000, 10], [2000, 20], [3000, 30], [4000, 40], [5000, 500]]), { a: 0, b: 0.01 });
   assert.equal(fit([[1, 1], [2, 2]]), null); // under 3 observations
   assert.equal(fit([[5, 1], [5, 2], [5, 3]]), null); // no sales spread
   const tiers = plain(evalIn(ctx2, 'newBibleTiers()'));
