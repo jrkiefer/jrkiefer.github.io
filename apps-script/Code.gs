@@ -5,7 +5,7 @@ var SHEETS = {
     name: "Dough Counts",
     headers: ["Date","Today's Forecast","Current Sales","Sales Left","Tomorrow's Forecast",
               "Indi Count","Small Count","Large Count","Sic Count","Boil Count","Batches",
-              "Bible"]
+              "Bible","Forecast Rounding","Batch Rounding"]
   },
   temps: {
     name: "Temperatures",
@@ -227,7 +227,9 @@ function handleDoughPost(data) {
     data.date, data.todayForecast, data.currentSales, data.salesLeft,
     data.tomorrowForecast, data.indiCount, data.smallCount,
     data.largeCount, data.sicCount, data.boilCount, data.batches,
-    data.bible || ""  // 'regular' / 'peach'; older frontends send nothing
+    data.bible || "",         // 'regular' / 'peach'; older frontends send nothing
+    data.forecastRound || "", // raw 'up' / 'down'; blank = auto
+    data.batchRound || ""
   ];
 
   var existingRow = findRowByDate(sheet, data.date);
@@ -560,15 +562,18 @@ function seedSheets() {
     }
   }
 
-  // Additive migration: pre-v2 deployments have an 11-column Dough Counts
-  // tab. The header-writing branch above only runs on empty sheets, so
-  // append the Bible column header to the live tab here.
+  // Additive migration: older deployments have a narrower Dough Counts tab
+  // (11 columns pre-v2, 12 through v2·9). The header-writing branch above
+  // only runs on empty sheets, so append any missing column headers here.
   var doughSheet = ss.getSheetByName(SHEETS.dough.name);
   if (doughSheet && doughSheet.getLastRow() > 0) {
-    var bibleCol = SHEETS.dough.headers.indexOf("Bible") + 1;
-    if (doughSheet.getRange(1, bibleCol).getValue() !== "Bible") {
-      doughSheet.getRange(1, bibleCol).setValue("Bible");
-      report.push("appended Bible column header to " + SHEETS.dough.name);
+    var addedCols = ["Bible", "Forecast Rounding", "Batch Rounding"];
+    for (var a = 0; a < addedCols.length; a++) {
+      var col = SHEETS.dough.headers.indexOf(addedCols[a]) + 1;
+      if (doughSheet.getRange(1, col).getValue() !== addedCols[a]) {
+        doughSheet.getRange(1, col).setValue(addedCols[a]);
+        report.push("appended " + addedCols[a] + " column header to " + SHEETS.dough.name);
+      }
     }
   }
 

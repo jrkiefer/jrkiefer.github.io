@@ -7,6 +7,7 @@
 import {
   SIZES, BOIL, ALL, TRAYS_PER_BATCH, SIC_MIN, SIC_MIN_WAIVER,
   PEACH_MONTHS, BIBLES,
+  SLOW_DAY_UNDER, ROUND_DOWN_MAX_GAP, BATCH_DOWN_MAX_OVER, EXTRA_LG_RATIO,
 } from './config.js';
 
 /* ---------------- parsing & formatting ---------------- */
@@ -44,6 +45,8 @@ export const blankCounts = () => Object.fromEntries(ALL.map((s) => [s.id, { tray
 
 export const blankRecord = () => ({
   bible: null, // null = follow the month default
+  forecastRound: null, // null = auto (slow-day rule)
+  batchRound: null, // null = auto (slow-day + remainder rule)
   twopm: { counts: blankCounts(), todayForecast: '', currentSales: '', tomorrowForecast: '' },
   actualMake: { indi: '', small: '', large: '', sic: '', boil: '' },
   temps: [],
@@ -57,26 +60,63 @@ export function autoBibleFor(dateISO) {
   return PEACH_MONTHS.includes(Number(String(dateISO).slice(5, 7))) ? 'peach' : 'regular';
 }
 
+// Slow day: both money forecasts entered and strictly under $12,000 — the
+// shared gate for the auto round-down rules (bible lookups and batches).
+export function slowDay(tf, tmf) {
+  return tf != null && tmf != null && tf < SLOW_DAY_UNDER && tmf < SLOW_DAY_UNDER;
+}
+
+// Resolved forecast-rounding policy for a record: a stamped pill wins,
+// otherwise slow days round down. (`??` also covers records from before
+// the field existed.)
+export function resolveForecastRound(record) {
+  const tp = record.twopm;
+  return record.forecastRound
+    ?? (slowDay(parseSales(tp.todayForecast), parseSales(tp.tomorrowForecast)) ? 'down' : 'up');
+}
+
 // Rounds UP to the next tier, caps at the top row. Zero or negative sales
 // mean zero need/use (tier 0) — never rounds up to the first row.
-export function bibleLookup(bibleId, sales) {
+// round 'down' takes the tier below instead — but never a drop of more
+// than $300 (even when stamped manually); a wider gap falls back to up.
+export function bibleLookup(bibleId, sales, round = 'up') {
   if (sales == null) return null;
   if (sales <= 0) return { tier: 0, indi: 0, small: 0, large: 0, sic: 0 };
   const rows = BIBLES[bibleId].rows;
-  const row = rows.find((r) => r[0] >= sales) || rows[rows.length - 1];
+  let row = null;
+  if (round === 'down') {
+    for (let i = rows.length - 1; i >= 0; i--) {
+      if (rows[i][0] <= sales) { row = rows[i]; break; }
+    }
+    if (row && sales - row[0] > ROUND_DOWN_MAX_GAP) row = null;
+  }
+  if (!row) row = rows.find((r) => r[0] >= sales) || rows[rows.length - 1];
   return { tier: row[0], indi: row[1], small: row[2], large: row[3], sic: row[4] };
 }
 
 /* ---------------- the 2 PM plan ---------------- */
 
+// Lean-large 60/40: LG = ceil(0.6·n), SM the rest — Large strictly ahead
+// for any n ≥ 1. Shared by the extras top-up and the round-down cut.
+const splitLeanLarge = (n) => {
+  const lg = Math.ceil(EXTRA_LG_RATIO * n);
+  return { lg, sm: n - lg };
+};
+
 export function computePlan(record, bibleId) {
   const tp = record.twopm;
   const tf = parseSales(tp.todayForecast);
   const cs = parseSales(tp.currentSales);
+  const tmf = parseSales(tp.tomorrowForecast);
   const salesLeft = tf != null && cs != null ? tf - cs : null;
 
-  const use = bibleLookup(bibleId, salesLeft);
-  const need = bibleLookup(bibleId, parseSales(tp.tomorrowForecast));
+  // Forecast rounding resolves first — it shifts use/need and with them
+  // every tray count the batch rounding is judged on.
+  const slow = slowDay(tf, tmf);
+  const fRound = record.forecastRound ?? (slow ? 'down' : 'up');
+
+  const use = bibleLookup(bibleId, salesLeft, fRound);
+  const need = bibleLookup(bibleId, tmf, fRound);
   // Explicit 0 forecast = closed tomorrow: zero need across the board.
   const closedTomorrow = need != null && need.tier === 0;
 
@@ -116,29 +156,53 @@ export function computePlan(record, bibleId) {
   const boilTrays = boilShort != null ? Math.ceil(boilShort / BOIL.perTray) : 0;
   const boilMake = boilShort != null ? boilTrays * BOIL.perTray : null;
 
-  let totalTrays = null, batches = null, extra = 0, finalTrays = null, extraNote = '';
+  let totalTrays = null, batches = null, extra = 0, extraNote = '', cut = 0, cutNote = '';
+  let finalTrays = null;
+  let bRound = record.batchRound ?? null; // null = auto undecidable until totalTrays exists
   if (ready) {
     totalTrays = pizzaTrays + boilTrays;
-    batches = totalTrays === 0 ? 0 : Math.ceil(totalTrays / TRAYS_PER_BATCH);
-    extra = totalTrays > 0 ? batches * TRAYS_PER_BATCH - totalTrays : 0;
+    // Slow-day auto: ≤ 5 trays past a whole batch rounds down; a manual
+    // stamp wins either way. Rounding down never drops below one batch.
+    const rem = totalTrays % TRAYS_PER_BATCH;
+    bRound = record.batchRound ?? (slow && rem >= 1 && rem <= BATCH_DOWN_MAX_OVER ? 'down' : 'up');
+    batches = totalTrays === 0 ? 0
+      : bRound === 'down' ? Math.max(1, Math.floor(totalTrays / TRAYS_PER_BATCH))
+        : Math.ceil(totalTrays / TRAYS_PER_BATCH);
+    extra = totalTrays > 0 ? Math.max(0, batches * TRAYS_PER_BATCH - totalTrays) : 0;
+    cut = totalTrays > 0 ? Math.max(0, totalTrays - batches * TRAYS_PER_BATCH) : 0;
     finalTrays = {};
     for (const s of SIZES) finalTrays[s.id] = rows[s.id].trays;
-    // Batch extras: 1–4 → all Large; 5+ → 1 Small, rest Large.
-    // Display-level only — never Indi/Sicilian, never saved to the sheet.
-    if (extra >= 5) {
-      finalTrays.small += 1;
-      finalTrays.large += extra - 1;
-      extraNote = `+1 SM, +${extra - 1} LG`;
-    } else if (extra > 0) {
-      finalTrays.large += extra;
-      extraNote = `+${extra} LG`;
+    // Both adjustments are display-level only — never Indi/Sicilian/boil,
+    // never saved to the sheet.
+    if (extra > 0) {
+      const { lg, sm } = splitLeanLarge(extra);
+      finalTrays.small += sm;
+      finalTrays.large += lg;
+      extraNote = sm > 0 ? `+${sm} SM, +${lg} LG` : `+${lg} LG`;
+    } else if (cut > 0) {
+      // Trim the overage with the same split, clamped so no size goes
+      // negative; whatever neither LG nor SM can absorb stays untrimmed.
+      const want = splitLeanLarge(cut);
+      let lgCut = Math.min(want.lg, finalTrays.large);
+      const smCut = Math.min(cut - lgCut, finalTrays.small);
+      lgCut += Math.min(cut - lgCut - smCut, finalTrays.large - lgCut);
+      finalTrays.large -= lgCut;
+      finalTrays.small -= smCut;
+      cutNote = [smCut > 0 && `−${smCut} SM`, lgCut > 0 && `−${lgCut} LG`].filter(Boolean).join(', ');
     }
   }
 
   return {
     salesLeft, use, need, closedTomorrow, rows, setout, pizzaTrays,
     boilHave, boilMake, boilTrays, totalTrays, batches, extra, extraNote,
-    finalTrays, ready,
+    cut, cutNote, finalTrays, ready,
+    rounding: {
+      slowDay: slow,
+      forecast: fRound,
+      forecastAuto: record.forecastRound == null,
+      batches: bRound,
+      batchesAuto: record.batchRound == null,
+    },
   };
 }
 
@@ -164,7 +228,9 @@ export function effectiveMake(record, plan) {
 // diff rides along. Sicilian is treated like every other size here —
 // EON-made Sicilian IS usable tomorrow (unlike the same-night 2 PM clamp).
 export function computeOutlook(record, bibleId, forecast) {
-  const need = bibleLookup(bibleId, forecast);
+  // Need follows the night's resolved rounding — the gate reads the 2 PM
+  // forecasts, never the EON-typed one.
+  const need = bibleLookup(bibleId, forecast, resolveForecastRound(record));
   const rows = {};
   let anyCount = false, surplus = 0, shortfall = 0, surplusTrays = 0, shortTrays = 0;
   const add = (id, have, needN, perTray) => {

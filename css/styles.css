@@ -780,6 +780,14 @@ input[type="date"] {
 .bible-pill.active { background: var(--ink); color: var(--paper); }
 .bible-auto-tag { font-size: 9px; color: var(--accent); }
 
+/* rounding pill rows (Bible card + Day's Work card) */
+.round-pills {
+  margin-top: 2px;
+  padding: 8px 0 0;
+  border-top: 1px dashed var(--rule-soft);
+}
+.round-pills .eyebrow { margin-right: auto; }
+
 .bible-table-wrap {
   overflow: auto;
   max-height: 300px;

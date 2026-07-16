@@ -45,6 +45,10 @@ function fullRecord() {
   r.twopm.counts.large = { trays: '8', singles: '2' }; // 50
   r.twopm.counts.sic = { trays: '', singles: '3' };
   r.twopm.counts.boil = { trays: '1', singles: '4' }; // 10
+  // $6k/$8k is a slow day — rounding pinned up so the fixture's makes,
+  // finals, and batches stay the pre-v2·10 reference numbers.
+  r.forecastRound = 'up';
+  r.batchRound = 'up';
   return r;
 }
 
@@ -69,10 +73,30 @@ test('buildPayloads: full 2 PM record → dough payload with makes/finals + bibl
     boilCount: 10,
     batches: 4,
     bible: 'regular',
+    forecastRound: 'up',
+    batchRound: 'up',
     // raw calculated balls, clamped ≥ 0 — batch extras never save
     makes: { indi: 16, small: 113, large: 106, sic: 2, boil: 30 },
     finals: { indi: 36, small: 173, large: 156, sic: 5, boil: 40 },
   });
+});
+
+test('buildPayloads: rounding fields send the raw record value, not the resolved policy', () => {
+  const r = blankRecord();
+  r.twopm.todayForecast = '0';
+  r.twopm.currentSales = '0';
+  r.twopm.tomorrowForecast = '3750';
+  r.twopm.counts.boil = { trays: '0', singles: '0' }; // counted zero → 6 boil trays
+  const p = buildPayloads('2026-04-01', r);
+  assert.equal(p.dough.forecastRound, ''); // auto stays blank on the wire …
+  assert.equal(p.dough.batchRound, '');
+  assert.equal(p.dough.batches, 2); // … while batches carries the auto-rounded plan (23 trays → down)
+  r.forecastRound = 'down';
+  r.batchRound = 'up';
+  const p2 = buildPayloads('2026-04-01', r);
+  assert.equal(p2.dough.forecastRound, 'down');
+  assert.equal(p2.dough.batchRound, 'up');
+  assert.equal(p2.dough.batches, 3);
 });
 
 test('buildPayloads: bible stamp follows the month default and the manual override', () => {
@@ -201,6 +225,8 @@ test('recordFromRow: a realistic merged row round-trips into the record shape', 
     'Boil Count': 24,
     Batches: 3,
     Bible: 'peach',
+    'Forecast Rounding': 'down',
+    'Batch Rounding': 'up',
     'Water 1': 58, 'Dough 1': 78,
     'Water 2': 56, 'Dough 2': 80,
     'EON Sales': 5240,
@@ -210,6 +236,8 @@ test('recordFromRow: a realistic merged row round-trips into the record shape', 
   };
   const r = recordFromRow(row);
   assert.equal(r.bible, 'peach');
+  assert.equal(r.forecastRound, 'down');
+  assert.equal(r.batchRound, 'up');
   assert.equal(r.twopm.todayForecast, '9');
   assert.equal(r.twopm.currentSales, '3');
   assert.equal(r.twopm.tomorrowForecast, '10');
@@ -236,9 +264,22 @@ test('recordFromRow: legacy rows — no Bible column → auto; 2 PM zeros → bl
     'Boil Count': 0,
   });
   assert.equal(r.bible, null);
+  assert.equal(r.forecastRound, null); // no rounding columns → auto
+  assert.equal(r.batchRound, null);
   assert.equal(r.twopm.todayForecast, '0'); // closed-day zero round-trips
   assert.deepEqual(r.twopm.counts.indi, { trays: '', singles: '' }); // pizza zero → blank
   assert.deepEqual(r.twopm.counts.boil, { trays: '0', singles: '0' }); // boil zero = counted
+});
+
+test('recordFromRow: junk rounding cells hydrate as auto', () => {
+  const r = recordFromRow({
+    Date: '4/1/2026',
+    "Today's Forecast": 9000,
+    'Forecast Rounding': 'sideways',
+    'Batch Rounding': 0,
+  });
+  assert.equal(r.forecastRound, null);
+  assert.equal(r.batchRound, null);
 });
 
 /* ---------------- transport ---------------- */

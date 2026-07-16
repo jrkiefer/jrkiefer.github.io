@@ -1,16 +1,19 @@
 // js/ui/bible.js — the Dough Bible reference card: regular/peach pill
 // toggle (stamped on the night's record; auto tag when following the
-// July–August default), both tables built once, tonight/tomorrow row
-// highlights on the active table. Also owns the quick toggle below the
-// Active Date, which surfaces only while the date is in peach season.
+// July–August default), the forecast-rounding pills, both tables built
+// once, tonight/tomorrow row highlights on the active table. Also owns
+// the quick toggle below the Active Date, which surfaces only while the
+// date is in peach season.
 
 import { BIBLES } from '../config.js';
 import { money } from '../calc.js';
 import { $, setText, wireCollapse } from './fields.js';
 
 const IDS = ['regular', 'peach'];
+const ROUNDS = ['up', 'down'];
 
 let activeBible = null; // effective bibleId from the last update(view)
+let stampedRound = null; // RAW record.forecastRound from the last update(view)
 
 export function init(ctx) {
   wireCollapse('bibleSec', 'bibleToggle');
@@ -33,6 +36,14 @@ export function init(ctx) {
     $(`biblePill-${id}`).addEventListener('click', stamp);
     $(`bibleQuickPill-${id}`).addEventListener('click', stamp);
   }
+  for (const id of ROUNDS) {
+    // Unlike the bible pills, guard on the RAW stamp: tapping the value
+    // the auto rule currently resolves to PINS it against live inputs.
+    $(`forecastRoundPill-${id}`).addEventListener('click', () => {
+      if (stampedRound === id) return;
+      ctx.patch((r) => { r.forecastRound = id; });
+    });
+  }
 }
 
 export function update(view) {
@@ -48,6 +59,12 @@ export function update(view) {
   // The quick toggle lives below the Active Date, peach season only.
   $('bibleQuick').classList.toggle('hidden', autoBible !== 'peach');
   $('bibleQuickAutoTag').classList.toggle('hidden', record.bible != null);
+
+  stampedRound = record.forecastRound ?? null;
+  for (const id of ROUNDS) {
+    $(`forecastRoundPill-${id}`).classList.toggle('active', plan.rounding.forecast === id);
+  }
+  $('forecastRoundAutoTag').classList.toggle('hidden', record.forecastRound != null);
 
   const tonightTier = plan.use && plan.use.tier > 0 ? plan.use.tier : null;
   const tomorrowTier = plan.need && plan.need.tier > 0 ? plan.need.tier : null;

@@ -45,7 +45,7 @@ export function update(view) {
   const foot = $('bysizeFoot');
   if (p.ready) {
     foot.className = 'bysize-foot caps';
-    setText(foot, `Make in balls · trays includes batch extras · SIC min ${SIC_MIN} unless ${SIC_MIN_WAIVER}+ on hand`);
+    setText(foot, `Make in balls · trays includes batch extras/cuts · SIC min ${SIC_MIN} unless ${SIC_MIN_WAIVER}+ on hand`);
   } else {
     foot.className = 'bysize-foot';
     setText(foot, "Fill in the counts, sales, and both forecasts to get tonight's make.");

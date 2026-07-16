@@ -23,8 +23,8 @@ This is **v2**, a from-scratch rebuild (July 2026) governed by MASTERPLAN.md and
 - `eslint.config.mjs` — flat config: `js/**` + `test/**` are modules, `apps-script/` is script-goal, `v1/**` and `design/**` ignored
 - `.github/workflows/ci.yml` — CI on every PR and push to main: `node --check` over `js/` and `v1/js/` (before `npm ci`, so syntax errors fail fast), then `npm ci`, `npm run lint`, `npm test`
 - `js/`
-  - `config.js` — constants only: `SCRIPT_URL`, `SHEET_URL`, `SIZES`, `BOIL`, `ALL`, `TRAYS_PER_BATCH`, `SIC_MIN`, `SIC_MIN_WAIVER`, `PEACH_MONTHS`, `MAX_BATCH_TEMPS`, `BIBLES` (both tables)
-  - `calc.js` — pure math, no DOM/fetch/storage: `parseSales`, `money`, `fmt`, `fmtDate`, `countTotal`, `countBlank`, `blankRecord`/`blankCounts`, `autoBibleFor`, `bibleLookup`, `computePlan`, `effectiveMake`, `computeOutlook`
+  - `config.js` — constants only: `SCRIPT_URL`, `SHEET_URL`, `SIZES`, `BOIL`, `ALL`, `TRAYS_PER_BATCH`, `SIC_MIN`, `SIC_MIN_WAIVER`, `PEACH_MONTHS`, `MAX_BATCH_TEMPS`, `SLOW_DAY_UNDER`, `ROUND_DOWN_MAX_GAP`, `BATCH_DOWN_MAX_OVER`, `EXTRA_LG_RATIO`, `BIBLES` (both tables)
+  - `calc.js` — pure math, no DOM/fetch/storage: `parseSales`, `money`, `fmt`, `fmtDate`, `countTotal`, `countBlank`, `blankRecord`/`blankCounts`, `autoBibleFor`, `slowDay`, `resolveForecastRound`, `bibleLookup`, `computePlan`, `effectiveMake`, `computeOutlook`
   - `api.js` — everything that knows the Apps Script wire format: `post` (text/plain + no-cors retry + keepalive), `getByDate`, `getHistory`, `buildPayloads`, `recordFromRow`, date helpers (`todayISO`, `isoToSheetDate`, `mdyToISO`, `sheetDateToLocal`, `toShorthand`)
   - `store.js` — record state, synchronous localStorage write-through, debounced background sync, status machine; **no DOM access**
   - `ui/` — one module per card; **UI modules never import api.js or store.js** — they get the record and a `patch` function via ctx (pure calc/config imports are fine)
@@ -33,7 +33,7 @@ This is **v2**, a from-scratch rebuild (July 2026) governed by MASTERPLAN.md and
   - `main.js` — the only place store and UI meet: view derivation, mode tabs, two-tap reset, date input, unload/online flush wiring, boot
 - `apps-script/`
   - `Code.gs` — version-controlled copy of the Google Apps Script backend; deploy by manually copying into the Apps Script editor
-- `test/` — Node's built-in `node:test`, plain ES-module imports (84 tests)
+- `test/` — Node's built-in `node:test`, plain ES-module imports (97 tests)
   - `helpers/load.js` — vm harness kept ONLY for Code.gs (not a module) and for vm-loading `v1/js/*` in parity tests
   - `calc.test.js`, `api.test.js`, `store.test.js`, `codegs.test.js`
 
@@ -45,6 +45,7 @@ This is **v2**, a from-scratch rebuild (July 2026) governed by MASTERPLAN.md and
 - Saved chips are pure CSS off one shared signal: `html[data-status="synced"] .field.has-value .saved-chip`.
 - Mode visibility is pure CSS off `<html data-mode="twopm"|"eon">` (`.hide-in-eon` / `.hide-in-twopm`). 2 PM and EON have **separate count state** (`counts.js` is instantiated once per mode); both stay hydrated so switching modes is one attribute flip. EON auto-selects on load when the date already has 2 PM data; manual taps always win until the next load. Reset always returns to 2 PM.
 - **Quick bible toggle** (`#bibleQuick`, owned by `ui/bible.js`): a second regular/peach pill row directly below the Active Date, shown **only while the active date is in peach season** (`autoBibleFor(date) === 'peach'`), both modes. Same state as the Bible-card pills (`record.bible`); the Bible card stays the year-round home of the toggle.
+- **Rounding pill rows** (v2·10): forecast rounding on the Bible card (owned by `ui/bible.js`), batch rounding on the Day's Work card (owned by `ui/dayswork.js`, whose `init` now takes ctx). Round up / Round down + an `auto` tag when unstamped; the active pill shows the RESOLVED direction from `plan.rounding` (batch pills show neither while the plan isn't ready and nothing is stamped). Unlike the bible pills, the tap guard is on the **raw stamped value**, not the resolved one — tapping the value auto currently resolves to *pins* it against live inputs. Display-only, no hydrate.
 
 ## The data layer
 
@@ -52,6 +53,8 @@ Record shape (one per date, all raw input strings):
 
 ```
 { bible: null|'regular'|'peach',            // null = follow the month default
+  forecastRound: null|'up'|'down',          // null = auto (slow-day rule)
+  batchRound: null|'up'|'down',             // null = auto (slow-day + remainder rule)
   twopm: { counts: {indi|small|large|sic|boil: {trays, singles}},
            todayForecast, currentSales, tomorrowForecast },
   actualMake: {indi, small, large, sic, boil},
@@ -85,17 +88,18 @@ Both tables were verified against the physical binder (July 2026). `bibleLookup`
 ## The math (`computePlan` in js/calc.js — pure, unit-tested)
 
 1. **Sales Left** = Today's Forecast − Current Sales.
-2. **Use Tonight** = lookup(Sales Left) on the active bible. If Sales Left ≤ 0 (closed day or forecast already hit), use is zero for every size — never rounds up to the first row.
+2. **Use Tonight** = lookup(Sales Left) on the active bible, in the night's resolved rounding direction. If Sales Left ≤ 0 (closed day or forecast already hit), use is zero for every size — never rounds up to the first row.
 3. **Left** = Count − Use per size (blank pizza counts read as 0). Sicilian's Left clamps at 0.
-4. **Need Tomorrow** = lookup(Tomorrow's Forecast).
+4. **Need Tomorrow** = lookup(Tomorrow's Forecast), same rounding direction.
 5. **Make** = Need − Left, floored at 0. Sicilian floors at 2 unless 10+ on hand.
 6. **Trays** = ceil(Make ÷ per-tray) per size.
 7. **Boil**: whole trays only (see above); skipped entirely on a closed tomorrow.
-8. **Total Trays** = all five tray counts. **Batches** = ceil(Total ÷ 11) (0 when nothing to make).
-9. **Extras** = Batches × 11 − Total: 1–4 → all Large; 5+ → 1 Small, rest Large; never Indi/Sicilian. Extras are **display-level only** (`finalTrays`, the chips and trays column) — the saved makes stay the raw calculated balls.
+8. **Total Trays** = all five tray counts. **Batches** = ceil(Total ÷ 11) when rounding up (0 when nothing to make); `max(1, floor(Total ÷ 11))` when rounding down — rounding down never erases the only batch.
+9. **Extras** = Batches × 11 − Total when positive, split lean-large 60/40: `LG = ceil(0.6·E)`, `SM = rest` (Large always strictly ahead; 10 → 6 LG + 4 SM); never Indi/Sicilian. When batches round **down**, the overage is a **Cut** trimmed from the tray display with the same split (clamped ≥ 0, LG/SM only; whatever neither can absorb stays untrimmed). Both are **display-level only** (`finalTrays`, the chips and trays column, `extraNote`/`cutNote`) — the saved makes stay the raw calculated balls.
 
 Cross-cutting rules:
 
+- **Slow-day rounding** (v2·10, `plan.rounding`): the shared gate is both money forecasts entered and **strictly under $12,000** (`slowDay`; exactly $12k fails). On the gate, the bible lookups default to rounding **down** — per lookup, the tier below is used only when the drop is **≤ $300** (`ROUND_DOWN_MAX_GAP`), else that lookup rounds up; the cap holds even when "down" is stamped manually. Batches default to rounding **down** when the gate passes AND the total is ≤ 5 trays past a whole batch (`BATCH_DOWN_MAX_OVER`, remainder 1–5). Manual pills (Bible card = forecast, Day's Work card = batches) stamp `record.forecastRound`/`record.batchRound` and win until Reset; the EON outlook's need lookup follows the same resolved forecast direction (gate always reads the 2 PM forecasts, never the EON-typed one).
 - **Closed tomorrow**: an explicit `0` in Tomorrow's Forecast means **zero need for every size including boil** — no makes, no Sicilian minimum, no boil top-up, batches 0. (Tonight's use and set-out still compute.) A **blank** tomorrow forecast means the plan is simply not ready.
 - **Ready gate**: the plan (`ready`, batches, makes, finalTrays) requires all three money fields entered. Counts alone still save; makes/finals just don't ride along until the plan is ready.
 - **Set-out**: negative Left for Indi/Small/Large → "set out ceil(−Left ÷ per-tray) trays" in one alert card. Never Sicilian (its clamp), never Boil.
@@ -107,7 +111,7 @@ Cross-cutting rules:
 
 `SCRIPT_URL` points to a Google Apps Script web app. The spreadsheet has **seven tabs**; `SHEETS` in `Code.gs` is the single source of truth for names + headers:
 
-- **Dough Counts**: `Date | Today's Forecast | Current Sales | Sales Left | Tomorrow's Forecast | Indi Count | Small Count | Large Count | Sic Count | Boil Count | Batches | Bible` (Bible column appended in v2: `regular`/`peach`, blank from old frontends)
+- **Dough Counts**: `Date | Today's Forecast | Current Sales | Sales Left | Tomorrow's Forecast | Indi Count | Small Count | Large Count | Sic Count | Boil Count | Batches | Bible | Forecast Rounding | Batch Rounding` (Bible appended in v2 — `regular`/`peach`; the rounding pair in v2·10 — **raw** `up`/`down`, blank = auto, deliberately NOT the resolved policy so auto stays live after a reload; all blank from old frontends)
 - **Temperatures**: `Date | Water 1 | Dough 1 | … | Water 10 | Dough 10`
 - **Dough Bible** and **Peach Bible** (v2): `Threshold | Indi | Small | Large | Sicilian` — reference only; the JS owns the calculation source of truth
 - **2pm Make Amount**: `Date | Indi | Small | Large | Sicilian | Boil` — raw calculated balls-to-make, clamped ≥ 0 (extras never save; a real extras make lands via the Actual Make correction). Written alongside every dough save when the plan is ready.
@@ -116,23 +120,23 @@ Cross-cutting rules:
 
 Wire format (all POSTs `Content-Type: text/plain` to dodge the CORS preflight; opaque responses count as landed; one no-cors retry on network throw):
 
-- `type:'dough'` — v1 fields + `bible`; `makes`/`finals` ride along when the plan is ready. Blank boil count travels as `''` (empty cell, not 0).
+- `type:'dough'` — v1 fields + `bible` (resolved id) + `forecastRound`/`batchRound` (raw, `''` = auto); `makes`/`finals` ride along when the plan is ready. Blank boil count travels as `''` (empty cell, not 0). `batches` carries the rounded count.
 - `type:'make'` — `{date, makes}` from `effectiveMake`; backend requires an existing Dough Counts row and recomputes finals from that row's counts.
 - `type:'temps'` — `{date, temps: [{water, dough}…]}`, positional, trailing blanks trimmed.
 - `type:'eon'` — sales + per-size counts; blank counts travel as `''` ("not counted" ≠ counted zero). The response echoes `tomorrowForecast` (v2 reads the local record instead — echo kept for `/v1/` compat).
 - Backend rejections: missing date, empty save, negative values (`salesLeft` exempt). Each tab keeps one row per date; saves upsert.
 - **GET** `?date=M/D/YYYY` → `{status:'found', data}` (merged dough+temps+eon row) or `{status:'not_found'}`; bare GET → array of the last ≤30 Dough Counts rows, newest first (History card, behind an explicit load button).
-- **Deploy flow**: edit `Code.gs` via PR, merge, paste into the Apps Script editor, deploy a new version; run `seedSheets()` when tabs/columns changed (idempotent — creates missing tabs, seeds both bibles, appends the Bible header to a pre-v2 Dough Counts tab).
-- **Compat matrix**: v2 frontend + old deployed backend works (bible field ignored, not persisted); `/v1/` frontend + new backend works (Bible cell left blank).
+- **Deploy flow**: edit `Code.gs` via PR, merge, paste into the Apps Script editor, deploy a new version; run `seedSheets()` when tabs/columns changed (idempotent — creates missing tabs, seeds both bibles, appends any missing Dough Counts headers — Bible, Forecast Rounding, Batch Rounding — to a live tab).
+- **Compat matrix**: v2 frontend + old deployed backend works (bible/rounding fields ignored, not persisted — stamped pills survive only on the phone that set them until the redeploy); `/v1/` frontend + new backend works (Bible + rounding cells left blank).
 
 ## Testing & CI
 
-- `npm test` — 84 tests, zero dependencies, Node's built-in `node:test`, plain ES-module imports.
+- `npm test` — 97 tests, zero dependencies, Node's built-in `node:test`, plain ES-module imports.
 - `npm run lint` — eslint (flat config). `node --check` on all JS before every commit (Code.gs needs a `.js`-extension copy — see the CI workflow).
-- `test/calc.test.js` — lookup/table invariants for both bibles, computePlan fixtures (including real sheet-export nights), every v2 rule (waiver, whole-tray boil, extras splits, closed-tomorrow), outlook rounding, and a **v1-parity suite** that vm-loads `v1/js/` computeDough and asserts identical plans on identical inputs (boil balls aside — whole-tray by design).
-- `test/api.test.js` — payload building/gating, hydration mapping, transport fallbacks (mocked global fetch).
+- `test/calc.test.js` — lookup/table invariants for both bibles, computePlan fixtures (including real sheet-export nights), every v2 rule (waiver, whole-tray boil, extras/cut splits, closed-tomorrow, the full slow-day rounding matrix incl. the July 14 2026 regression night), outlook rounding, and a **v1-parity suite** that vm-loads `v1/js/` computeDough and asserts identical plans on identical inputs (boil balls aside — whole-tray by design; rounding pinned `up` since v1 always rounded up). Pre-v2·10 fixtures that fall on slow days pin `fr`/`br` `'up'` to keep their reference numbers.
+- `test/api.test.js` — payload building/gating (incl. raw-vs-resolved rounding fields), hydration mapping, transport fallbacks (mocked global fetch).
 - `test/store.test.js` — the sync state machine with mocked fetch/storage and `node:test` mock timers: debounce, ordering, ack cache, offline recovery, mid-flight edits, merge matrix, reset semantics, boot retry.
-- `test/codegs.test.js` — Code.gs in a vm context: validation branches, **dual bible sync**, Bible column, seedSheets idempotency.
+- `test/codegs.test.js` — Code.gs in a vm context: validation branches, **dual bible sync**, Bible + rounding columns, seedSheets idempotency (pre-v2 and v2·6-era tabs).
 
 ## Known quirks and gotchas
 
@@ -148,6 +152,9 @@ Wire format (all POSTs `Content-Type: text/plain` to dodge the CORS preflight; o
 - **Zoom is locked** (`user-scalable=no`) — deliberate for floury hands on a kitchen phone.
 - **Theme/density baked in**: `<html data-theme="mise" data-density="compact">` — the CSS keys off these; don't remove them.
 - **Temps, Bible, History, and Make are collapsed by default** — shared `wireCollapse` pattern, "Tap to expand ▾"/"Tap to collapse ▴".
+- **Cut trims are display-level**: on a rounded-down night the saved makes/finals (raw balls) imply slightly more dough than `Batches` produces — the same drift class extras have always had in the other direction. The By Size make column can likewise imply more trays than the trimmed trays column shows.
+- **Degenerate cut**: with a manual round-down and no Small/Large trays to give, the overage stays untrimmed — `finalTrays` can sum past `batches × 11` by design (`cutNote` lists only what was actually trimmed).
+- **Rounding auto stays live across reloads** (unlike Bible): the sheet stores the raw stamp (blank = auto), so an unstamped night keeps re-resolving as inputs change. Explicit-0 forecasts pass the under-$12k gate (0 < 12,000).
 - **`/v1/` is frozen** — never edit it; it exists so the QR keeps working through cutover. Remove in phase 8.
 
 ## Changelog
@@ -165,6 +172,7 @@ Wire format (all POSTs `Content-Type: text/plain` to dodge the CORS preflight; o
 | v2·7 | Cutover: v2 at root, `/v1/` fallback, CLAUDE.md rewritten | — |
 | v2·8 | Polish from real use (in progress): peach-season quick bible toggle below the date. Still pending: remove `/v1/` after ~2 weeks of clean nights | — |
 | v2·9 | Review hardening: mid-load typing no longer clobbered by the arriving GET; make correction gated on a ready plan; HTTP 4xx/5xx retried instead of counted as synced; backend LockService around doPost + full-row temps upsert (stale cells cleared); single view derivation per store event, same-pill bible tap no-op, dead CSS removed, real README | **Yes** |
+| v2·10 | Slow-day rounding (decided with Jacob after the July 14 six-batch night): under-$12k gate auto-rounds the bible lookups down (≤ $300 drop cap) and the batches down (≤ 5 trays past a whole batch, never below 1); manual round up/down pills on the Bible + Day's Work cards (`forecastRound`/`batchRound`, raw-persisted); lean-large 60/40 extras split replaces "1 SM rest LG", with the mirrored cut split on round-down nights; Forecast/Batch Rounding sheet columns | **Yes + `seedSheets()`** |
 
 ## Rules for future prompts
 

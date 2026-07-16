@@ -67,7 +67,7 @@ let lastState = store.getState();
 /* ─── UI modules ─── */
 
 sales.init(ctx);
-dayswork.init();
+dayswork.init(ctx);
 bysize.init();
 outlook.init(ctx);
 bible.init(ctx);
