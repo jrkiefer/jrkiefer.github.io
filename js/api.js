@@ -135,6 +135,12 @@ export function buildPayloads(dateISO, record) {
       boilCount,
       batches: plan.batches ?? 0,
       bible: bibleId,
+      // Raw record values ('' = auto) — deliberately NOT resolved like
+      // `bible` above: the auto rounding depends on live inputs, so
+      // persisting tonight's resolution would freeze it into the record
+      // on the next hydration.
+      forecastRound: record.forecastRound || '',
+      batchRound: record.batchRound || '',
     };
     if (plan.ready) {
       // Raw calculated balls, clamped ≥ 0. Batch extras never save —
@@ -246,6 +252,11 @@ export function recordFromRow(row) {
 
   const bible = row['Bible'];
   r.bible = bible === 'regular' || bible === 'peach' ? bible : null;
+
+  const fr = row['Forecast Rounding'];
+  r.forecastRound = fr === 'up' || fr === 'down' ? fr : null;
+  const br = row['Batch Rounding'];
+  r.batchRound = br === 'up' || br === 'down' ? br : null;
 
   r.twopm.todayForecast = moneyCell(row["Today's Forecast"]);
   r.twopm.currentSales = moneyCell(row['Current Sales']);

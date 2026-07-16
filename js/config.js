@@ -20,6 +20,13 @@ export const SIC_MIN_WAIVER = 10; // 10+ Sicilians on hand → no minimum
 export const PEACH_MONTHS = [7, 8]; // Peach bible auto-default July 1 – Aug 31
 export const MAX_BATCH_TEMPS = 10;
 
+// Slow-day rounding (v2·10): with both forecasts strictly under $12,000 the
+// bible lookups and the batch count default to rounding down.
+export const SLOW_DAY_UNDER = 12000;
+export const ROUND_DOWN_MAX_GAP = 300; // never round a lookup down more than $300
+export const BATCH_DOWN_MAX_OVER = 5; // ≤ 5 trays past a whole batch rounds down
+export const EXTRA_LG_RATIO = 0.6; // lean-large share of the extras/cut split
+
 // The Dough Bibles. Row format: [threshold, indi, small, large, sic].
 // Both tables verified against the physical binder (July 2026).
 // BIBLE_DATA / PEACH_BIBLE_DATA in apps-script/Code.gs mirror these —

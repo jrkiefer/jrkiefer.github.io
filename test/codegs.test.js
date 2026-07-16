@@ -43,8 +43,10 @@ test('both bible tables mirror js/config.js row for row', () => {
 });
 
 test('SHEETS headers match the row widths the handlers write', () => {
-  assert.equal(g.SHEETS.dough.headers.length, 12); // v2: + Bible column
+  assert.equal(g.SHEETS.dough.headers.length, 14); // v2: + Bible, v2·10: + rounding pair
   assert.equal(g.SHEETS.dough.headers[11], 'Bible');
+  assert.equal(g.SHEETS.dough.headers[12], 'Forecast Rounding');
+  assert.equal(g.SHEETS.dough.headers[13], 'Batch Rounding');
   assert.equal(g.SHEETS.temps.headers.length, 21);
   assert.equal(g.SHEETS.make.headers.length, 6);
   assert.equal(g.SHEETS.final.headers.length, 6);
@@ -52,7 +54,7 @@ test('SHEETS headers match the row widths the handlers write', () => {
   assert.equal(g.SHEETS.peachBible.headers.length, 5);
 });
 
-test('handleDoughPost writes the Bible column (blank for old frontends)', () => {
+test('handleDoughPost writes the Bible + rounding columns (blank for old frontends)', () => {
   const appended = [];
   const fakeSheet = {
     getDataRange() { return { getValues: () => [g.SHEETS.dough.headers] }; },
@@ -66,62 +68,74 @@ test('handleDoughPost writes the Bible column (blank for old frontends)', () => 
     SpreadsheetApp: { getActiveSpreadsheet: () => ({ getSheetByName: () => fakeSheet }) }
   });
   const { handleDoughPost } = getRefs(ctx2, ['handleDoughPost']);
-  handleDoughPost({ date: '4/1/2026', todayForecast: 9000, bible: 'peach' });
+  handleDoughPost({
+    date: '4/1/2026', todayForecast: 9000, bible: 'peach',
+    forecastRound: 'down', batchRound: 'up'
+  });
   handleDoughPost({ date: '4/2/2026', todayForecast: 9000 }); // pre-v2 payload
-  assert.equal(appended[0].length, 12);
+  assert.equal(appended[0].length, 14);
   assert.equal(appended[0][11], 'peach');
+  assert.equal(appended[0][12], 'down');
+  assert.equal(appended[0][13], 'up');
   assert.equal(appended[1][11], '');
+  assert.equal(appended[1][12], '');
+  assert.equal(appended[1][13], '');
 });
 
-test('seedSheets: creates the Peach tab, appends the Bible header, idempotent', () => {
-  function fakeSheet(rows) {
-    return {
-      rows,
-      getDataRange() { return { getValues: () => this.rows.map((r) => r.slice()) }; },
-      getRange(row, col, numRows, numCols) {
-        const self = this;
-        return {
-          getValue: () => (self.rows[row - 1] ? self.rows[row - 1][col - 1] : '') ?? '',
-          setValue(v) {
-            while (self.rows.length < row) self.rows.push([]);
-            self.rows[row - 1][col - 1] = v;
-          },
-          setValues(vals) {
-            for (let i = 0; i < (numRows ?? vals.length); i++) {
-              while (self.rows.length < row + i) self.rows.push([]);
-              for (let j = 0; j < (numCols ?? vals[i].length); j++) {
-                self.rows[row - 1 + i][col - 1 + j] = vals[i][j];
-              }
+function fakeGridSheet(rows) {
+  return {
+    rows,
+    getDataRange() { return { getValues: () => this.rows.map((r) => r.slice()) }; },
+    getRange(row, col, numRows, numCols) {
+      const self = this;
+      return {
+        getValue: () => (self.rows[row - 1] ? self.rows[row - 1][col - 1] : '') ?? '',
+        setValue(v) {
+          while (self.rows.length < row) self.rows.push([]);
+          self.rows[row - 1][col - 1] = v;
+        },
+        setValues(vals) {
+          for (let i = 0; i < (numRows ?? vals.length); i++) {
+            while (self.rows.length < row + i) self.rows.push([]);
+            for (let j = 0; j < (numCols ?? vals[i].length); j++) {
+              self.rows[row - 1 + i][col - 1 + j] = vals[i][j];
             }
           }
-        };
-      },
-      appendRow(r) { this.rows.push(r); },
-      getLastRow() { return this.rows.length; },
-      setFrozenRows() {}
-    };
-  }
-  // a live pre-v2 spreadsheet: 11-column dough tab with data, no Peach tab
-  const byName = {
-    'Dough Counts': fakeSheet([
-      g.SHEETS.dough.headers.slice(0, 11),
-      ['4/1/2026', 9000, 3000, 6000, 10000, 33, 112, 168, 6, 24, 3]
-    ]),
-    Temperatures: fakeSheet([plain(g.SHEETS.temps.headers)]),
-    'Dough Bible': fakeSheet([plain(g.SHEETS.bible.headers), [3750, 11, 52, 44, 2]]),
-    '2pm Make Amount': fakeSheet([plain(g.SHEETS.make.headers)]),
-    'Final Dough Amount at 2pm': fakeSheet([plain(g.SHEETS.final.headers)]),
-    'End of Night Count': fakeSheet([plain(g.SHEETS.eon.headers)])
+        }
+      };
+    },
+    appendRow(r) { this.rows.push(r); },
+    getLastRow() { return this.rows.length; },
+    setFrozenRows() {}
   };
+}
+
+function seedContextFor(byName) {
   const ss = {
     getSheetByName: (n) => byName[n] ?? null,
-    insertSheet: (n) => { byName[n] = fakeSheet([]); return byName[n]; }
+    insertSheet: (n) => { byName[n] = fakeGridSheet([]); return byName[n]; }
   };
-  const ctx2 = loadContext(['apps-script/Code.gs'], {
+  return loadContext(['apps-script/Code.gs'], {
     ContentService: ContentServiceStub,
     Logger: { log() {} },
     SpreadsheetApp: { getActiveSpreadsheet: () => ss }
   });
+}
+
+test('seedSheets: creates the Peach tab, appends the added headers, idempotent', () => {
+  // a live pre-v2 spreadsheet: 11-column dough tab with data, no Peach tab
+  const byName = {
+    'Dough Counts': fakeGridSheet([
+      g.SHEETS.dough.headers.slice(0, 11),
+      ['4/1/2026', 9000, 3000, 6000, 10000, 33, 112, 168, 6, 24, 3]
+    ]),
+    Temperatures: fakeGridSheet([plain(g.SHEETS.temps.headers)]),
+    'Dough Bible': fakeGridSheet([plain(g.SHEETS.bible.headers), [3750, 11, 52, 44, 2]]),
+    '2pm Make Amount': fakeGridSheet([plain(g.SHEETS.make.headers)]),
+    'Final Dough Amount at 2pm': fakeGridSheet([plain(g.SHEETS.final.headers)]),
+    'End of Night Count': fakeGridSheet([plain(g.SHEETS.eon.headers)])
+  };
+  const ctx2 = seedContextFor(byName);
 
   evalIn(ctx2, 'seedSheets()');
   const peach = byName['Peach Bible'];
@@ -129,8 +143,11 @@ test('seedSheets: creates the Peach tab, appends the Bible header, idempotent', 
   assert.deepEqual(plain(peach.rows[0]), plain(g.SHEETS.peachBible.headers));
   assert.equal(peach.rows.length, 31); // headers + 30 rows
   assert.deepEqual(plain(peach.rows[1]), [3000, 20, 56, 51, 2]);
-  assert.equal(byName['Dough Counts'].rows[0][11], 'Bible'); // header appended
+  assert.equal(byName['Dough Counts'].rows[0][11], 'Bible'); // headers appended
+  assert.equal(byName['Dough Counts'].rows[0][12], 'Forecast Rounding');
+  assert.equal(byName['Dough Counts'].rows[0][13], 'Batch Rounding');
   assert.equal(byName['Dough Counts'].rows[1][11], undefined); // data untouched
+  assert.equal(byName['Dough Counts'].rows[1][12], undefined);
 
   // run again — nothing changes
   const before = JSON.stringify(plain({
@@ -141,6 +158,32 @@ test('seedSheets: creates the Peach tab, appends the Bible header, idempotent', 
     dough: byName['Dough Counts'].rows, peach: peach.rows
   }));
   assert.equal(after, before);
+});
+
+test('seedSheets: a v2·6-era 12-column tab gains only the rounding headers', () => {
+  // the current production state: Bible column live, rounding columns not
+  const byName = {
+    'Dough Counts': fakeGridSheet([
+      g.SHEETS.dough.headers.slice(0, 12),
+      ['4/1/2026', 9000, 3000, 6000, 10000, 33, 112, 168, 6, 24, 3, 'peach']
+    ]),
+    Temperatures: fakeGridSheet([plain(g.SHEETS.temps.headers)]),
+    'Dough Bible': fakeGridSheet([plain(g.SHEETS.bible.headers), [3750, 11, 52, 44, 2]]),
+    'Peach Bible': fakeGridSheet([plain(g.SHEETS.peachBible.headers), [3000, 20, 56, 51, 2]]),
+    '2pm Make Amount': fakeGridSheet([plain(g.SHEETS.make.headers)]),
+    'Final Dough Amount at 2pm': fakeGridSheet([plain(g.SHEETS.final.headers)]),
+    'End of Night Count': fakeGridSheet([plain(g.SHEETS.eon.headers)])
+  };
+  const ctx2 = seedContextFor(byName);
+
+  evalIn(ctx2, 'seedSheets()');
+  const dough = byName['Dough Counts'];
+  assert.equal(dough.rows[0][11], 'Bible'); // untouched
+  assert.equal(dough.rows[0][12], 'Forecast Rounding');
+  assert.equal(dough.rows[0][13], 'Batch Rounding');
+  assert.equal(dough.rows[1][11], 'peach'); // data untouched
+  assert.equal(dough.rows[1][12], undefined);
+  assert.equal(dough.rows[1][13], undefined);
 });
 
 test('handleDoughPost rejects missing date and empty saves', () => {

@@ -1,11 +1,14 @@
 // js/ui/dayswork.js — Step 03: the tray chips (final trays including batch
-// extras), the hero batch count, and the set-out alert card.
+// extras/cuts), the hero batch count with its rounding pills, and the
+// set-out alert card.
 
 import { ALL, TRAYS_PER_BATCH } from '../config.js';
 import { fmt } from '../calc.js';
 import { $, setText } from './fields.js';
 
-export function init() {
+let stampedRound = null; // RAW record.batchRound from the last update(view)
+
+export function init(ctx) {
   const wrap = $('trayChips');
   for (const s of ALL) {
     const chip = document.createElement('span');
@@ -14,6 +17,14 @@ export function init() {
     chip.style.setProperty('--c', `var(--${s.id})`);
     chip.innerHTML = `<span class="dot"></span><span class="monocaps">${s.chip}</span><span class="chip-val" id="chip-${s.id}-val">—</span>`;
     wrap.appendChild(chip);
+  }
+  for (const id of ['up', 'down']) {
+    // Guard on the RAW stamp (not the resolved direction): tapping the
+    // value the auto rule currently resolves to PINS it against live inputs.
+    $(`batchRoundPill-${id}`).addEventListener('click', () => {
+      if (stampedRound === id) return;
+      ctx.patch((r) => { r.batchRound = id; });
+    });
   }
 }
 
@@ -38,13 +49,21 @@ export function update(view) {
       ? 'closed tomorrow — nothing to make'
       : `${p.batches} ${p.batches === 1 ? 'batch' : 'batches'} to make`);
     const totalPrep = p.batches * TRAYS_PER_BATCH;
-    setText($('heroNote'),
-      `${totalPrep} trays${p.extra > 0 ? ` (${p.totalTrays} planned · extras: ${p.extraNote})` : ''}`);
+    const detail = p.extra > 0 ? ` (${p.totalTrays} planned · extras: ${p.extraNote})`
+      : p.cut > 0 ? ` (${p.totalTrays} planned${p.cutNote ? ` · cut: ${p.cutNote}` : ''})`
+        : '';
+    setText($('heroNote'), `${totalPrep} trays${detail}`);
     setText($('heroBoilWarn'), p.boilMake == null ? 'boil not counted — left out of batch math' : '');
   } else {
     wrap.classList.add('hidden');
     empty.classList.remove('hidden');
   }
+
+  stampedRound = view.record.batchRound ?? null;
+  for (const id of ['up', 'down']) {
+    $(`batchRoundPill-${id}`).classList.toggle('active', p.rounding.batches === id);
+  }
+  $('batchRoundAutoTag').classList.toggle('hidden', view.record.batchRound != null);
 
   const alert = $('setoutAlert');
   if (p.setout.length) {
