@@ -637,23 +637,34 @@ function bibleLabelFor(dateCell, bibleCell) {
   return m === 7 || m === 8 ? "peach" : "regular";
 }
 
-// Least squares use = a + b·sales; slope clamped ≥ 0 so more sales never
-// means less dough. Null under 3 observations — a blank column beats a
-// made-up one.
+function medianOf(arr) {
+  var s = arr.slice().sort(function (x, y) { return x - y; });
+  var mid = Math.floor(s.length / 2);
+  return s.length % 2 ? s[mid] : (s[mid - 1] + s[mid]) / 2;
+}
+
+// Robust Theil–Sen line, use = a + b·sales: the median slope across every
+// pair of nights, so one miscounted night barely moves the chart (decided
+// with Jacob over plain least squares). Slope clamped ≥ 0 so more sales
+// never means less dough. Null under 3 observations — a blank column
+// beats a made-up one.
 function fitLine(points) {
   var n = points.length;
   if (n < 3) return null;
-  var sx = 0, sy = 0, sxx = 0, sxy = 0;
+  var slopes = [];
   for (var i = 0; i < n; i++) {
-    sx += points[i][0]; sy += points[i][1];
-    sxx += points[i][0] * points[i][0];
-    sxy += points[i][0] * points[i][1];
+    for (var j = i + 1; j < n; j++) {
+      if (points[j][0] !== points[i][0]) {
+        slopes.push((points[j][1] - points[i][1]) / (points[j][0] - points[i][0]));
+      }
+    }
   }
-  var den = n * sxx - sx * sx;
-  if (den === 0) return null;
-  var b = (n * sxy - sx * sy) / den;
+  if (!slopes.length) return null;
+  var b = medianOf(slopes);
   if (b < 0) b = 0;
-  return { a: (sy - b * sx) / n, b: b };
+  var residuals = [];
+  for (i = 0; i < n; i++) residuals.push(points[i][1] - b * points[i][0]);
+  return { a: medianOf(residuals), b: b };
 }
 
 // Sales tiers $2,000 → $22,000 every $300, endpoints exact (the final
@@ -665,21 +676,30 @@ function newBibleTiers() {
   return tiers;
 }
 
+// Everything red-flagged by rebuildDoughUse uses this fill: suspect values
+// on Dough Use, and the exact source cells to fill in on EON / 2pm Make.
+var FLAG_RED = "#f4c7c3";
+
 function rebuildDoughUse() {
   var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var eonSheet = getSheet("eon");
+  var makeSheet = getSheet("make");
   var doughRows = getSheet("dough").getDataRange().getValues();
-  var eonRows = getSheet("eon").getDataRange().getValues();
-  var makeRows = getSheet("make").getDataRange().getValues();
+  var eonRows = eonSheet.getDataRange().getValues();
+  var makeRows = makeSheet.getDataRange().getValues();
   var finalRows = getSheet("final").getDataRange().getValues();
 
-  // Index the source tabs by day. EON rows count only when at least one
-  // count cell is filled (early rows exist with nothing in them).
+  // Index the source tabs by day. eonByDay holds rows with at least one
+  // count; eonSheetRow / makeSheetRow remember where any dated row lives
+  // so the red-flag pass can point at the exact cells to fill in.
   var eonByDay = {};
+  var eonSheetRow = {};
   var eonDays = [];
   var i, c, day;
   for (i = 1; i < eonRows.length; i++) {
     day = dateDayKey(eonRows[i][0]);
     if (day == null) continue;
+    eonSheetRow[day] = i + 1;
     var counts = [];
     var any = false;
     for (c = 0; c < 5; c++) {
@@ -693,12 +713,15 @@ function rebuildDoughUse() {
   }
   eonDays.sort(function (x, y) { return x - y; });
 
-  // A make row must exist for the date or the Final row is count-only
-  // (pre-make-era artifact) and PM use would be meaningless.
+  // A make row is what separates a trustworthy Final row from the early
+  // count-only artifact — PM still computes without one, but it's flagged
+  // and the bibles ignore it until the make data is entered.
   var makeByDay = {};
+  var makeSheetRow = {};
   for (i = 1; i < makeRows.length; i++) {
     day = dateDayKey(makeRows[i][0]);
     if (day == null) continue;
+    makeSheetRow[day] = i + 1;
     for (c = 1; c <= 5; c++) {
       if (numCell(makeRows[i][c]) != null) { makeByDay[day] = true; break; }
     }
@@ -719,11 +742,13 @@ function rebuildDoughUse() {
   }
   entries.sort(function (x, y) { return x.day - y.day; });
 
-  // pts[label][sizeIndex] — fit observations (pizza sizes only). Cells
-  // stay raw in the tab; only sales-paired, non-negative values feed fits.
+  // pts[label][sizeIndex] — fit observations (pizza sizes only). The tab
+  // shows every computable value raw; the bibles only learn from
+  // sales-paired, non-negative values on nights with a real make row.
   var pts = { regular: [[], [], [], []], peach: [[], [], [], []] };
   var used = { regular: { am: 0, pm: 0 }, peach: { am: 0, pm: 0 } };
   var useRows = [];
+  var useBgs = [];
 
   for (i = 0; i < entries.length; i++) {
     day = entries[i].day;
@@ -750,21 +775,24 @@ function rebuildDoughUse() {
       }
     }
 
-    // PM: needs this date's EON counts, a real make row, and a Final row.
+    // PM computes whenever Final and EON counts exist ("all the math,
+    // with or without the rest"); pmTrusted marks whether a make row
+    // backs the Final so the fits know what to believe.
     var pm = [null, null, null, null, null];
     var pmSales = null;
+    var pmTrusted = !!makeByDay[day];
     var tonight = eonByDay[day];
-    if (tonight && makeByDay[day] && finalByDay[day]) {
+    if (tonight && finalByDay[day]) {
       for (c = 0; c < 5; c++) {
         if (finalByDay[day][c] != null && tonight.counts[c] != null) {
           pm[c] = finalByDay[day][c] - tonight.counts[c];
         }
       }
-      // EON sales of 0 means "never entered" (v1 artifact), and sales
-      // below the 2 PM number is an entry error — no pairing either way.
-      if (tonight.sales != null && tonight.sales > 0 && cs != null && tonight.sales >= cs) {
-        pmSales = tonight.sales - cs;
-      }
+    }
+    // EON sales of 0 means "never entered" (v1 artifact), and sales below
+    // the 2 PM number is an entry error — no pairing either way.
+    if (tonight && tonight.sales != null && tonight.sales > 0 && cs != null && tonight.sales >= cs) {
+      pmSales = tonight.sales - cs;
     }
 
     var amUsed = false, pmUsed = false;
@@ -773,7 +801,7 @@ function rebuildDoughUse() {
         pts[label][c].push([cs, am[c]]);
         amUsed = true;
       }
-      if (pmSales != null && pmSales > 0 && pm[c] != null && pm[c] >= 0) {
+      if (pmTrusted && pmSales != null && pmSales > 0 && pm[c] != null && pm[c] >= 0) {
         pts[label][c].push([pmSales, pm[c]]);
         pmUsed = true;
       }
@@ -786,17 +814,82 @@ function rebuildDoughUse() {
     out.push(pmSales != null ? pmSales : "");
     for (c = 0; c < 5; c++) out.push(pm[c] != null ? pm[c] : "");
     useRows.push(out);
+
+    // Red = look at this: negative values (recounts/typos), and PM values
+    // whose Final row has no make behind it.
+    var bg = [null, null, null, null];
+    for (c = 0; c < 5; c++) bg.push(am[c] != null && am[c] < 0 ? FLAG_RED : null);
+    bg.push(null);
+    for (c = 0; c < 5; c++) {
+      bg.push(pm[c] != null && (pm[c] < 0 || !pmTrusted) ? FLAG_RED : null);
+    }
+    useBgs.push(bg);
   }
 
-  writeDerivedTab(ss, "doughUse", useRows, null);
+  var duSheet = writeDerivedTab(ss, "doughUse", useRows, null);
+  if (useRows.length) {
+    duSheet.getRange(2, 1, useRows.length, SHEETS.doughUse.headers.length).setBackgrounds(useBgs);
+  }
+  flagMissingSources(eonSheet, makeSheet, entries, eonByDay, eonSheetRow, makeByDay, makeSheetRow, eonRows.length, makeRows.length);
   writeNewBible(ss, "newBible", pts.regular, used.regular);
   writeNewBible(ss, "newPeachBible", pts.peach, used.peach);
 
-  var summary = "Dough Use: " + useRows.length + " dates · new bibles from " +
+  var summary = "Dough Use: " + useRows.length + " dates · bibles from " +
     (used.regular.am + used.regular.pm) + " regular + " +
-    (used.peach.am + used.peach.pm) + " peach dayparts";
+    (used.peach.am + used.peach.pm) + " peach dayparts · red cells = data to fill in, then rebuild";
   if (ss.toast) ss.toast(summary, "🍕 Dough Tracker", 8);
   Logger.log(summary);
+}
+
+// Paint the exact source cells that block a night's math, so backfilling
+// is a hunt for red: EON sales/count cells (stub rows appended for dates
+// with no EON row at all) and 2pm Make rows missing behind a Final row.
+// Backgrounds in these tabs' data rows are reset on every rebuild, so a
+// fixed cell loses its flag on the next run.
+function flagMissingSources(eonSheet, makeSheet, entries, eonByDay, eonSheetRow, makeByDay, makeSheetRow, eonRowCount, makeRowCount) {
+  var i, day, r, c;
+
+  // Stubs first so the background matrices cover them.
+  for (i = 0; i < entries.length; i++) {
+    day = entries[i].day;
+    var label = formatDate(entries[i].row[0]);
+    if (eonSheetRow[day] == null) {
+      eonSheet.appendRow([label]);
+      eonRowCount++;
+      eonSheetRow[day] = eonRowCount;
+    }
+    if (eonByDay[day] && !makeByDay[day] && makeSheetRow[day] == null) {
+      makeSheet.appendRow([label]);
+      makeRowCount++;
+      makeSheetRow[day] = makeRowCount;
+    }
+  }
+
+  var eonBgs = [];
+  for (r = 0; r < eonRowCount - 1; r++) eonBgs.push([null, null, null, null, null, null, null]);
+  var makeBgs = [];
+  for (r = 0; r < makeRowCount - 1; r++) makeBgs.push([null, null, null, null, null, null]);
+
+  for (i = 0; i < entries.length; i++) {
+    day = entries[i].day;
+    var eonRow = eonSheetRow[day] - 2; // background-matrix index
+    var tonight = eonByDay[day];
+    if (!tonight) {
+      for (c = 1; c <= 6; c++) eonBgs[eonRow][c] = FLAG_RED; // sales + all five counts
+    } else {
+      if (tonight.sales == null || tonight.sales <= 0) eonBgs[eonRow][1] = FLAG_RED;
+      for (c = 0; c < 5; c++) {
+        if (tonight.counts[c] == null) eonBgs[eonRow][2 + c] = FLAG_RED;
+      }
+    }
+    if (tonight && !makeByDay[day] && makeSheetRow[day] != null) {
+      var makeRow = makeSheetRow[day] - 2;
+      for (c = 1; c <= 5; c++) makeBgs[makeRow][c] = FLAG_RED;
+    }
+  }
+
+  if (eonBgs.length) eonSheet.getRange(2, 1, eonBgs.length, 7).setBackgrounds(eonBgs);
+  if (makeBgs.length) makeSheet.getRange(2, 1, makeBgs.length, 6).setBackgrounds(makeBgs);
 }
 
 // Full rewrite of a derived tab: clear, headers, rows. Creates the tab if

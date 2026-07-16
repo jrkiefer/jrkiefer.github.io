@@ -115,10 +115,31 @@ function fakeGridSheet(rows) {
   };
 }
 
+// getRange(...).setBackgrounds support for the highlight assertions —
+// records into sheet.bg keyed "row,col" (1-based), null entries deleted.
+function withBackgrounds(sheet) {
+  sheet.bg = {};
+  const orig = sheet.getRange.bind(sheet);
+  sheet.getRange = (row, col, numRows, numCols) => {
+    const range = orig(row, col, numRows, numCols);
+    range.setBackgrounds = (vals) => {
+      for (let i = 0; i < (numRows ?? vals.length); i++) {
+        for (let j = 0; j < (numCols ?? vals[i].length); j++) {
+          const key = `${row + i},${col + j}`;
+          if (vals[i][j] == null) delete sheet.bg[key];
+          else sheet.bg[key] = vals[i][j];
+        }
+      }
+    };
+    return range;
+  };
+  return sheet;
+}
+
 function seedContextFor(byName) {
   const ss = {
     getSheetByName: (n) => byName[n] ?? null,
-    insertSheet: (n) => { byName[n] = fakeGridSheet([]); return byName[n]; }
+    insertSheet: (n) => { byName[n] = withBackgrounds(fakeGridSheet([])); return byName[n]; }
   };
   return loadContext(['apps-script/Code.gs'], {
     ContentService: ContentServiceStub,
@@ -206,19 +227,19 @@ function doughUseSpreadsheet() {
       ['6/5/2026', 9000, 2500, 6500, 9000, 10, 50, 40, 3, 12, 3, 'peach', '', ''],
       ['7/3/2026', 9000, 4000, 5000, 9000, 12, 55, 42, 2, 15, 3, '', '', '']
     ]),
-    'End of Night Count': fakeGridSheet([
+    'End of Night Count': withBackgrounds(fakeGridSheet([
       plain(g.SHEETS.eon.headers),
       ['6/1/2026', 12000, 25, 90, 70, 4, 30],
       ['6/2/2026', 0, 40, 70, 50, 1, 20], // sales never entered (v1 artifact)
       ['6/3/2026', 13000, 30, 80, 60, 3, 24],
       ['6/9/2026', '', '', '', '', '', ''] // row exists, nothing counted
-    ]),
-    '2pm Make Amount': fakeGridSheet([
+    ])),
+    '2pm Make Amount': withBackgrounds(fakeGridSheet([
       plain(g.SHEETS.make.headers),
       ['6/1/2026', 10, 50, 40, 2, 12],
       ['6/2/2026', 5, 20, 15, 2, 6]
-      // no 6/3 make row → its count-only Final row must not produce PM use
-    ]),
+      // no 6/3 make row → its count-only Final must be flagged, not trusted
+    ])),
     'Final Dough Amount at 2pm': fakeGridSheet([
       plain(g.SHEETS.final.headers),
       ['6/1/2026', 30, 150, 120, 7, 36],
@@ -245,9 +266,10 @@ test('rebuildDoughUse: AM/PM derivation with every gate', () => {
   // PM computed but EON sales 0 → no sales pairing.
   assert.deepEqual(plain(rows[2]), ['6/2/2026', 'regular', '6/1/2026', 3000,
     -5, 10, 10, 2, '', '', -5, 30, 25, 3, 6]);
-  // 6/3: AM fine; PM blank — Final exists but no make row (count-only artifact).
+  // 6/3: AM fine; PM computes even without a make row ("all the math"),
+  // negative across the board because the Final row is count-only.
   assert.deepEqual(plain(rows[3]), ['6/3/2026', 'regular', '6/2/2026', 2200,
-    25, 10, 5, -1, 2, '', '', '', '', '', '']);
+    25, 10, 5, -1, 2, 10800, -15, -20, -15, -1, -6]);
   // 6/5: stamped peach in June — the label carries; prev reaches back 2 days.
   assert.deepEqual(plain(rows[4]), ['6/5/2026', 'peach', '6/3/2026', 2500,
     20, 30, 20, 0, 12, '', '', '', '', '', '']);
@@ -268,12 +290,13 @@ test('rebuildDoughUse: new bibles fit only sales-paired, non-negative observatio
   assert.equal(nb[68][0], 22000); // exact endpoint, final step $200
   // Regular observations: small/large get 3 points (6/1 PM + 6/2 AM + 6/3 AM);
   // indi loses one to the −5 negative and sic to the −1 → 2 points → blank.
+  // 6/3's PM values never enter the fits — no make row behind the Final.
   assert.equal(nb[1][1], ''); // indi under 3 observations
   assert.equal(nb[1][4], ''); // sic under 3 observations
-  assert.equal(nb[1][2], 6); // small fit at $2,000
-  assert.equal(nb[68][2], 140); // small fit at $22,000
-  assert.equal(nb[1][3], 4); // large fit at $2,000
-  assert.equal(nb[68][3], 119); // large fit at $22,000
+  assert.equal(nb[1][2], 9); // small robust fit at $2,000
+  assert.equal(nb[68][2], 137); // small robust fit at $22,000
+  assert.equal(nb[1][3], 4); // large robust fit at $2,000
+  assert.equal(nb[68][3], 119); // large robust fit at $22,000
   // Peach has a single morning (6/5) → every column blank, grid still full.
   const pb = byName['New Peach Bible'].rows;
   assert.equal(pb.length, 69);
@@ -294,16 +317,52 @@ test('rebuildDoughUse: rerunning is a clean rewrite (idempotent)', () => {
   assert.equal(byName['Dough Use'].rows.length, 6); // rewritten, not appended
 });
 
-test('fitLine: exact line, slope clamp, and not-enough-data guards', () => {
+test('fitLine (robust median): exact line, outlier resistance, clamps, guards', () => {
   const ctx2 = seedContextFor({});
   const fit = (pts) => plain(evalIn(ctx2, `fitLine(${JSON.stringify(pts)})`));
   assert.deepEqual(fit([[1000, 20], [2000, 30], [3000, 40]]), { a: 10, b: 0.01 });
   assert.deepEqual(fit([[1000, 50], [2000, 40], [3000, 30]]), { a: 40, b: 0 }); // never negative slope
+  // One wild night doesn't bend the line — the median slope holds 0.01.
+  assert.deepEqual(fit([[1000, 10], [2000, 20], [3000, 30], [4000, 40], [5000, 500]]), { a: 0, b: 0.01 });
   assert.equal(fit([[1, 1], [2, 2]]), null); // under 3 observations
   assert.equal(fit([[5, 1], [5, 2], [5, 3]]), null); // no sales spread
   const tiers = plain(evalIn(ctx2, 'newBibleTiers()'));
   assert.equal(tiers.length, 68);
   assert.equal(tiers[1] - tiers[0], 300);
+});
+
+test('rebuildDoughUse: red flags land on suspect values and the exact missing source cells', () => {
+  const { byName, ctx: ctx2 } = doughUseSpreadsheet();
+  evalIn(ctx2, 'rebuildDoughUse()');
+  const RED = '#f4c7c3';
+  const du = byName['Dough Use'];
+  // Dough Use: negative AM indi on 6/2 (row 3, col E=5) and the whole
+  // untrusted 6/3 PM block (row 4, cols K–O = 11..15); clean cells stay bare.
+  assert.equal(du.bg['3,5'], RED);
+  for (const col of [11, 12, 13, 14, 15]) assert.equal(du.bg[`4,${col}`], RED);
+  assert.equal(du.bg['2,10'], undefined); // 6/1 PM sales — fine
+  assert.equal(du.bg['3,4'], undefined); // 6/2 AM sales — fine
+  // EON tab: 6/2's zero sales cell flags (row 3, col B); 6/5 + 7/3 get stub
+  // rows with sales + all five counts red; 6/1 stays clean.
+  const eon = byName['End of Night Count'];
+  assert.equal(eon.bg['3,2'], RED);
+  assert.equal(plain(eon.rows[5][0]), '6/5/2026'); // stub appended
+  assert.equal(plain(eon.rows[6][0]), '7/3/2026');
+  for (const col of [2, 3, 4, 5, 6, 7]) {
+    assert.equal(eon.bg[`6,${col}`], RED, `6/5 stub col ${col}`);
+    assert.equal(eon.bg[`7,${col}`], RED, `7/3 stub col ${col}`);
+  }
+  assert.equal(eon.bg['2,2'], undefined); // 6/1 sales present
+  // Make tab: 6/3 (EON counts, no make) gets a stub with all five size
+  // cells red; nights without EON counts are not make-flagged yet.
+  const make = byName['2pm Make Amount'];
+  assert.equal(plain(make.rows[3][0]), '6/3/2026');
+  for (const col of [2, 3, 4, 5, 6]) assert.equal(make.bg[`4,${col}`], RED, `make col ${col}`);
+  assert.equal(Object.keys(make.bg).some((k) => k.startsWith('2,')), false); // 6/1 clean
+  // Rerun: stubs are not duplicated, resolved flags would clear (full reset).
+  evalIn(ctx2, 'rebuildDoughUse()');
+  assert.equal(eon.rows.length, 7); // header + 4 original + 2 stubs, unchanged
+  assert.equal(make.rows.length, 4);
 });
 
 test('onOpen registers the rebuild menu', () => {
