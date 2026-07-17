@@ -351,3 +351,147 @@ test('retryUnsynced: boot pass re-sends every unsynced date, in order', async (t
     assert.equal(entry.syncedAt, entry.updatedAt);
   }
 });
+
+/* ---------------- reload: the Load button + foreground refresh ---------------- */
+
+const sheetRow716 = {
+  Date: '7/16/2026',
+  "Today's Forecast": 10000,
+  'Current Sales': 2200,
+  "Tomorrow's Forecast": 10000,
+  'Indi Count': 17,
+  'Small Count': 168,
+  Bible: 'peach',
+};
+
+test('reload pulls fresh sheet data onto an idle phone (the two-phone handoff)', async (t) => {
+  let serverRow = null;
+  const { store } = harness(t, {
+    getImpl: async () => (serverRow ? { status: 'found', data: serverRow } : { status: 'not_found' }),
+  });
+  await store.setDate('2026-07-16');
+  assert.equal(store.getState().status, 'new');
+  serverRow = sheetRow716; // the other phone saves at 1:30…
+  await store.reload(); // …this phone wakes at 2:50
+  const s = store.getState();
+  assert.equal(s.record.twopm.todayForecast, '10');
+  assert.equal(s.record.bible, 'peach');
+  assert.equal(s.status, 'synced');
+});
+
+test('reload (non-force) never clobbers unsynced local edits', async (t) => {
+  let serverRow = null;
+  const { store } = harness(t, {
+    getImpl: async () => (serverRow ? { status: 'found', data: serverRow } : { status: 'not_found' }),
+  });
+  await store.setDate('2026-07-16');
+  store.patch((r) => { r.twopm.currentSales = '9.9'; });
+  serverRow = sheetRow716;
+  await store.reload();
+  const s = store.getState();
+  assert.equal(s.record.twopm.currentSales, '9.9'); // local edit kept
+  assert.equal(s.record.twopm.todayForecast, ''); // server row not applied
+  assert.equal(s.status, 'local');
+});
+
+test('reload (force) applies the sheet copy over local edits, carrying the sheet-less fields', async (t) => {
+  const { store, storage } = harness(t, {
+    getImpl: async () => ({ status: 'found', data: sheetRow716 }),
+  });
+  await store.setDate('2026-07-16');
+  store.patch((r) => {
+    r.twopm.currentSales = '9.9';
+    r.actualMake.small = '104';
+    r.eon.outlookForecast = '11';
+    r.eon.outlookManual = true;
+  });
+  await store.reload({ force: true });
+  const s = store.getState();
+  assert.equal(s.record.twopm.currentSales, '2.2'); // the sheet's number wins
+  assert.equal(s.record.actualMake.small, '104'); // never on the sheet — kept
+  assert.equal(s.record.eon.outlookForecast, '11');
+  assert.equal(s.record.eon.outlookManual, true);
+  assert.equal(s.status, 'synced');
+  const entry = JSON.parse(storage.getItem('dough:2026-07-16'));
+  assert.equal(entry.syncedAt, entry.updatedAt); // local-wins disarmed
+});
+
+test('reload discards the arriving row when someone typed mid-fetch', async (t) => {
+  const pending = [];
+  const { store } = harness(t, {
+    getImpl: () => new Promise((res) => { pending.push(res); }),
+  });
+  const boot = store.setDate('2026-07-16');
+  await new Promise((r) => setImmediate(r));
+  pending.shift()({ status: 'not_found' });
+  await boot;
+
+  const p = store.reload({ force: true });
+  store.patch((r) => { r.eon.sales = '7'; });
+  await new Promise((r) => setImmediate(r));
+  pending.shift()({ status: 'found', data: sheetRow716 });
+  await p;
+  const s = store.getState();
+  assert.equal(s.record.eon.sales, '7'); // the keystroke won
+  assert.equal(s.record.twopm.todayForecast, ''); // row discarded
+  assert.equal(s.status, 'local');
+});
+
+test('a setDate mid-reload supersedes the stale fetch', async (t) => {
+  const pending = [];
+  const { store } = harness(t, {
+    getImpl: () => new Promise((res) => { pending.push(res); }),
+  });
+  const boot = store.setDate('2026-07-16');
+  await new Promise((r) => setImmediate(r));
+  pending.shift()({ status: 'not_found' });
+  await boot;
+
+  const p = store.reload({ force: true }); // its GET hangs…
+  const pd = store.setDate('2026-07-17'); // …while a new date takes over
+  await new Promise((r) => setImmediate(r));
+  pending.shift()({ status: 'found', data: sheetRow716 }); // stale reload GET
+  pending.shift()({ status: 'not_found' }); // the new date's GET
+  await p;
+  await pd;
+  const s = store.getState();
+  assert.equal(s.date, '2026-07-17');
+  assert.equal(s.record.twopm.todayForecast, ''); // stale row never applied
+});
+
+test('reload with nothing on the sheet leaves the phone alone; network failure reads offline', async (t) => {
+  let mode = 'not_found';
+  const { store } = harness(t, {
+    getImpl: async () => {
+      if (mode === 'throw') throw new Error('down');
+      return { status: 'not_found' };
+    },
+  });
+  await store.setDate('2026-07-16');
+  store.patch((r) => { r.twopm.currentSales = '5'; });
+  await store.reload({ force: true });
+  let s = store.getState();
+  assert.equal(s.record.twopm.currentSales, '5'); // not blanked
+  assert.equal(s.status, 'local'); // status restored after the loading flip
+  mode = 'throw';
+  await store.reload({ force: true });
+  s = store.getState();
+  assert.equal(s.record.twopm.currentSales, '5');
+  assert.equal(s.status, 'offline');
+});
+
+test('force-load after a reset deliberately resurrects the sheet row', async (t) => {
+  const { store } = harness(t, {
+    getImpl: async () => ({ status: 'found', data: sheetRow716 }),
+  });
+  await store.setDate('2026-07-16');
+  assert.equal(store.getState().record.twopm.todayForecast, '10');
+  store.reset();
+  assert.equal(store.getState().status, 'new');
+  await store.reload(); // auto refresh respects the reset…
+  assert.equal(store.getState().record.twopm.todayForecast, '');
+  await store.reload({ force: true }); // …the button is the escape hatch
+  const s = store.getState();
+  assert.equal(s.record.twopm.todayForecast, '10');
+  assert.equal(s.status, 'synced');
+});

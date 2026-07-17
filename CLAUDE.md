@@ -26,14 +26,14 @@ This is **v2**, a from-scratch rebuild (July 2026) governed by MASTERPLAN.md and
   - `config.js` — constants only: `SCRIPT_URL`, `SHEET_URL`, `SIZES`, `BOIL`, `ALL`, `TRAYS_PER_BATCH`, `SIC_MIN`, `SIC_MIN_WAIVER`, `PEACH_MONTHS`, `MAX_BATCH_TEMPS`, `SLOW_DAY_UNDER`, `ROUND_DOWN_MAX_GAP`, `BATCH_DOWN_MAX_OVER`, `EXTRA_LG_RATIO`, `BIBLES` (both tables)
   - `calc.js` — pure math, no DOM/fetch/storage: `parseSales`, `money`, `fmt`, `fmtDate`, `countTotal`, `countBlank`, `blankRecord`/`blankCounts`, `autoBibleFor`, `slowDay`, `resolveForecastRound`, `bibleLookup`, `computePlan`, `effectiveMake`, `computeOutlook`
   - `api.js` — everything that knows the Apps Script wire format: `post` (text/plain + no-cors retry + keepalive), `getByDate`, `getHistory`, `buildPayloads`, `recordFromRow`, date helpers (`todayISO`, `isoToSheetDate`, `mdyToISO`, `sheetDateToLocal`, `toShorthand`)
-  - `store.js` — record state, synchronous localStorage write-through, debounced background sync, status machine; **no DOM access**
+  - `store.js` — record state, synchronous localStorage write-through, debounced background sync, status machine, `reload` re-pull (force/non-force); **no DOM access**
   - `ui/` — one module per card; **UI modules never import api.js or store.js** — they get the record and a `patch` function via ctx (pure calc/config imports are fine)
     - `fields.js` (shared: `$`, `setText`, `bindInput`, `setInputValue`, `markHasValue`, `wireCollapse`)
     - `sales.js` `counts.js` `dayswork.js` `bysize.js` `outlook.js` `bible.js` `temps.js` `history.js` `make.js`
-  - `main.js` — the only place store and UI meet: view derivation, mode tabs, two-tap reset, date input, unload/online flush wiring, boot
+  - `main.js` — the only place store and UI meet: view derivation, mode tabs, two-tap reset, date input + two-tap Load, foreground auto-refresh, unload/online flush wiring, boot
 - `apps-script/`
   - `Code.gs` — version-controlled copy of the Google Apps Script backend; deploy by manually copying into the Apps Script editor
-- `test/` — Node's built-in `node:test`, plain ES-module imports (107 tests)
+- `test/` — Node's built-in `node:test`, plain ES-module imports (114 tests)
   - `helpers/load.js` — vm harness kept ONLY for Code.gs (not a module) and for vm-loading `v1/js/*` in parity tests
   - `calc.test.js`, `api.test.js`, `store.test.js`, `codegs.test.js`
 
@@ -46,6 +46,7 @@ This is **v2**, a from-scratch rebuild (July 2026) governed by MASTERPLAN.md and
 - Mode visibility is pure CSS off `<html data-mode="twopm"|"eon">` (`.hide-in-eon` / `.hide-in-twopm`). 2 PM and EON have **separate count state** (`counts.js` is instantiated once per mode); both stay hydrated so switching modes is one attribute flip. EON auto-selects on load when the date already has 2 PM data; manual taps always win until the next load. Reset always returns to 2 PM.
 - **Quick bible toggle** (`#bibleQuick`, owned by `ui/bible.js`): a second regular/peach pill row directly below the Active Date, shown **only while the active date is in peach season** (`autoBibleFor(date) === 'peach'`), both modes. Same state as the Bible-card pills (`record.bible`); the Bible card stays the year-round home of the toggle.
 - **Rounding pill rows** (v2·10): forecast rounding on the Bible card (owned by `ui/bible.js`), batch rounding on the Day's Work card (owned by `ui/dayswork.js`, whose `init` now takes ctx). Round up / Round down + an `auto` tag when unstamped; the active pill shows the RESOLVED direction from `plan.rounding` (batch pills show neither while the plan isn't ready and nothing is stamped). Unlike the bible pills, the tap guard is on the **raw stamped value**, not the resolved one — tapping the value auto currently resolves to *pins* it against live inputs. Display-only, no hydrate.
+- **Load button** (v2·14, `#loadBtn` in the date card, wired in main.js): two-tap like Reset (armed "Tap again", 2.5 s disarm). Force-pulls the sheet copy of the open date over whatever this phone has — the one deliberate way past local-wins, including after a Reset. The app also **auto-reloads on resurface** (`visibilitychange` → visible and `pageshow`, skipped while `loading` or within 60 s of the last load) — non-force, so another phone's numbers appear on wake but unsynced local edits always survive.
 
 ## The data layer
 
@@ -66,7 +67,8 @@ Record shape (one per date, all raw input strings):
 - `flush` is single-flight with a rerun flag. It builds up to four payloads per record via `api.buildPayloads` and sends them **in order dough → make → temps → eon** (the make correction needs the dough row to exist server-side; it's skipped if dough fails). A per-type serialized-payload ack cache stops unchanged payloads from re-posting. A backend `{status:'error'}` rejection is terminal for that payload version (warned, retried only after the record changes); a network failure sets status `offline` and the payload retries on the next flush/`online` event.
 - Payloads are **gated on the deployed backend's non-empty rules** so a background sync can never trip "Empty save rejected": dough needs a count or forecast > 0; eon needs sales or a count > 0; temps needs a value; make needs an entered actualMake field AND a ready plan (or every actualMake field entered) — otherwise the un-entered sizes would post as zeros and clobber the server's saved makes. HTTP 4xx/5xx responses count as network failures (retried), not as landed saves.
 - Unload safety: `visibilitychange`(hidden) and `pagehide` fire a keepalive fetch flush (fire-and-forget, never marked synced); a boot-time `retryUnsynced()` re-sends any date whose local copy has `syncedAt < updatedAt`. Server upserts make duplicate sends harmless.
-- Changing the date auto-loads (no Load button): local entry with unsynced edits wins wholesale; otherwise the server's merged GET wins, with `actualMake` and the outlook fields carried over from a fully-synced local copy (the sheet never stores them); otherwise blank. Network failure falls back to the local copy with status `offline`.
+- Changing the date auto-loads: local entry with unsynced edits wins wholesale; otherwise the server's merged GET wins, with `actualMake` and the outlook fields carried over from a fully-synced local copy (the sheet never stores them); otherwise blank. Network failure falls back to the local copy with status `offline`.
+- `reload({force})` (v2·14) re-pulls the **open** date without blanking state first. Non-force (the resurface auto-refresh) applies the arriving row only when nothing is unsynced (`updatedAt <= syncedAt`); force (the Load button) applies it wholesale. Both keep the phone-only fields (`actualMake`, outlook forecast/manual) from the in-memory record, bail if a `setDate` (`seq`) or a keystroke (`updatedAt`) lands mid-fetch, treat `not_found` as a no-op — never blank a phone because the sheet is empty — and mark a network failure `offline`. A successful apply stamps `updatedAt = syncedAt = now()` and notifies `load` (main.js re-hydrates + re-runs EON auto-select on that reason).
 - **Reset is two-tap** (armed 2.5 s) and blanks only the open date's record, stamping `updatedAt` with `syncedAt: 0` so local-wins blocks the server copy from resurrecting the cleared data. Sheet rows are NOT deleted — there's no backend API for that.
 - Validation is advisory only (range notes under the money fields); nothing blocks capture. The backend keeps its own rejection rules as the last line of defense.
 
@@ -134,11 +136,11 @@ Wire format (all POSTs `Content-Type: text/plain` to dodge the CORS preflight; o
 
 ## Testing & CI
 
-- `npm test` — 107 tests, zero dependencies, Node's built-in `node:test`, plain ES-module imports.
+- `npm test` — 114 tests, zero dependencies, Node's built-in `node:test`, plain ES-module imports.
 - `npm run lint` — eslint (flat config). `node --check` on all JS before every commit (Code.gs needs a `.js`-extension copy — see the CI workflow).
 - `test/calc.test.js` — lookup/table invariants for both bibles, computePlan fixtures (including real sheet-export nights), every v2 rule (waiver, whole-tray boil, extras/cut splits, closed-tomorrow, the full slow-day rounding matrix incl. the July 14 2026 regression night), outlook rounding, and a **v1-parity suite** that vm-loads `v1/js/` computeDough and asserts identical plans on identical inputs (boil balls aside — whole-tray by design; rounding pinned `up` since v1 always rounded up). Pre-v2·10 fixtures that fall on slow days pin `fr`/`br` `'up'` to keep their reference numbers.
 - `test/api.test.js` — payload building/gating (incl. raw-vs-resolved rounding fields), hydration mapping, transport fallbacks (mocked global fetch).
-- `test/store.test.js` — the sync state machine with mocked fetch/storage and `node:test` mock timers: debounce, ordering, ack cache, offline recovery, mid-flight edits, merge matrix, reset semantics, boot retry.
+- `test/store.test.js` — the sync state machine with mocked fetch/storage and `node:test` mock timers: debounce, ordering, ack cache, offline recovery, mid-flight edits, merge matrix, reset semantics, boot retry, and the reload rules (force vs non-force, mid-fetch guards, not-found/offline no-ops, load-after-reset resurrection).
 - `test/codegs.test.js` — Code.gs in a vm context: validation branches, **dual bible sync**, Bible + rounding columns, seedSheets idempotency (pre-v2 and v2·6-era tabs), the v2·11–13 Dough Use structure (formula rows, stubs, CF rules, dough-save upsert), the reference fit math, formula well-formedness, and menu registration.
 
 ## Known quirks and gotchas
@@ -148,8 +150,8 @@ Wire format (all POSTs `Content-Type: text/plain` to dodge the CORS preflight; o
 - **Blank vs zero**: blank 2 PM pizza counts compute as 0 and hydrate back as blanks; blank boil and blank EON counts mean "not counted" and round-trip as empty sheet cells. Legacy v1 EON rows wrote 0 for untouched fields — those hydrate as counted zeros (documented artifact).
 - **Explicit money zeros round-trip**: a saved 0 forecast hydrates back as '0', not blank.
 - **toShorthand wart** (inherited from v1): dollar values ≥ $100,000 would display-shorthand ambiguously; the shop's range ($1k–$22k) never gets near it.
-- **Reset can't delete sheet rows** — it blanks the phone's record and blocks server resurrection via local-wins. Fixing a wrong save = re-enter and let the upsert overwrite.
-- **Last-writer-wins across phones**: two devices editing the same date converge on whoever synced last; unsynced local edits always beat a server load on that device.
+- **Reset can't delete sheet rows** — it blanks the phone's record and blocks server resurrection via local-wins. Fixing a wrong save = re-enter and let the upsert overwrite. **Load-after-Reset resurrects the sheet row on purpose** — the explicit button is the escape hatch the auto-load deliberately lacks.
+- **Last-writer-wins across phones**: two devices editing the same date converge on whoever synced last; unsynced local edits always beat a server load on that device. Load (force) resolves a two-phone standoff toward the sheet; the resurface auto-refresh never does.
 - **Duplicate-row prevention lives in the backend** (upsert by date), not the frontend.
 - **History EON sales** come from the local cache only ("—" otherwise) — the bare history GET carries Dough Counts rows only.
 - **Zoom is locked** (`user-scalable=no`) — deliberate for floury hands on a kitchen phone.
@@ -179,6 +181,7 @@ Wire format (all POSTs `Content-Type: text/plain` to dodge the CORS preflight; o
 | v2·11 | Dough Use + data-driven bibles, all backend-side (no js/ changes): derived **Dough Use** tab (AM use = last EON − 2 PM count w/ 2 PM sales; PM use = Final − EON w/ EON−2 PM sales, gated on a real make row), **New Dough Bible**/**New Peach Bible** ($2,000–$22,000 by $300, per-size best-fit line over that bible's observations, blank under 3 obs), rebuilt wholesale by `rebuildDoughUse()` via the 🍕 sheet menu (`onOpen`). Prototyped against the 61-night export: 34 mornings + 22 evenings (8 sales-paired) | **Yes + `seedSheets()`** |
 | v2·12 | Backfill workflow, from Jacob's phone-typed answers that never reached the earlier prompts: compute all Dough Use math with or without data; red-flag negative/untrusted values on Dough Use and the exact missing cells on EON/Make (stub rows appended so there's a cell to fill); bibles keep ignoring incomplete rows; fit upgraded from least squares to robust Theil–Sen (Jacob picked from four options run on his data) | **Yes** |
 | v2·13 | Live formulas everywhere: Dough Use cells and both New Bible tabs became real Sheets formulas (INDEX/MATCH + a spilling Theil–Sen LET/MAKEARRAY fit per size), red flags became conditional-format rules that clear as data is typed, `handleDoughPost` upserts each night's Dough Use row, and the 🍕 button now syncs structure only (+ `PM Make OK` 16th column) | **Yes** |
+| v2·14 | Two-phone fix (numbers entered at 1:30 on one phone were invisible on another at 2:50): `store.reload` — the Load button is back (two-tap, in the date card) and force-applies the sheet copy past local-wins (incl. after a Reset); a silent non-force re-pull on returning to the foreground (> 60 s stale) covers the ordinary handoff, with unsynced local edits always winning | — |
 
 ## Rules for future prompts
 

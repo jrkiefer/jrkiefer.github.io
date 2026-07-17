@@ -293,7 +293,31 @@ input[type="date"] {
   padding: 0 10px;
 }
 
-.date-card { padding: 12px; }
+.date-card {
+  padding: 12px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.date-card input { flex: 1; min-width: 0; }
+.date-load {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--ink);
+  background: transparent;
+  border: 1.5px solid var(--ink);
+  border-radius: 99px;
+  padding: 7px 12px;
+  white-space: nowrap;
+}
+.date-load.armed {
+  color: var(--paper);
+  background: var(--accent);
+  border-color: var(--accent);
+}
 
 /* ─── Mode tabs ─── */
 
