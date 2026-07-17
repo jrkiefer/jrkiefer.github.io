@@ -251,6 +251,53 @@ export function createStore({ api, storage, now = Date.now, debounceMs = 2500 })
     notify('load');
   }
 
+  // Re-pull the active date from the sheet without blanking state first.
+  // Non-force applies only when this phone has nothing unsynced — the
+  // foreground auto-refresh rides this, so another phone's numbers appear
+  // on wake but never clobber local edits. Force (the Load button) applies
+  // the sheet copy wholesale — the one deliberate way past local-wins,
+  // including after a Reset.
+  async function reload({ force = false } = {}) {
+    if (date == null) return;
+    const mySeq = seq;
+    const startUpdatedAt = updatedAt;
+    if (force) setStatus('loading');
+    let server = null;
+    let netFail = false;
+    try {
+      server = await api.getByDate(date);
+    } catch {
+      netFail = true;
+    }
+    if (mySeq !== seq) return; // a setDate superseded this fetch
+    if (updatedAt !== startUpdatedAt) return; // typed mid-fetch — the edit wins
+
+    const serverRow = server && server.status === 'found' && server.data ? server.data : null;
+    if (netFail) {
+      setStatus('offline');
+      return;
+    }
+    if (!serverRow) {
+      // Nothing on the sheet — never blank a phone over that. Just put the
+      // status back where it belongs after the force-load's 'loading'.
+      if (force) setStatus(updatedAt > syncedAt ? 'local' : isBlank(record) ? 'new' : 'synced');
+      return;
+    }
+    if (!force && updatedAt > syncedAt) return; // unsynced edits win silently
+
+    hasServerDoughRow = serverRow["Today's Forecast"] !== undefined;
+    const next = api.recordFromRow(serverRow);
+    // The sheet never stores these — keep this phone's copies.
+    next.actualMake = record.actualMake;
+    next.eon.outlookForecast = record.eon.outlookForecast;
+    next.eon.outlookManual = record.eon.outlookManual;
+    record = next;
+    updatedAt = syncedAt = now();
+    persist();
+    status = 'synced';
+    notify('load');
+  }
+
   // Two-tap reset target: blank the open date's record only. updatedAt is
   // stamped with syncedAt left at 0 so local-wins blocks the server copy
   // from auto-resurrecting the cleared data on the next load. Sheet rows
@@ -294,5 +341,5 @@ export function createStore({ api, storage, now = Date.now, debounceMs = 2500 })
     if (updatedAt > syncedAt) flush();
   }
 
-  return { getState, subscribe, patch, setDate, flush, reset, retryUnsynced };
+  return { getState, subscribe, patch, setDate, reload, flush, reset, retryUnsynced };
 }

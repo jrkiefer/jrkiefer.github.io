@@ -134,6 +134,7 @@ store.subscribe((state, meta) => {
   setText($('statusLabel'), STATUS_LABELS[state.status] ?? state.status);
 
   if (meta.reason === 'load') {
+    lastLoadAt = Date.now();
     // auto-select EON when the date already has 2 PM data
     setMode(has2pmData(state.record) ? 'eon' : 'twopm');
   }
@@ -173,12 +174,36 @@ resetBtn.addEventListener('click', () => {
   store.reset();
 });
 
-/* ─── active date ─── */
+/* ─── active date + load from sheet ─── */
 
 const dateInput = $('activeDate');
 dateInput.value = api.todayISO();
 dateInput.addEventListener('change', () => {
   if (dateInput.value) store.setDate(dateInput.value);
+});
+
+// Two-tap like Reset: a force-load replaces this phone's copy with the
+// sheet's (that's its job — the way past local-wins after a Reset or a
+// two-phone standoff), so it shouldn't fire on a stray tap.
+const loadBtn = $('loadBtn');
+let loadTimer = null;
+
+function disarmLoad() {
+  if (loadTimer) clearTimeout(loadTimer);
+  loadTimer = null;
+  loadBtn.classList.remove('armed');
+  loadBtn.textContent = 'Load';
+}
+
+loadBtn.addEventListener('click', () => {
+  if (!loadTimer) {
+    loadBtn.classList.add('armed');
+    loadBtn.textContent = 'Tap again';
+    loadTimer = setTimeout(disarmLoad, 2500);
+    return;
+  }
+  disarmLoad();
+  store.reload({ force: true });
 });
 
 /* ─── sync lifecycle ─── */
@@ -188,6 +213,19 @@ document.addEventListener('visibilitychange', () => {
 });
 window.addEventListener('pagehide', () => store.flush({ keepalive: true }));
 window.addEventListener('online', () => store.flush());
+
+// A phone that keeps the tab open never re-fetched — numbers typed on
+// another phone stayed invisible until a manual reload. Re-pull on
+// resurface; the non-force rules keep any unsynced local edits safe.
+let lastLoadAt = Date.now();
+function refreshOnWake() {
+  if (document.visibilityState !== 'visible') return;
+  if (store.getState().status === 'loading') return;
+  if (Date.now() - lastLoadAt < 60_000) return;
+  store.reload();
+}
+document.addEventListener('visibilitychange', refreshOnWake);
+window.addEventListener('pageshow', refreshOnWake);
 
 /* ─── boot ─── */
 
