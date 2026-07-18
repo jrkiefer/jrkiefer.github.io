@@ -362,8 +362,35 @@ test('real night 6/20/2026 (from the sheet export): both rows round down, batche
   assert.equal(sum, p.batches * 11);
 });
 
-test('batch auto-down boundary: 5 trays over rounds down, 6 rounds up', () => {
-  // $5,200 row → 24 pizza trays; the boil count steers the remainder.
+test('batch auto-down at ≤2 over rounds down every day, even on a busy night', () => {
+  // Real 5/28/2026 night: tmf $15,500 → NOT a slow day, 57 total trays
+  // (remainder 2). Pre-v2·15 this rounded up to 6 batches; the always-down
+  // rule now floors it to 5.
+  const down = computePlan(record2pm({
+    cs: 1500, tf: 10500, tmf: 15500,
+    counts: { indi: 53, small: 157, large: 142, sic: 5 }, boil: 18,
+  }), 'regular');
+  assert.equal(down.rounding.slowDay, false);
+  assert.equal(down.totalTrays, 57); // remainder 2
+  assert.equal(down.rounding.batches, 'down');
+  assert.equal(down.batches, 5);
+  assert.equal(down.cut, 2);
+  assert.equal(down.cutNote, '−2 LG');
+  // Same busy night, boil steered to 58 trays (remainder 3) → back to up.
+  const up = computePlan(record2pm({
+    cs: 1500, tf: 10500, tmf: 15500,
+    counts: { indi: 53, small: 157, large: 142, sic: 5 }, boil: 12,
+  }), 'regular');
+  assert.equal(up.rounding.slowDay, false);
+  assert.equal(up.totalTrays, 58); // remainder 3 — past the always-down window
+  assert.equal(up.rounding.batches, 'up');
+  assert.equal(up.batches, 6);
+  assert.equal(up.extra, 8);
+});
+
+test('batch auto-down boundary (slow day): 5 trays over rounds down, 6 rounds up', () => {
+  // Slow-day extension window (≤ 5 over). $5,200 row → 24 pizza trays; the
+  // boil count steers the remainder.
   const at27 = computePlan(record2pm({ cs: 0, tf: 0, tmf: 5200, boil: 18 }), 'regular');
   assert.equal(at27.totalTrays, 27); // remainder 5
   assert.equal(at27.rounding.batches, 'down');

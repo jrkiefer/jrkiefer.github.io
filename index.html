@@ -43,6 +43,7 @@
         <input type="date" id="activeDate" aria-label="Active date">
         <button type="button" class="date-load" id="loadBtn">Load</button>
       </div>
+      <div class="load-note hidden" id="loadNote" role="status"></div>
     </section>
 
     <!-- ─── Quick bible toggle (peach season only) ─── -->
@@ -173,9 +174,12 @@
           <div>
             <span class="eyebrow">Batches</span>
             <div class="hero-words" id="heroWords"></div>
-            <div class="hero-note" id="heroNote"></div>
             <div class="hero-warn" id="heroBoilWarn"></div>
           </div>
+        </div>
+        <div class="round-banner hidden" id="roundBanner">
+          <span class="round-banner-head" id="roundBannerHead"></span>
+          <span class="round-banner-sub" id="roundBannerSub"></span>
         </div>
         <div class="hero-empty" id="heroEmpty">Set sales and both forecasts to get the batch count.</div>
         <div class="bible-pills round-pills">

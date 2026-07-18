@@ -136,20 +136,42 @@ function jsonResponse(obj) {
     .setMimeType(ContentService.MimeType.JSON);
 }
 
+// Cache the spreadsheet's timezone — formatDate runs once per row in
+// findRowByDate, and the value never changes within a request.
+var __ssTz = null;
+function ssTimeZone() {
+  if (!__ssTz) __ssTz = SpreadsheetApp.getActiveSpreadsheet().getSpreadsheetTimeZone();
+  return __ssTz;
+}
+
 function formatDate(d) {
   if (d instanceof Date) {
-    return (d.getMonth()+1) + "/" + d.getDate() + "/" + d.getFullYear();
+    // Format in the SPREADSHEET's timezone, not the script project's. When
+    // the two differ, a date-only cell (stored as midnight in the sheet's
+    // tz) renders as the previous/next day under getDate() — the classic
+    // Apps Script off-by-one — so findRowByDate misses an otherwise-present
+    // row, getByDate returns not_found, and a force-Load looks dead on the
+    // phone. Formatting in the sheet's own tz matches what the user sees.
+    return Utilities.formatDate(d, ssTimeZone(), "M/d/yyyy");
   }
   return String(d).trim();
 }
 
 function normalizeDate(dateStr) {
-  // Handle both "4/1/2026" and "04/01/2026" formats
-  var parts = String(dateStr).split("/");
-  if (parts.length === 3) {
-    return parseInt(parts[0]) + "/" + parseInt(parts[1]) + "/" + parseInt(parts[2]);
+  var s = String(dateStr).trim();
+  // ISO "2026-07-04" (hand-typed / pasted cells) → "7/4/2026"
+  var iso = s.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);
+  if (iso) {
+    return parseInt(iso[2], 10) + "/" + parseInt(iso[3], 10) + "/" + parseInt(iso[1], 10);
   }
-  return String(dateStr).trim();
+  // "4/1/2026" / "04/01/2026", plus 2-digit years ("7/4/26" → "7/4/2026")
+  var parts = s.split("/");
+  if (parts.length === 3) {
+    var y = parseInt(parts[2], 10);
+    if (y < 100) y += 2000;
+    return parseInt(parts[0], 10) + "/" + parseInt(parts[1], 10) + "/" + y;
+  }
+  return s;
 }
 
 function hasNegative(values) {

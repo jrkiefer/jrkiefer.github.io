@@ -279,8 +279,12 @@ export function createStore({ api, storage, now = Date.now, debounceMs = 2500 })
     }
     if (!serverRow) {
       // Nothing on the sheet — never blank a phone over that. Just put the
-      // status back where it belongs after the force-load's 'loading'.
-      if (force) setStatus(updatedAt > syncedAt ? 'local' : isBlank(record) ? 'new' : 'synced');
+      // status back where it belongs after the force-load's 'loading', and
+      // tell the UI the force-load found nothing so it isn't a silent no-op.
+      if (force) {
+        setStatus(updatedAt > syncedAt ? 'local' : isBlank(record) ? 'new' : 'synced');
+        notify('loadmiss');
+      }
       return;
     }
     if (!force && updatedAt > syncedAt) return; // unsynced edits win silently

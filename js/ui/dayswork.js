@@ -41,6 +41,7 @@ export function update(view) {
 
   const wrap = $('heroWrap');
   const empty = $('heroEmpty');
+  const banner = $('roundBanner');
   if (p.ready) {
     wrap.classList.remove('hidden');
     empty.classList.add('hidden');
@@ -48,15 +49,36 @@ export function update(view) {
     setText($('heroWords'), p.closedTomorrow
       ? 'closed tomorrow — nothing to make'
       : `${p.batches} ${p.batches === 1 ? 'batch' : 'batches'} to make`);
-    const totalPrep = p.batches * TRAYS_PER_BATCH;
-    const detail = p.extra > 0 ? ` (${p.totalTrays} planned · extras: ${p.extraNote})`
-      : p.cut > 0 ? ` (${p.totalTrays} planned${p.cutNote ? ` · cut: ${p.cutNote}` : ''})`
-        : '';
-    setText($('heroNote'), `${totalPrep} trays${detail}`);
     setText($('heroBoilWarn'), p.boilMake == null ? 'boil not counted — left out of batch math' : '');
+    // Rounding banner: spell out planned trays vs. what we're actually
+    // making, and by how much we rounded. Colour keyed off the direction.
+    const making = p.batches * TRAYS_PER_BATCH;
+    let dir = 'exact', head = '', sub = '';
+    if (p.closedTomorrow || p.batches === 0) {
+      banner.classList.add('hidden');
+    } else {
+      if (p.cut > 0) {
+        dir = 'down';
+        head = `▼ Rounding down — ${p.cut} ${p.cut === 1 ? 'tray' : 'trays'}`;
+        sub = `Making ${making} vs ${p.totalTrays} planned${p.cutNote ? ` · ${p.cutNote}` : ''}`;
+      } else if (p.extra > 0) {
+        dir = 'up';
+        head = `▲ Rounding up — ${p.extra} ${p.extra === 1 ? 'tray' : 'trays'}`;
+        sub = `Making ${making} vs ${p.totalTrays} planned${p.extraNote ? ` · ${p.extraNote}` : ''}`;
+      } else {
+        dir = 'exact';
+        head = 'On the batch — no rounding';
+        sub = `Making ${p.totalTrays} ${p.totalTrays === 1 ? 'tray' : 'trays'}`;
+      }
+      banner.setAttribute('data-dir', dir);
+      setText($('roundBannerHead'), head);
+      setText($('roundBannerSub'), sub);
+      banner.classList.remove('hidden');
+    }
   } else {
     wrap.classList.add('hidden');
     empty.classList.remove('hidden');
+    banner.classList.add('hidden');
   }
 
   stampedRound = view.record.batchRound ?? null;

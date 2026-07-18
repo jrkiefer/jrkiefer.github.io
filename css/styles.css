@@ -318,6 +318,12 @@ input[type="date"] {
   background: var(--accent);
   border-color: var(--accent);
 }
+.load-note {
+  margin-top: 8px;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--warn);
+}
 
 /* ─── Mode tabs ─── */
 
@@ -486,10 +492,13 @@ input[type="date"] {
   border: 1px solid var(--rule);
 }
 .tray-chip.zero { opacity: 0.45; }
+.tray-chip {
+  padding: 7px 13px;
+}
 .tray-chip .chip-val {
   font-family: var(--font-body);
   font-weight: 800;
-  font-size: 15px;
+  font-size: 16px;
   color: var(--ink);
   font-variant-numeric: tabular-nums;
 }
@@ -519,19 +528,51 @@ input[type="date"] {
   color: var(--accent);
   font-variant-numeric: tabular-nums;
 }
-.hero-words { font-family: var(--font-display); font-weight: 700; font-size: 20px; }
-.hero-note {
-  font-family: var(--font-mono);
-  font-size: 12px;
-  color: var(--ink-mute);
-  font-variant-numeric: tabular-nums;
-}
+.hero-words { font-family: var(--font-display); font-weight: 700; font-size: 22px; }
 .hero-warn {
   font-family: var(--font-mono);
   font-size: 11px;
   color: var(--warn);
+  margin-top: 2px;
 }
 .hero-warn:empty { display: none; }
+
+/* rounding banner — planned vs. making, and by how much (v2·15) */
+.round-banner {
+  margin-top: 14px;
+  padding: 12px 14px;
+  border-radius: var(--radius);
+  border: 1px solid var(--rule);
+  background: var(--bg);
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+.round-banner-head {
+  font-family: var(--font-body);
+  font-weight: 800;
+  font-size: 15px;
+  letter-spacing: 0.01em;
+  color: var(--ink);
+}
+.round-banner-sub {
+  font-family: var(--font-mono);
+  font-size: 13px;
+  color: var(--ink-soft);
+  font-variant-numeric: tabular-nums;
+}
+.round-banner[data-dir="down"] {
+  border-color: #2f6b3a;
+  background: #edf2e8;
+}
+.round-banner[data-dir="down"] .round-banner-head,
+.round-banner[data-dir="down"] .round-banner-sub { color: #2f6b3a; }
+.round-banner[data-dir="up"] {
+  border-color: var(--warn);
+  background: #f6efdc;
+}
+.round-banner[data-dir="up"] .round-banner-head { color: #8a5e12; }
+.round-banner[data-dir="up"] .round-banner-sub { color: #8a5e12; }
 .hero-empty {
   font-family: var(--font-mono);
   font-size: 12px;

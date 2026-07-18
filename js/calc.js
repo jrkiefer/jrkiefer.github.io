@@ -7,7 +7,7 @@
 import {
   SIZES, BOIL, ALL, TRAYS_PER_BATCH, SIC_MIN, SIC_MIN_WAIVER,
   PEACH_MONTHS, BIBLES,
-  SLOW_DAY_UNDER, ROUND_DOWN_MAX_GAP, BATCH_DOWN_MAX_OVER, EXTRA_LG_RATIO,
+  SLOW_DAY_UNDER, ROUND_DOWN_MAX_GAP, BATCH_DOWN_ALWAYS_OVER, BATCH_DOWN_MAX_OVER, EXTRA_LG_RATIO,
 } from './config.js';
 
 /* ---------------- parsing & formatting ---------------- */
@@ -161,10 +161,12 @@ export function computePlan(record, bibleId) {
   let bRound = record.batchRound ?? null; // null = auto undecidable until totalTrays exists
   if (ready) {
     totalTrays = pizzaTrays + boilTrays;
-    // Slow-day auto: ≤ 5 trays past a whole batch rounds down; a manual
-    // stamp wins either way. Rounding down never drops below one batch.
+    // Batch auto-down: 1–2 trays past a whole batch rounds down every day
+    // (46 trays → 4 batches); slow days extend that window to ≤ 5 over. A
+    // manual stamp wins either way. Rounding down never drops below one batch.
     const rem = totalTrays % TRAYS_PER_BATCH;
-    bRound = record.batchRound ?? (slow && rem >= 1 && rem <= BATCH_DOWN_MAX_OVER ? 'down' : 'up');
+    bRound = record.batchRound
+      ?? (rem >= 1 && (rem <= BATCH_DOWN_ALWAYS_OVER || (slow && rem <= BATCH_DOWN_MAX_OVER)) ? 'down' : 'up');
     batches = totalTrays === 0 ? 0
       : bRound === 'down' ? Math.max(1, Math.floor(totalTrays / TRAYS_PER_BATCH))
         : Math.ceil(totalTrays / TRAYS_PER_BATCH);

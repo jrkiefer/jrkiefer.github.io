@@ -55,6 +55,7 @@ const ctx = {
     load: loadHistoryEntries,
     openDate: (iso) => {
       $('activeDate').value = iso;
+      setMode('twopm'); // opening a date always lands on the 2 PM tab
       store.setDate(iso);
       window.scrollTo({ top: 0 });
     },
@@ -114,11 +115,6 @@ function setMode(m) {
   }
 }
 
-function has2pmData(record) {
-  if (record.twopm.tomorrowForecast !== '') return true;
-  return Object.values(record.twopm.counts).some((c) => c.trays !== '' || c.singles !== '');
-}
-
 for (const tab of document.querySelectorAll('.mode-tab')) {
   tab.addEventListener('click', () => {
     setMode(tab.dataset.mode); // manual taps always win
@@ -128,17 +124,31 @@ for (const tab of document.querySelectorAll('.mode-tab')) {
 
 /* ─── store → UI ─── */
 
+// Transient note under the date card (e.g. a force-load that found nothing).
+let loadNoteTimer = null;
+function showLoadNote(msg) {
+  const el = $('loadNote');
+  if (loadNoteTimer) { clearTimeout(loadNoteTimer); loadNoteTimer = null; }
+  if (!msg) { el.classList.add('hidden'); el.textContent = ''; return; }
+  el.textContent = msg;
+  el.classList.remove('hidden');
+  loadNoteTimer = setTimeout(() => { el.classList.add('hidden'); el.textContent = ''; loadNoteTimer = null; }, 4000);
+}
+
 store.subscribe((state, meta) => {
   lastState = state;
   document.documentElement.setAttribute('data-status', state.status);
   setText($('statusLabel'), STATUS_LABELS[state.status] ?? state.status);
 
-  if (meta.reason === 'load') {
-    lastLoadAt = Date.now();
-    // auto-select EON when the date already has 2 PM data
-    setMode(has2pmData(state.record) ? 'eon' : 'twopm');
-  }
+  // The mode never auto-switches on a load — the tab defaults to 2 PM and
+  // only a manual tap (or a reset/date-open, which snap to 2 PM at their
+  // call sites) moves it. This keeps the silent resurface reload from
+  // yanking someone off the EON tab on wake.
+  if (meta.reason === 'load') { lastLoadAt = Date.now(); showLoadNote(''); }
   if (meta.reason === 'reset') setMode('twopm');
+  // A force-load that found no sheet row for the date — say so instead of
+  // leaving the button looking dead.
+  if (meta.reason === 'loadmiss') showLoadNote(`No saved data on the sheet for ${fmtDate(state.date)}.`);
 
   // Derive once, after any mode change — the view carries the mode.
   const view = deriveView(state);
@@ -179,7 +189,10 @@ resetBtn.addEventListener('click', () => {
 const dateInput = $('activeDate');
 dateInput.value = api.todayISO();
 dateInput.addEventListener('change', () => {
-  if (dateInput.value) store.setDate(dateInput.value);
+  if (dateInput.value) {
+    setMode('twopm'); // switching dates always lands on the 2 PM tab
+    store.setDate(dateInput.value);
+  }
 });
 
 // Two-tap like Reset: a force-load replaces this phone's copy with the
@@ -203,6 +216,7 @@ loadBtn.addEventListener('click', () => {
     return;
   }
   disarmLoad();
+  setMode('twopm'); // a force-load always lands on the 2 PM tab
   store.reload({ force: true });
 });
 

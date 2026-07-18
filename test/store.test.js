@@ -469,10 +469,13 @@ test('reload with nothing on the sheet leaves the phone alone; network failure r
   });
   await store.setDate('2026-07-16');
   store.patch((r) => { r.twopm.currentSales = '5'; });
+  const reasons = [];
+  store.subscribe((_s, meta) => reasons.push(meta.reason));
   await store.reload({ force: true });
   let s = store.getState();
   assert.equal(s.record.twopm.currentSales, '5'); // not blanked
   assert.equal(s.status, 'local'); // status restored after the loading flip
+  assert.ok(reasons.includes('loadmiss')); // the miss is signalled, not silent
   mode = 'throw';
   await store.reload({ force: true });
   s = store.getState();
