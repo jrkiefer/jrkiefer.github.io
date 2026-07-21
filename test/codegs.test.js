@@ -10,7 +10,26 @@ const ContentServiceStub = {
   createTextOutput(s) { return { body: s, setMimeType() { return this; } }; }
 };
 
-const gs = loadContext(['apps-script/Code.gs'], { ContentService: ContentServiceStub });
+// Minimal stand-ins so formatDate (now timezone-aware) runs in the vm. The
+// spreadsheet timezone is fixed to Mountain (the shop's zone) so date-cell
+// formatting is deterministic regardless of the CI process timezone.
+const UtilitiesStub = {
+  formatDate(d, tz /* fmt is always "M/d/yyyy" here */) {
+    const p = new Intl.DateTimeFormat('en-US', {
+      timeZone: tz, year: 'numeric', month: 'numeric', day: 'numeric',
+    }).formatToParts(d).reduce((o, part) => (o[part.type] = part.value, o), {});
+    return `${Number(p.month)}/${Number(p.day)}/${p.year}`;
+  },
+};
+const SpreadsheetAppTzStub = {
+  getActiveSpreadsheet: () => ({ getSpreadsheetTimeZone: () => 'America/Denver' }),
+};
+
+const gs = loadContext(['apps-script/Code.gs'], {
+  ContentService: ContentServiceStub,
+  Utilities: UtilitiesStub,
+  SpreadsheetApp: SpreadsheetAppTzStub,
+});
 const g = getRefs(gs, [
   'SHEETS', 'BIBLE_DATA', 'PEACH_BIBLE_DATA', 'formatDate', 'normalizeDate',
   'hasNegative', 'handleDoughPost', 'handleEonPost', 'handleMakePost'
@@ -20,14 +39,23 @@ function responseOf(output) {
   return JSON.parse(output.body);
 }
 
-test('formatDate: Date object renders as M/D/YYYY', () => {
-  assert.equal(evalIn(gs, 'formatDate(new Date(2026, 3, 1))'), '4/1/2026');
+test('formatDate: Date cell renders as M/D/YYYY in the spreadsheet timezone', () => {
+  // A date-only cell reads as midnight in the sheet's tz. Midnight Mountain
+  // for 4/1 is 06:00 UTC — build that instant and confirm it renders 4/1.
+  assert.equal(evalIn(gs, 'formatDate(new Date(Date.UTC(2026, 3, 1, 6)))'), '4/1/2026');
   assert.equal(g.formatDate('4/1/2026'), '4/1/2026');
+  // The whole point of the tz fix: an instant that is a different calendar
+  // day in UTC (03:00 UTC 7/16 = 21:00 Mountain 7/15) must render as the
+  // Mountain day, not the UTC day — otherwise findRowByDate misses the row.
+  assert.equal(evalIn(gs, 'formatDate(new Date(Date.UTC(2026, 6, 16, 3)))'), '7/15/2026');
 });
 
-test('normalizeDate: strips leading zeros', () => {
+test('normalizeDate: canonicalizes slash, ISO, and 2-digit-year cells', () => {
   assert.equal(g.normalizeDate('04/01/2026'), '4/1/2026');
   assert.equal(g.normalizeDate('4/1/2026'), '4/1/2026');
+  assert.equal(g.normalizeDate('2026-07-04'), '7/4/2026'); // ISO
+  assert.equal(g.normalizeDate('2026-7-4'), '7/4/2026');   // ISO, no leading zeros
+  assert.equal(g.normalizeDate('7/4/26'), '7/4/2026');     // 2-digit year
 });
 
 test('hasNegative: detects negatives, ignores garbage', () => {
@@ -282,7 +310,9 @@ test('buildNewBibleTab: tier grid wired to live per-size fit helpers', () => {
   assert.equal(nb.rows[67][0], 21800);
   assert.equal(nb.rows[68][0], 22000); // exact endpoint, final step $200
   const indiTier = plain(nb.rows[1])[1];
-  assert.match(indiTier, /IF\(\$H\$2<3,"",MAX\(0,ROUND\(\$I\$2\+\$J\$2\*\$A2\)\)\)/);
+  // The OR's second arm mirrors fitLine's zero-sales-spread null: n ≥ 3 can
+  // still spill a blank fit, and arithmetic on that "" would be #VALUE!.
+  assert.match(indiTier, /IF\(OR\(\$H\$2<3,\$I\$2=""\),"",MAX\(0,ROUND\(\$I\$2\+\$J\$2\*\$A2\)\)\)/);
   assert.match(plain(nb.rows[1])[4], /\$H\$5/); // sic reads helper row 5
   const helper = plain(nb.rows[1])[7]; // H2 — the spilling {n, a, b} fit
   assert.match(helper, /MAKEARRAY\(n,n/);

@@ -85,8 +85,11 @@ export async function post(payload, { keepalive = false } = {}) {
 }
 
 // Merged record for one date: {status:'found', data} | {status:'not_found'}.
+// An HTTP error (or an Apps Script HTML error page) must not read as a real
+// answer — throw so callers treat it as a network failure, not not_found.
 export async function getByDate(dateISO) {
   const r = await fetch(SCRIPT_URL + '?date=' + encodeURIComponent(isoToSheetDate(dateISO)));
+  if (!r.ok) throw new Error('getByDate HTTP ' + r.status);
   return r.json();
 }
 
