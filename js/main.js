@@ -5,7 +5,7 @@
 import { createStore } from './store.js';
 import * as api from './api.js';
 import { computePlan, effectiveMake, autoBibleFor, parseSales, fmtDate } from './calc.js';
-import { BIBLES } from './config.js';
+import { BIBLES, APP_VERSION } from './config.js';
 import { $, setText } from './ui/fields.js';
 import * as sales from './ui/sales.js';
 import { createCounts } from './ui/counts.js';
@@ -253,6 +253,10 @@ async function prewarmCache() {
     store.cacheHistory(await api.getHistory());
   } catch { /* offline — the cache just stays as-is */ }
 }
+
+// The footer version is written by JS on purpose: a blank footer means
+// the phone is running stale cached scripts, not this release.
+setText($('appVersion'), APP_VERSION);
 
 store.setDate(api.todayISO()).then(() => {
   store.retryUnsynced();

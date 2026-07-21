@@ -958,3 +958,14 @@ input[type="date"] {
 .make-eff-val.mute { color: var(--ink-mute); }
 .make-eff-src { display: block; font-family: var(--font-mono); font-size: 8px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--ink-mute); }
 .make-eff-src.recount { color: var(--accent); }
+
+/* ─── Footer version tag ─── */
+
+.app-foot {
+  max-width: 460px;
+  margin: 0 auto;
+  padding: 4px 16px 28px;
+  text-align: center;
+  color: var(--ink-mute);
+  min-height: 18px; /* holds its space while blank (stale-scripts signal) */
+}

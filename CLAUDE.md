@@ -12,7 +12,7 @@ This is **v2**, a from-scratch rebuild (July 2026) governed by MASTERPLAN.md and
 
 ## Current file structure
 
-- `index.html` — static markup skeleton for both modes; repeated per-size blocks are built once at init by the UI modules
+- `index.html` — static markup skeleton for both modes; repeated per-size blocks are built once at init by the UI modules. The css/js URLs carry a `?v=` cache-buster (bump with `APP_VERSION` on every release) and the footer version tag is written by JS — a blank footer means the phone runs stale cached scripts (v2·17)
 - `css/styles.css` — all CSS; Mise en Place is the only theme (tokens on `:root/[data-theme="mise"]`)
 - `design/preview.jsx` — the approved React reference build (not served, not linted; the visual source of truth)
 - `v1/` — byte-identical snapshot of the pre-rebuild live site (temporary fallback; still fully functional against the backend)
@@ -23,7 +23,7 @@ This is **v2**, a from-scratch rebuild (July 2026) governed by MASTERPLAN.md and
 - `eslint.config.mjs` — flat config: `js/**` + `test/**` are modules, `apps-script/` is script-goal, `v1/**` and `design/**` ignored
 - `.github/workflows/ci.yml` — CI on every PR and push to main: `node --check` over `js/` and `v1/js/` (before `npm ci`, so syntax errors fail fast), then `npm ci`, `npm run lint`, `npm test`
 - `js/`
-  - `config.js` — constants only: `SCRIPT_URL`, `SHEET_URL`, `SIZES`, `BOIL`, `ALL`, `TRAYS_PER_BATCH`, `SIC_MIN`, `SIC_MIN_WAIVER`, `PEACH_MONTHS`, `MAX_BATCH_TEMPS`, `SLOW_DAY_UNDER`, `ROUND_DOWN_MAX_GAP`, `BATCH_DOWN_MAX_OVER`, `BATCH_DOWN_ALWAYS_MAX_OVER`, `EXTRA_LG_RATIO`, `BIBLES` (both tables)
+  - `config.js` — constants only: `APP_VERSION`, `SCRIPT_URL`, `SHEET_URL`, `SIZES`, `BOIL`, `ALL`, `TRAYS_PER_BATCH`, `SIC_MIN`, `SIC_MIN_WAIVER`, `PEACH_MONTHS`, `MAX_BATCH_TEMPS`, `SLOW_DAY_UNDER`, `ROUND_DOWN_MAX_GAP`, `BATCH_DOWN_MAX_OVER`, `BATCH_DOWN_ALWAYS_MAX_OVER`, `EXTRA_LG_RATIO`, `BIBLES` (both tables)
   - `calc.js` — pure math, no DOM/fetch/storage: `parseSales`, `money`, `fmt`, `fmtDate`, `countTotal`, `countBlank`, `blankRecord`/`blankCounts`, `autoBibleFor`, `slowDay`, `resolveForecastRound`, `bibleLookup`, `computePlan`, `effectiveMake`, `computeOutlook`
   - `api.js` — everything that knows the Apps Script wire format: `post` (text/plain + no-cors retry + keepalive), `getByDate`, `getHistory`, `buildPayloads`, `recordFromRow`, date helpers (`todayISO`, `isoToSheetDate`, `mdyToISO`, `sheetDateToLocal`, `toShorthand`)
   - `store.js` — record state, synchronous localStorage write-through, debounced background sync, status machine, `reload` re-pull (force/non-force), `cacheHistory` pre-warm; `getState` exposes `dirty` (real unsynced edits); **no DOM access**
@@ -155,6 +155,7 @@ Wire format (all POSTs `Content-Type: text/plain` to dodge the CORS preflight; o
 - **Reset can't delete sheet rows** — it blanks the phone's record so the blank never POSTs, but the **next auto-load re-pulls the sheet** (v2·15 — a blank has nothing to protect). Fixing a wrong save = re-enter and let the upsert overwrite; a Reset alone won't stick if the sheet still has the row.
 - **Last-writer-wins across phones**: two devices editing the same date converge on whoever synced last; a phone's **real (non-blank) unsynced edits** always beat a server load on that device, but a blank/reset copy yields. Load (force) resolves a two-phone standoff toward the sheet.
 - **Duplicate-row prevention lives in the backend** (upsert by date), not the frontend.
+- **Stale phone caches are real** (v2·17; July 2026: a phone rendered the v2·14 Load button with pre-v2·14 CSS/JS — tiny, unstyled, dead): the `?v=` query on the css/js URLs must be bumped together with `APP_VERSION` in js/config.js on every release. The footer version tag is written by JS — ask what the footer says; blank = stale scripts.
 - **History EON sales** come from the local cache only ("—" otherwise) — the bare history GET carries Dough Counts rows only.
 - **Zoom is locked** (`user-scalable=no`) — deliberate for floury hands on a kitchen phone.
 - **Theme/density baked in**: `<html data-theme="mise" data-density="compact">` — the CSS keys off these; don't remove them.
@@ -187,6 +188,7 @@ Wire format (all POSTs `Content-Type: text/plain` to dodge the CORS preflight; o
 | v2·14 | Two-phone fix (numbers entered at 1:30 on one phone were invisible on another at 2:50): `store.reload` — the Load button is back (two-tap, in the date card) and force-applies the sheet copy past local-wins (incl. after a Reset); a silent non-force re-pull on returning to the foreground (> 60 s stale) covers the ordinary handoff, with unsynced local edits always winning | — |
 | v2·15 | Follow-ups from real use: **blank/reset dates now yield to the sheet** on auto-load (fixes a phone stuck showing a stale blank for a saved date — the "16th won't load" report); **one-tap Load** (full-width, confirm only when there are real unsynced edits) + on-device `cacheHistory` pre-warm of recent days; **always open on 2 PM** (removed EON auto-select + dead `has2pmData`); batches **round down at ≤ 2 trays over on any day** (`BATCH_DOWN_ALWAYS_MAX_OVER`, 46 → 4 batches); **redesigned Day's Work card** (Planned/Making lines + colored rounding badge, bigger type); fixed a `reload()` race (a mid-fetch flush could let a stale GET clobber a just-synced edit); audit cleanups (dead exports `intOf`/`numOrNull`, `money`/`setInputValue` dedupes) | — |
 | v2·16 | Consolidation of two stale parallel branches after v2·15 merged (their overlapping features were already in — kept the merged versions): **backend `formatDate` timezone fix** + tolerant `normalizeDate` (the second, backend-side cause of past-days-not-loading) with a `getByDate` `r.ok` guard and a `loadmiss` "No saved data…" note; **reload/flush coordination** — reload waits out an in-flight flush, discards a row fetched while a flush landed mid-GET, and clears the ack cache on apply; a superseded flush hands off its rerun to the new date; **New Bible tier cells guard a blank fit** (`IF(OR($H$hr<3,$I$hr=""),…)`) so a zero-sales-spread size no longer spills `#VALUE!`. 5 new tests (122 total) | **Yes + 🍕 Rebuild** (no `seedSheets()`) |
+| v2·17 | Stale-cache defense, from a phone that rendered the v2·14 Load button tiny and dead on pre-v2·14 CSS/JS: `?v=` cache-buster on the css/js URLs (bump with every release), `APP_VERSION` in js/config.js, and a JS-written footer version tag — a blank footer identifies a phone on stale scripts | — |
 
 ## Rules for future prompts
 
