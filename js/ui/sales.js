@@ -76,7 +76,7 @@ export function update(view) {
   const deltaEl = $('eonDelta');
   if (es != null && today != null) {
     const d = es - today;
-    setText(deltaEl, `${d >= 0 ? '+' : '−'}$${Math.abs(d).toLocaleString('en-US')} vs forecast`);
+    setText(deltaEl, `${d >= 0 ? '+' : '−'}${money(Math.abs(d))} vs forecast`);
     deltaEl.classList.toggle('pos', d >= 0);
     deltaEl.classList.toggle('neg', d < 0);
   } else {

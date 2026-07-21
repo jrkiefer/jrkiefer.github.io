@@ -296,21 +296,22 @@ input[type="date"] {
 .date-card {
   padding: 12px;
   display: flex;
-  align-items: center;
+  flex-direction: column;
   gap: 10px;
 }
-.date-card input { flex: 1; min-width: 0; }
+.date-card input { width: 100%; min-width: 0; }
 .date-load {
+  width: 100%;
   font-family: var(--font-mono);
-  font-size: 10px;
+  font-size: 13px;
   font-weight: 700;
-  letter-spacing: 0.1em;
+  letter-spacing: 0.08em;
   text-transform: uppercase;
-  color: var(--ink);
-  background: transparent;
+  color: var(--paper);
+  background: var(--ink);
   border: 1.5px solid var(--ink);
-  border-radius: 99px;
-  padding: 7px 12px;
+  border-radius: var(--radius-sm);
+  padding: 14px 12px;
   white-space: nowrap;
 }
 .date-load.armed {
@@ -489,7 +490,7 @@ input[type="date"] {
 .tray-chip .chip-val {
   font-family: var(--font-body);
   font-weight: 800;
-  font-size: 15px;
+  font-size: 16px;
   color: var(--ink);
   font-variant-numeric: tabular-nums;
 }
@@ -508,9 +509,10 @@ input[type="date"] {
 
 .hero {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   gap: 16px;
 }
+.hero-body { min-width: 0; }
 .hero-num {
   font-family: var(--font-display);
   font-weight: 700;
@@ -519,13 +521,36 @@ input[type="date"] {
   color: var(--accent);
   font-variant-numeric: tabular-nums;
 }
-.hero-words { font-family: var(--font-display); font-weight: 700; font-size: 20px; }
-.hero-note {
-  font-family: var(--font-mono);
-  font-size: 12px;
-  color: var(--ink-mute);
+.hero-words { font-family: var(--font-display); font-weight: 700; font-size: 24px; line-height: 1.1; }
+.hero-lines {
+  margin-top: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+.hero-line {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
   font-variant-numeric: tabular-nums;
 }
+.hero-line-lab { font-size: 10px; color: var(--ink-soft); width: 54px; flex-shrink: 0; }
+.hero-line-val { font-family: var(--font-body); font-weight: 700; font-size: 16px; color: var(--ink); }
+.round-badge {
+  margin-top: 10px;
+  display: inline-block;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  padding: 6px 11px;
+  border-radius: 99px;
+  font-variant-numeric: tabular-nums;
+}
+.round-badge.hidden { display: none; }
+.round-badge.down { background: #e8efe6; color: #2f6b3a; }
+.round-badge.up { background: var(--accent-soft); color: var(--accent); }
+.round-badge.even { background: var(--bg); color: var(--ink-mute); }
 .hero-warn {
   font-family: var(--font-mono);
   font-size: 11px;

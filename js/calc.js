@@ -7,7 +7,8 @@
 import {
   SIZES, BOIL, ALL, TRAYS_PER_BATCH, SIC_MIN, SIC_MIN_WAIVER,
   PEACH_MONTHS, BIBLES,
-  SLOW_DAY_UNDER, ROUND_DOWN_MAX_GAP, BATCH_DOWN_MAX_OVER, EXTRA_LG_RATIO,
+  SLOW_DAY_UNDER, ROUND_DOWN_MAX_GAP, BATCH_DOWN_MAX_OVER,
+  BATCH_DOWN_ALWAYS_MAX_OVER, EXTRA_LG_RATIO,
 } from './config.js';
 
 /* ---------------- parsing & formatting ---------------- */
@@ -26,8 +27,9 @@ export const fmt = (n) => (n == null ? '—' : String(n));
 export const fmtDate = (d) =>
   new Date(d + 'T12:00:00').toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
 
-export const intOf = (v) => { const n = Number(v); return v !== '' && Number.isFinite(n) ? n : 0; };
-export const numOrNull = (v) => { const n = Number(v); return v !== '' && v != null && Number.isFinite(n) ? n : null; };
+// Internal helpers (not part of the public calc API).
+const intOf = (v) => { const n = Number(v); return v !== '' && Number.isFinite(n) ? n : 0; };
+const numOrNull = (v) => { const n = Number(v); return v !== '' && v != null && Number.isFinite(n) ? n : null; };
 
 /* ---------------- counts ---------------- */
 
@@ -161,10 +163,13 @@ export function computePlan(record, bibleId) {
   let bRound = record.batchRound ?? null; // null = auto undecidable until totalTrays exists
   if (ready) {
     totalTrays = pizzaTrays + boilTrays;
-    // Slow-day auto: ≤ 5 trays past a whole batch rounds down; a manual
-    // stamp wins either way. Rounding down never drops below one batch.
     const rem = totalTrays % TRAYS_PER_BATCH;
-    bRound = record.batchRound ?? (slow && rem >= 1 && rem <= BATCH_DOWN_MAX_OVER ? 'down' : 'up');
+    // Auto round-down: ≤ 2 trays past a whole batch rounds down on ANY day
+    // (46 trays → 4 batches); a slow day widens that window to ≤ 5. A manual
+    // stamp wins either way. Rounding down never drops below one batch.
+    const autoDown = (rem >= 1 && rem <= BATCH_DOWN_ALWAYS_MAX_OVER)
+      || (slow && rem >= 1 && rem <= BATCH_DOWN_MAX_OVER);
+    bRound = record.batchRound ?? (autoDown ? 'down' : 'up');
     batches = totalTrays === 0 ? 0
       : bRound === 'down' ? Math.max(1, Math.floor(totalTrays / TRAYS_PER_BATCH))
         : Math.ceil(totalTrays / TRAYS_PER_BATCH);

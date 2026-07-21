@@ -6,7 +6,7 @@
 
 import { ALL } from '../config.js';
 import { parseSales, money, fmt, computeOutlook } from '../calc.js';
-import { $, bindInput, setText, setInputValue, markHasValue } from './fields.js';
+import { $, bindInput, setText, setInputValue } from './fields.js';
 
 export function init(ctx) {
   const wrap = $('outlookRows');
@@ -101,7 +101,5 @@ export function update(view) {
 }
 
 export function hydrate(view) {
-  const input = $('outlookForecast');
-  input.value = effectiveRaw(view.record);
-  markHasValue(input);
+  setInputValue($('outlookForecast'), effectiveRaw(view.record));
 }
