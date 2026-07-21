@@ -282,7 +282,9 @@ test('buildNewBibleTab: tier grid wired to live per-size fit helpers', () => {
   assert.equal(nb.rows[67][0], 21800);
   assert.equal(nb.rows[68][0], 22000); // exact endpoint, final step $200
   const indiTier = plain(nb.rows[1])[1];
-  assert.match(indiTier, /IF\(\$H\$2<3,"",MAX\(0,ROUND\(\$I\$2\+\$J\$2\*\$A2\)\)\)/);
+  // The OR's second arm mirrors fitLine's zero-sales-spread null: n ≥ 3 can
+  // still spill a blank fit, and arithmetic on that "" would be #VALUE!.
+  assert.match(indiTier, /IF\(OR\(\$H\$2<3,\$I\$2=""\),"",MAX\(0,ROUND\(\$I\$2\+\$J\$2\*\$A2\)\)\)/);
   assert.match(plain(nb.rows[1])[4], /\$H\$5/); // sic reads helper row 5
   const helper = plain(nb.rows[1])[7]; // H2 — the spilling {n, a, b} fit
   assert.match(helper, /MAKEARRAY\(n,n/);

@@ -824,7 +824,11 @@ function buildNewBibleTab(ss, key, label) {
     var fr = [];
     for (var s = 0; s < 4; s++) {
       var hr = s + 2;
-      fr.push('=IF($H$' + hr + '<3,"",MAX(0,ROUND($I$' + hr + '+$J$' + hr + '*$A' + (t + 2) + ')))');
+      // Blank both when n < 3 AND when the fit itself is blank (n ≥ 3 but
+      // zero sales spread — fitLine's other null branch). Without the second
+      // guard the arithmetic on the spilled "" text turns the whole column
+      // into #VALUE!.
+      fr.push('=IF(OR($H$' + hr + '<3,$I$' + hr + '=""),"",MAX(0,ROUND($I$' + hr + '+$J$' + hr + '*$A' + (t + 2) + ')))');
     }
     tierFs.push(fr);
   }

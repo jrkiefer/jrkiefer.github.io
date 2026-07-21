@@ -22,6 +22,7 @@ export function createStore({ api, storage, now = Date.now, debounceMs = 2500 })
   let seq = 0; // bumped by setDate — kills stale loads and stale flushes
   let debounceTimer = null;
   let flushing = false;
+  let flushRun = null; // the in-flight flush's completion promise — reload waits on it
   let rerun = false;
   let sent = {}; // per-type serialized-payload ack cache (per date)
   const subscribers = new Set();
@@ -143,35 +144,43 @@ export function createStore({ api, storage, now = Date.now, debounceMs = 2500 })
 
     if (flushing) {
       rerun = true;
-      return;
+      return flushRun;
     }
     flushing = true;
-    try {
-      do {
-        rerun = false;
-        const flushSeq = seq;
-        const flushedAt = updatedAt;
-        const payloads = api.buildPayloads(date, record);
-        if (Object.keys(payloads).length === 0) {
-          // Nothing the backend would accept (blank or reset record).
-          // Deliberately NOT marked synced: a reset must keep local-wins
-          // so a stale sheet row can't resurrect on the next load.
-          return;
-        }
-        const { networkFailed } = await postPayloads(payloads, hasServerDoughRow, sent);
-        if (seq !== flushSeq) return; // date changed mid-flight — state replaced
-        if (networkFailed) {
-          setStatus('offline');
-        } else if (updatedAt === flushedAt) {
-          syncedAt = flushedAt;
-          persist();
-          setStatus('synced');
-        }
-        // else: edits landed mid-flight — stay 'local', debounce re-flushes
-      } while (rerun);
-    } finally {
-      flushing = false;
-    }
+    flushRun = (async () => {
+      try {
+        do {
+          rerun = false;
+          const flushSeq = seq;
+          const flushedAt = updatedAt;
+          const payloads = api.buildPayloads(date, record);
+          if (Object.keys(payloads).length === 0) {
+            // Nothing the backend would accept (blank or reset record).
+            // Deliberately NOT marked synced: a reset must keep local-wins
+            // so a stale sheet row can't resurrect on the next load.
+            return;
+          }
+          const { networkFailed } = await postPayloads(payloads, hasServerDoughRow, sent);
+          // Date changed mid-flight — this pass's state was replaced. Don't
+          // bail out entirely: a flush attempt for the NEW date may have set
+          // `rerun` while this one was in flight, and returning here would
+          // drop it, stranding the new date's edits until the next event.
+          if (seq !== flushSeq) continue;
+          if (networkFailed) {
+            setStatus('offline');
+          } else if (updatedAt === flushedAt) {
+            syncedAt = flushedAt;
+            persist();
+            setStatus('synced');
+          }
+          // else: edits landed mid-flight — stay 'local', debounce re-flushes
+        } while (rerun);
+      } finally {
+        flushing = false;
+        flushRun = null;
+      }
+    })();
+    return flushRun;
   }
 
   // Change the active date: local entry + merged GET race, newer wins.
@@ -260,8 +269,15 @@ export function createStore({ api, storage, now = Date.now, debounceMs = 2500 })
   async function reload({ force = false } = {}) {
     if (date == null) return;
     const mySeq = seq;
-    const startUpdatedAt = updatedAt;
     if (force) setStatus('loading');
+    // Let an in-flight sync land before fetching: its POSTs are changing
+    // what the sheet holds, so a GET raced against them can return a row
+    // that predates this phone's own numbers (the wake sequence fires the
+    // `online` flush and the resurface reload together).
+    while (flushRun) await flushRun;
+    if (mySeq !== seq) return; // a setDate arrived while waiting
+    const startUpdatedAt = updatedAt;
+    const startSyncedAt = syncedAt;
     let server = null;
     let netFail = false;
     try {
@@ -271,6 +287,14 @@ export function createStore({ api, storage, now = Date.now, debounceMs = 2500 })
     }
     if (mySeq !== seq) return; // a setDate superseded this fetch
     if (updatedAt !== startUpdatedAt) return; // typed mid-fetch — the edit wins
+    if (syncedAt !== startSyncedAt) {
+      // A flush landed while the GET was in flight, so the row in hand may
+      // predate the numbers that just synced — applying it would revert
+      // them (and the next keystroke would upsert the stale copy back to
+      // the sheet). Drop the row; the record is freshly synced as-is.
+      if (force) setStatus(updatedAt > syncedAt ? 'local' : isBlank(record) ? 'new' : 'synced');
+      return;
+    }
 
     const serverRow = server && server.status === 'found' && server.data ? server.data : null;
     if (netFail) {
@@ -292,6 +316,11 @@ export function createStore({ api, storage, now = Date.now, debounceMs = 2500 })
     next.eon.outlookForecast = record.eon.outlookForecast;
     next.eon.outlookManual = record.eon.outlookManual;
     record = next;
+    // The ack cache described the record this phone last posted — after
+    // applying the sheet's copy (possibly another phone's numbers) a stale
+    // ack could swallow a later edit that happens to re-serialize the same
+    // payload, leaving the phone "synced" while the sheet disagrees.
+    sent = {};
     updatedAt = syncedAt = now();
     persist();
     status = 'synced';
