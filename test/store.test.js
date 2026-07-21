@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
 import { blankRecord } from '../js/calc.js';
-import { buildPayloads, recordFromRow } from '../js/api.js';
+import { buildPayloads, recordFromRow, sheetDateToLocal, mdyToISO } from '../js/api.js';
 import { createStore } from '../js/store.js';
 
 /* ---------------- harness ---------------- */
@@ -28,6 +28,8 @@ function harness(t, { postImpl, getImpl, debounceMs = 2500 } = {}) {
   const api = {
     buildPayloads,
     recordFromRow,
+    sheetDateToLocal,
+    mdyToISO,
     post: async (payload, opts = {}) => {
       calls.push({ payload, opts });
       return postImpl ? postImpl(payload, calls.length) : { ok: true, json: { status: 'ok' } };
@@ -231,6 +233,20 @@ test('setDate: unsynced local edits win over the server copy', async (t) => {
   assert.equal(s.status, 'local');
 });
 
+test('setDate: a blank unsynced local copy yields to the server row (the stuck-16th fix)', async (t) => {
+  const { store, storage } = harness(t, {
+    getImpl: async () => ({ status: 'found', data: serverRow }),
+  });
+  // The stuck signature: updatedAt > syncedAt but the record is blank (a reset
+  // or a date only glanced at). It must NOT cling — the sheet row loads.
+  seedEntry(storage, '2026-04-02', blankRecord(), { updatedAt: 100, syncedAt: 0 });
+  await store.setDate('2026-04-02');
+  const s = store.getState();
+  assert.equal(s.record.twopm.todayForecast, '9'); // sheet loaded, not the stale blank
+  assert.equal(s.status, 'synced');
+  assert.equal(s.dirty, false); // getState exposes the unsynced-real-edits flag
+});
+
 test('setDate: synced local → server wins, local-only fields carry over', async (t) => {
   const { store, storage } = harness(t, {
     getImpl: async () => ({ status: 'found', data: serverRow }),
@@ -319,7 +335,7 @@ test('setDate: a superseded load never lands', async (t) => {
 
 /* ---------------- reset & boot retry ---------------- */
 
-test('reset blanks the open date and blocks server resurrection', async (t) => {
+test('reset blanks the date and stops the blank posting; the next load re-pulls the sheet', async (t) => {
   const { store, storage, calls } = harness(t, {
     getImpl: async () => ({ status: 'found', data: serverRow }),
   });
@@ -328,13 +344,15 @@ test('reset blanks the open date and blocks server resurrection', async (t) => {
   store.reset();
   assert.equal(store.getState().status, 'new');
   const before = calls.length;
-  await store.flush(); // nothing to send for a blank record
+  await store.flush(); // nothing to send for a blank record — the sheet isn't clobbered
   assert.equal(calls.length, before);
   const entry = JSON.parse(storage.getItem('dough:2026-04-02'));
-  assert.ok(entry.updatedAt > entry.syncedAt); // local-wins stays armed
+  assert.ok(entry.updatedAt > entry.syncedAt); // still unsynced on the phone
   await store.setDate('2026-04-02'); // reload the same date
-  assert.equal(store.getState().record.twopm.todayForecast, ''); // no resurrect
-  assert.equal(store.getState().status, 'local');
+  // A blank reset has nothing to protect, so the sheet's row wins — this is
+  // what un-sticks a phone showing a stale blank for a saved date.
+  assert.equal(store.getState().record.twopm.todayForecast, '9');
+  assert.equal(store.getState().status, 'synced');
 });
 
 test('retryUnsynced: boot pass re-sends every unsynced date, in order', async (t) => {
@@ -350,6 +368,26 @@ test('retryUnsynced: boot pass re-sends every unsynced date, in order', async (t
     const entry = JSON.parse(storage.getItem(`dough:${iso}`));
     assert.equal(entry.syncedAt, entry.updatedAt);
   }
+});
+
+/* ---------------- cacheHistory: last week ready to load ---------------- */
+
+test('cacheHistory pre-warms recent dates but never clobbers an existing copy', async (t) => {
+  const { store, storage } = harness(t);
+  await store.setDate('2026-07-01'); // the active date must be skipped
+  // an existing unsynced edit for 7/16 that must survive the pre-warm
+  seedEntry(storage, '2026-07-16', eonSalesRecord('9.9'), { updatedAt: 200, syncedAt: 0 });
+  store.cacheHistory([
+    { Date: '7/15/2026', "Today's Forecast": 10000, 'Indi Count': 5 },
+    { Date: '7/16/2026', "Today's Forecast": 11500 }, // has a local copy — skip
+    { Date: '7/01/2026', "Today's Forecast": 8000 }, // the active date — skip
+  ]);
+  const c15 = JSON.parse(storage.getItem('dough:2026-07-15'));
+  assert.equal(c15.record.twopm.todayForecast, '10'); // gap-filled from history
+  assert.equal(c15.syncedAt, c15.updatedAt); // landed as a synced copy
+  const c16 = JSON.parse(storage.getItem('dough:2026-07-16'));
+  assert.equal(c16.record.eon.sales, '9.9'); // the unsynced edit was left alone
+  assert.equal(storage.getItem('dough:2026-07-01'), null); // active date never cached
 });
 
 /* ---------------- reload: the Load button + foreground refresh ---------------- */
@@ -480,7 +518,7 @@ test('reload with nothing on the sheet leaves the phone alone; network failure r
   assert.equal(s.status, 'offline');
 });
 
-test('force-load after a reset deliberately resurrects the sheet row', async (t) => {
+test('after a reset, the auto-refresh re-pulls the sheet (a blank has nothing to protect)', async (t) => {
   const { store } = harness(t, {
     getImpl: async () => ({ status: 'found', data: sheetRow716 }),
   });
@@ -488,9 +526,7 @@ test('force-load after a reset deliberately resurrects the sheet row', async (t)
   assert.equal(store.getState().record.twopm.todayForecast, '10');
   store.reset();
   assert.equal(store.getState().status, 'new');
-  await store.reload(); // auto refresh respects the reset…
-  assert.equal(store.getState().record.twopm.todayForecast, '');
-  await store.reload({ force: true }); // …the button is the escape hatch
+  await store.reload(); // blank reset → the sheet copy wins, zero taps
   const s = store.getState();
   assert.equal(s.record.twopm.todayForecast, '10');
   assert.equal(s.status, 'synced');

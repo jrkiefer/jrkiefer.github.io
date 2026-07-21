@@ -48,11 +48,29 @@ export function update(view) {
     setText($('heroWords'), p.closedTomorrow
       ? 'closed tomorrow — nothing to make'
       : `${p.batches} ${p.batches === 1 ? 'batch' : 'batches'} to make`);
-    const totalPrep = p.batches * TRAYS_PER_BATCH;
-    const detail = p.extra > 0 ? ` (${p.totalTrays} planned · extras: ${p.extraNote})`
-      : p.cut > 0 ? ` (${p.totalTrays} planned${p.cutNote ? ` · cut: ${p.cutNote}` : ''})`
-        : '';
-    setText($('heroNote'), `${totalPrep} trays${detail}`);
+
+    // Planned = the raw tray total; Making = what the batch count produces.
+    const madeTrays = p.batches * TRAYS_PER_BATCH;
+    const tray = (n) => `${n} ${n === 1 ? 'tray' : 'trays'}`;
+    setText($('heroPlanned'), tray(p.totalTrays));
+    setText($('heroMaking'), `${tray(madeTrays)} (${p.batches} × ${TRAYS_PER_BATCH})`);
+
+    // Rounding badge: how far the batch count moved off the planned trays.
+    const badge = $('heroRound');
+    badge.classList.remove('down', 'up', 'even', 'hidden');
+    if (p.closedTomorrow || p.totalTrays === 0) {
+      badge.classList.add('hidden');
+    } else if (p.cut > 0) {
+      badge.classList.add('down');
+      setText(badge, `▾ rounded down ${tray(p.cut)}${p.cutNote ? ` · ${p.cutNote}` : ''}`);
+    } else if (p.extra > 0) {
+      badge.classList.add('up');
+      setText(badge, `▴ rounded up · +${tray(p.extra)}${p.extraNote ? ` · ${p.extraNote}` : ''}`);
+    } else {
+      badge.classList.add('even');
+      setText(badge, `even · ${tray(p.totalTrays)} = ${p.batches} ${p.batches === 1 ? 'batch' : 'batches'}`);
+    }
+
     setText($('heroBoilWarn'), p.boilMake == null ? 'boil not counted — left out of batch math' : '');
   } else {
     wrap.classList.add('hidden');

@@ -31,6 +31,7 @@ const store = createStore({ api, storage: window.localStorage });
 // (UI modules never import api or touch storage).
 async function loadHistoryEntries() {
   const rows = await api.getHistory();
+  store.cacheHistory(rows); // keep recent days ready to load offline
   return (Array.isArray(rows) ? rows : []).slice(0, 10).map((row) => {
     const mdy = api.sheetDateToLocal(row.Date ?? row.date ?? '');
     const iso = api.mdyToISO(mdy);
@@ -114,11 +115,6 @@ function setMode(m) {
   }
 }
 
-function has2pmData(record) {
-  if (record.twopm.tomorrowForecast !== '') return true;
-  return Object.values(record.twopm.counts).some((c) => c.trays !== '' || c.singles !== '');
-}
-
 for (const tab of document.querySelectorAll('.mode-tab')) {
   tab.addEventListener('click', () => {
     setMode(tab.dataset.mode); // manual taps always win
@@ -135,8 +131,7 @@ store.subscribe((state, meta) => {
 
   if (meta.reason === 'load') {
     lastLoadAt = Date.now();
-    // auto-select EON when the date already has 2 PM data
-    setMode(has2pmData(state.record) ? 'eon' : 'twopm');
+    setMode('twopm'); // always open on 2 PM; EON is a manual tap
   }
   if (meta.reason === 'reset') setMode('twopm');
 
@@ -192,14 +187,21 @@ function disarmLoad() {
   if (loadTimer) clearTimeout(loadTimer);
   loadTimer = null;
   loadBtn.classList.remove('armed');
-  loadBtn.textContent = 'Load';
+  loadBtn.textContent = 'Load from sheet';
 }
 
 loadBtn.addEventListener('click', () => {
+  // One tap when there's nothing unsynced to lose. A force-load only needs
+  // a confirming second tap when it would discard real local edits.
+  if (!store.getState().dirty) {
+    disarmLoad();
+    store.reload({ force: true });
+    return;
+  }
   if (!loadTimer) {
     loadBtn.classList.add('armed');
-    loadBtn.textContent = 'Tap again';
-    loadTimer = setTimeout(disarmLoad, 2500);
+    loadBtn.textContent = 'Discard edits & load?';
+    loadTimer = setTimeout(disarmLoad, 3000);
     return;
   }
   disarmLoad();
@@ -229,4 +231,15 @@ window.addEventListener('pageshow', refreshOnWake);
 
 /* ─── boot ─── */
 
-store.setDate(api.todayISO()).then(() => store.retryUnsynced());
+// Pre-warm the local cache with the last ~30 nights so opening a recent
+// date is instant and survives a flaky network. Background, failure-silent.
+async function prewarmCache() {
+  try {
+    store.cacheHistory(await api.getHistory());
+  } catch { /* offline — the cache just stays as-is */ }
+}
+
+store.setDate(api.todayISO()).then(() => {
+  store.retryUnsynced();
+  prewarmCache();
+});

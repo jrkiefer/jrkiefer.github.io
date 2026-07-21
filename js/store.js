@@ -29,13 +29,20 @@ export function createStore({ api, storage, now = Date.now, debounceMs = 2500 })
   const isBlank = (r) => JSON.stringify(r) === BLANK_JSON;
   const keyFor = (d) => KEY_PREFIX + d;
 
+  // Unsynced edits worth protecting from a server load. A blank record —
+  // a reset, or a date this phone only glanced at — has nothing to lose, so
+  // it deliberately does NOT block a load: that's what un-sticks a phone
+  // showing a stale blank for a date another phone already saved. Only a
+  // record with real typed values holds the line against the sheet.
+  const hasUnsyncedEdits = () => updatedAt > syncedAt && !isBlank(record);
+
   function notify(reason) {
     const state = getState();
     for (const fn of subscribers) fn(state, { reason });
   }
 
   function getState() {
-    return { date, record, status, updatedAt, syncedAt };
+    return { date, record, status, updatedAt, syncedAt, dirty: hasUnsyncedEdits() };
   }
 
   function subscribe(fn) {
@@ -204,8 +211,11 @@ export function createStore({ api, storage, now = Date.now, debounceMs = 2500 })
     // (and the pre-patch `local` snapshot) must not clobber it.
     if (updatedAt > 0) return;
 
-    if (local && local.updatedAt > (local.syncedAt || 0)) {
-      // Unsynced local edits win wholesale over whatever the server has.
+    if (local && local.updatedAt > (local.syncedAt || 0) && !isBlank(local.record)) {
+      // Real unsynced local edits win wholesale over whatever the server
+      // has. A blank unsynced copy (a reset, or a date this phone only
+      // glanced at) deliberately does NOT win — it falls through so the
+      // sheet's saved row loads instead of a stale blank.
       record = local.record;
       updatedAt = local.updatedAt;
       syncedAt = local.syncedAt || 0;
@@ -261,6 +271,7 @@ export function createStore({ api, storage, now = Date.now, debounceMs = 2500 })
     if (date == null) return;
     const mySeq = seq;
     const startUpdatedAt = updatedAt;
+    const startSyncedAt = syncedAt;
     if (force) setStatus('loading');
     let server = null;
     let netFail = false;
@@ -280,10 +291,15 @@ export function createStore({ api, storage, now = Date.now, debounceMs = 2500 })
     if (!serverRow) {
       // Nothing on the sheet — never blank a phone over that. Just put the
       // status back where it belongs after the force-load's 'loading'.
-      if (force) setStatus(updatedAt > syncedAt ? 'local' : isBlank(record) ? 'new' : 'synced');
+      if (force) setStatus(hasUnsyncedEdits() ? 'local' : isBlank(record) ? 'new' : 'synced');
       return;
     }
-    if (!force && updatedAt > syncedAt) return; // unsynced edits win silently
+    // Whether to apply the arriving row is judged on the sync state AS OF
+    // ENTRY (snapshots), not the live values: a flush that lands mid-fetch
+    // equalizes syncedAt to updatedAt, and reading it live would let this
+    // now-stale GET overwrite the edit the flush just synced. The keystroke
+    // guard above already guarantees the record is unchanged since entry.
+    if (!force && startUpdatedAt > startSyncedAt && !isBlank(record)) return;
 
     hasServerDoughRow = serverRow["Today's Forecast"] !== undefined;
     const next = api.recordFromRow(serverRow);
@@ -310,6 +326,28 @@ export function createStore({ api, storage, now = Date.now, debounceMs = 2500 })
     persist();
     status = 'new';
     notify('reset');
+  }
+
+  // Pre-warm the local cache from a History pull so recently-saved dates
+  // load instantly (and survive a flaky network). Gap-fill ONLY: never
+  // overwrite an existing local copy, so unsynced edits and richer
+  // EON/temps records are always preserved. Rows carry Dough Counts fields;
+  // they land as fully-synced entries so a later setDate still prefers the
+  // server's merged row when reachable, and falls back to this when not.
+  function cacheHistory(rows) {
+    if (!Array.isArray(rows)) return;
+    for (const row of rows) {
+      const mdy = api.sheetDateToLocal(row.Date ?? row.date ?? '');
+      const iso = api.mdyToISO(mdy);
+      if (!iso || iso === date) continue; // the active date manages itself
+      if (readLocal(iso)) continue; // never clobber an existing copy
+      const t = now();
+      try {
+        storage.setItem(keyFor(iso), JSON.stringify({
+          v: 2, record: api.recordFromRow(row), updatedAt: t, syncedAt: t,
+        }));
+      } catch { /* best effort */ }
+    }
   }
 
   // Boot pass: re-send any date whose local copy never finished syncing
@@ -341,5 +379,5 @@ export function createStore({ api, storage, now = Date.now, debounceMs = 2500 })
     if (updatedAt > syncedAt) flush();
   }
 
-  return { getState, subscribe, patch, setDate, reload, flush, reset, retryUnsynced };
+  return { getState, subscribe, patch, setDate, reload, flush, reset, cacheHistory, retryUnsynced };
 }

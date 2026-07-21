@@ -24,7 +24,8 @@ export const MAX_BATCH_TEMPS = 10;
 // bible lookups and the batch count default to rounding down.
 export const SLOW_DAY_UNDER = 12000;
 export const ROUND_DOWN_MAX_GAP = 300; // never round a lookup down more than $300
-export const BATCH_DOWN_MAX_OVER = 5; // ≤ 5 trays past a whole batch rounds down
+export const BATCH_DOWN_MAX_OVER = 5; // slow day: ≤ 5 trays past a whole batch rounds down
+export const BATCH_DOWN_ALWAYS_MAX_OVER = 2; // any day: ≤ 2 trays past a whole batch rounds down
 export const EXTRA_LG_RATIO = 0.6; // lean-large share of the extras/cut split
 
 // The Dough Bibles. Row format: [threshold, indi, small, large, sic].

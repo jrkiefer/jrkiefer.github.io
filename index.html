@@ -41,7 +41,7 @@
       </div>
       <div class="card date-card">
         <input type="date" id="activeDate" aria-label="Active date">
-        <button type="button" class="date-load" id="loadBtn">Load</button>
+        <button type="button" class="date-load" id="loadBtn">Load from sheet</button>
       </div>
     </section>
 
@@ -170,10 +170,20 @@
         <div class="hero-split"></div>
         <div class="hero hidden" id="heroWrap">
           <span class="hero-num" id="heroNum">0</span>
-          <div>
+          <div class="hero-body">
             <span class="eyebrow">Batches</span>
             <div class="hero-words" id="heroWords"></div>
-            <div class="hero-note" id="heroNote"></div>
+            <div class="hero-lines">
+              <div class="hero-line">
+                <span class="hero-line-lab monocaps">Planned</span>
+                <span class="hero-line-val" id="heroPlanned">—</span>
+              </div>
+              <div class="hero-line">
+                <span class="hero-line-lab monocaps">Making</span>
+                <span class="hero-line-val" id="heroMaking">—</span>
+              </div>
+            </div>
+            <div class="round-badge hidden" id="heroRound"></div>
             <div class="hero-warn" id="heroBoilWarn"></div>
           </div>
         </div>
