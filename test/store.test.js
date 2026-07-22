@@ -507,10 +507,13 @@ test('reload with nothing on the sheet leaves the phone alone; network failure r
   });
   await store.setDate('2026-07-16');
   store.patch((r) => { r.twopm.currentSales = '5'; });
+  const reasons = [];
+  store.subscribe((_s, meta) => reasons.push(meta.reason));
   await store.reload({ force: true });
   let s = store.getState();
   assert.equal(s.record.twopm.currentSales, '5'); // not blanked
   assert.equal(s.status, 'local'); // status restored after the loading flip
+  assert.ok(reasons.includes('loadmiss')); // the miss is signalled, not silent
   mode = 'throw';
   await store.reload({ force: true });
   s = store.getState();
@@ -530,4 +533,98 @@ test('after a reset, the auto-refresh re-pulls the sheet (a blank has nothing to
   const s = store.getState();
   assert.equal(s.record.twopm.todayForecast, '10');
   assert.equal(s.status, 'synced');
+});
+
+/* ---------------- reload/flush coordination (v2·16) ---------------- */
+
+test('resurface reload discards a stale row when a sync lands mid-fetch', async (t) => {
+  // The wake sequence fires the `online` flush and the resurface reload
+  // together; the GET can be served before the POSTs land and return the
+  // pre-edit row. Applying it would revert the numbers that just synced.
+  const pendingGets = [];
+  const { store, tick } = harness(t, {
+    getImpl: () => new Promise((res) => { pendingGets.push(res); }),
+  });
+  const boot = store.setDate('2026-07-16');
+  await new Promise((r) => setImmediate(r));
+  pendingGets.shift()({ status: 'not_found' });
+  await boot;
+  store.patch((r) => { r.eon.sales = '5'; });
+  const p = store.reload(); // non-force; its GET hangs…
+  await tick(2500); // …while the debounce flush completes (syncedAt moves)
+  pendingGets.shift()({ status: 'found', data: { Date: '7/16/2026', 'EON Sales': 7000 } });
+  await p;
+  const s = store.getState();
+  assert.equal(s.record.eon.sales, '5'); // the just-synced edit survives
+  assert.equal(s.status, 'synced');
+});
+
+test('force reload lets an in-flight sync land before fetching', async (t) => {
+  // Load's job is "show what the sheet holds" — if this phone's own POSTs
+  // are still in flight, fetching first would race them and display a row
+  // the sheet is about to replace.
+  const pendingPosts = [];
+  let row = null;
+  let gets = 0;
+  const { store, tick, settle } = harness(t, {
+    postImpl: () => new Promise((res) => { pendingPosts.push(res); }),
+    getImpl: async () => {
+      gets++;
+      return row ? { status: 'found', data: row } : { status: 'not_found' };
+    },
+  });
+  await store.setDate('2026-07-16');
+  store.patch((r) => { r.eon.sales = '5'; });
+  await tick(2500); // flush starts, its POST hangs
+  row = { Date: '7/16/2026', 'EON Sales': 7000 };
+  const p = store.reload({ force: true });
+  await settle();
+  assert.equal(gets, 1); // only the setDate GET so far — reload is waiting
+  pendingPosts.shift()({ ok: true });
+  await settle();
+  await p;
+  assert.equal(gets, 2); // fetched only after the POST landed
+  const s = store.getState();
+  assert.equal(s.record.eon.sales, '7'); // the sheet copy applied
+  assert.equal(s.status, 'synced');
+});
+
+test('a superseded flush hands off to the new date instead of stranding it', async (t) => {
+  const pendingPosts = [];
+  const { store, calls, tick, settle } = harness(t, {
+    postImpl: (p) => (p.eonSales === 5000 ? new Promise((res) => { pendingPosts.push(res); }) : { ok: true }),
+  });
+  await store.setDate('2026-07-01');
+  store.patch((r) => { r.eon.sales = '5'; });
+  await tick(2500); // date A's flush hangs mid-POST
+  await store.setDate('2026-07-02');
+  store.patch((r) => { r.eon.sales = '6'; });
+  await tick(2500); // B's debounce fires into the busy flush → queued as a rerun
+  pendingPosts.shift()({ ok: true }); // A's POST finally lands
+  await settle();
+  // The rerun pass must flush B — dropping it on the seq check would leave
+  // B "Saved on phone" with no timer armed until the next event.
+  assert.ok(calls.some((c) => c.payload.eonSales === 6000));
+  assert.equal(store.getState().status, 'synced');
+});
+
+test('reload invalidates the ack cache — a re-typed number reposts even when it matches an old payload', async (t) => {
+  let serverRow = null;
+  const { store, calls, tick } = harness(t, {
+    getImpl: async () => (serverRow ? { status: 'found', data: serverRow } : { status: 'not_found' }),
+  });
+  await store.setDate('2026-07-16');
+  store.patch((r) => { r.eon.sales = '5'; });
+  await tick(2500);
+  assert.equal(calls.length, 1); // acked: eonSales 5000
+  serverRow = { Date: '7/16/2026', 'EON Sales': 7000 }; // another phone's number
+  await store.reload(); // idle phone — the non-force refresh applies it
+  assert.equal(store.getState().record.eon.sales, '7');
+  store.patch((r) => { r.eon.sales = '5'; }); // disagree: re-type the original
+  await tick(2500);
+  // Byte-identical to the first post — a stale ack must not swallow it, or
+  // the phone reads "synced" while the sheet keeps the other phone's 7000.
+  assert.equal(calls.length, 2);
+  assert.equal(calls[1].payload.eonSales, 5000);
+  assert.equal(store.getState().status, 'synced');
 });

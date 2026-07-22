@@ -403,6 +403,30 @@ test('batch ≤2-over rounds down on ANY day; 3-over on a busy day rounds up', (
   assert.equal(up.extra, 8);
 });
 
+test('real 5/28/2026 busy night: 57 trays (rem 2) floors to 5 batches', () => {
+  // From the Apr–Jul export — tmf $15,500 is NOT a slow day, yet the ≤2 rule
+  // floors the batches. Pre-v2·15 this rounded up to 6.
+  const down = computePlan(record2pm({
+    cs: 1500, tf: 10500, tmf: 15500,
+    counts: { indi: 53, small: 157, large: 142, sic: 5 }, boil: 18,
+  }), 'regular');
+  assert.equal(down.rounding.slowDay, false);
+  assert.equal(down.totalTrays, 57); // remainder 2
+  assert.equal(down.rounding.batches, 'down');
+  assert.equal(down.batches, 5);
+  assert.equal(down.cut, 2);
+  assert.equal(down.cutNote, '−2 LG');
+  // Same night, boil steered to 58 trays (remainder 3) → back to up.
+  const up = computePlan(record2pm({
+    cs: 1500, tf: 10500, tmf: 15500,
+    counts: { indi: 53, small: 157, large: 142, sic: 5 }, boil: 12,
+  }), 'regular');
+  assert.equal(up.totalTrays, 58); // remainder 3 — past the always-down window
+  assert.equal(up.rounding.batches, 'up');
+  assert.equal(up.batches, 6);
+  assert.equal(up.extra, 8);
+});
+
 test('rounding down never drops below 1 batch; the single batch still tops up', () => {
   // Everything already on hand except one boil tray.
   const r = record2pm({

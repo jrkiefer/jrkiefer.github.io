@@ -26,7 +26,8 @@ export default [
       sourceType: 'script',
       globals: {
         SpreadsheetApp: 'readonly', ContentService: 'readonly',
-        LockService: 'readonly', Logger: 'readonly', console: 'readonly'
+        LockService: 'readonly', Logger: 'readonly', console: 'readonly',
+        Utilities: 'readonly'
       }
     },
     rules: {
