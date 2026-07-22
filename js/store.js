@@ -37,6 +37,10 @@ export function createStore({ api, storage, now = Date.now, debounceMs = 2500 })
   // record with real typed values holds the line against the sheet.
   const hasUnsyncedEdits = () => updatedAt > syncedAt && !isBlank(record);
 
+  // The status an idle record should show (used to restore after a
+  // force-load's 'loading' when nothing ends up applied).
+  const idleStatus = () => (hasUnsyncedEdits() ? 'local' : isBlank(record) ? 'new' : 'synced');
+
   function notify(reason) {
     const state = getState();
     for (const fn of subscribers) fn(state, { reason });
@@ -149,12 +153,17 @@ export function createStore({ api, storage, now = Date.now, debounceMs = 2500 })
       return;
     }
 
+    // Nothing unsynced — never re-POST a clean record. setDate/reload clear
+    // the ack cache, so without this guard a reconnect flush would upsert
+    // this phone's loaded copy over a possibly newer sheet row.
+    if (updatedAt <= syncedAt) return;
+
     if (flushing) {
       rerun = true;
       return flushRun;
     }
     flushing = true;
-    flushRun = (async () => {
+    const run = (async () => {
       try {
         do {
           rerun = false;
@@ -187,7 +196,11 @@ export function createStore({ api, storage, now = Date.now, debounceMs = 2500 })
         flushRun = null;
       }
     })();
-    return flushRun;
+    // A pass that bailed synchronously (nothing the backend would accept)
+    // has already run its finally — storing its settled promise back into
+    // flushRun would leave reload()'s wait spinning on it forever.
+    if (flushing) flushRun = run;
+    return run;
   }
 
   // Change the active date: local entry + merged GET race, newer wins.
@@ -285,7 +298,7 @@ export function createStore({ api, storage, now = Date.now, debounceMs = 2500 })
     // predates this phone's own numbers (the wake sequence fires the `online`
     // flush and the resurface reload together; and Load must show what the
     // sheet holds AFTER this phone's own writes).
-    while (flushRun) await flushRun;
+    while (flushing && flushRun) await flushRun;
     if (mySeq !== seq) return; // a setDate arrived while we waited
     const startUpdatedAt = updatedAt;
     const startSyncedAt = syncedAt;
@@ -302,7 +315,7 @@ export function createStore({ api, storage, now = Date.now, debounceMs = 2500 })
       // A flush landed while the GET was in flight, so the row in hand may
       // predate the numbers that just synced — applying it would revert them
       // (and the next keystroke would upsert the stale copy back). Drop it.
-      if (force) setStatus(hasUnsyncedEdits() ? 'local' : isBlank(record) ? 'new' : 'synced');
+      if (force) setStatus(idleStatus());
       return;
     }
 
@@ -316,7 +329,7 @@ export function createStore({ api, storage, now = Date.now, debounceMs = 2500 })
       // status after the force-load's 'loading', and tell the UI a force-load
       // found nothing so it isn't a silent no-op.
       if (force) {
-        setStatus(hasUnsyncedEdits() ? 'local' : isBlank(record) ? 'new' : 'synced');
+        setStatus(idleStatus());
         notify('loadmiss');
       }
       return;
@@ -333,6 +346,20 @@ export function createStore({ api, storage, now = Date.now, debounceMs = 2500 })
     next.actualMake = record.actualMake;
     next.eon.outlookForecast = record.eon.outlookForecast;
     next.eon.outlookManual = record.eon.outlookManual;
+
+    // Same content this phone already shows — refresh the sync stamps but
+    // skip the apply: no rehydrate (the periodic refresh must not rewrite
+    // inputs or yank the mode back to 2 PM when nothing changed) and the
+    // ack cache stays (it describes content the sheet provably holds).
+    // Stamping synced also recovers an 'offline' status once a background
+    // refresh gets through.
+    if (JSON.stringify(next) === JSON.stringify(record)) {
+      updatedAt = syncedAt = now();
+      persist();
+      setStatus('synced');
+      if (force) notify('loadsame'); // the Load button shouldn't look dead
+      return;
+    }
     record = next;
     // The ack cache described the record this phone last posted — after
     // applying the sheet's copy (possibly another phone's numbers) a stale ack
@@ -368,8 +395,7 @@ export function createStore({ api, storage, now = Date.now, debounceMs = 2500 })
   function cacheHistory(rows) {
     if (!Array.isArray(rows)) return;
     for (const row of rows) {
-      const mdy = api.sheetDateToLocal(row.Date ?? row.date ?? '');
-      const iso = api.mdyToISO(mdy);
+      const iso = api.rowToISO(row);
       if (!iso || iso === date) continue; // the active date manages itself
       if (readLocal(iso)) continue; // never clobber an existing copy
       const t = now();
@@ -379,6 +405,13 @@ export function createStore({ api, storage, now = Date.now, debounceMs = 2500 })
         }));
       } catch { /* best effort */ }
     }
+  }
+
+  // Read-only peek at another date's cached record (the History card shows
+  // EON sales from it). The active date's record comes from getState.
+  function getLocalRecord(d) {
+    const entry = readLocal(d);
+    return entry ? entry.record : null;
   }
 
   // Boot pass: re-send any date whose local copy never finished syncing
@@ -410,5 +443,8 @@ export function createStore({ api, storage, now = Date.now, debounceMs = 2500 })
     if (updatedAt > syncedAt) flush();
   }
 
-  return { getState, subscribe, patch, setDate, reload, flush, reset, cacheHistory, retryUnsynced };
+  return {
+    getState, subscribe, patch, setDate, reload, flush, reset,
+    cacheHistory, retryUnsynced, getLocalRecord,
+  };
 }

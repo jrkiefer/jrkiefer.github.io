@@ -31,6 +31,12 @@ export function mdyToISO(mdy) {
   return `${y}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
 }
 
+// History/GET rows carry the sheet's Date cell in either serialized-Date or
+// M/D/YYYY form — normalize straight to the app's ISO date (null for garbage).
+export function rowToISO(row) {
+  return mdyToISO(sheetDateToLocal(row.Date ?? row.date ?? ''));
+}
+
 // Sheet Date cells arrive as Date objects serialized to ISO timestamps or
 // as plain strings — normalize to M/D/YYYY (local, no UTC shift).
 export function sheetDateToLocal(raw) {
@@ -52,6 +58,15 @@ export function toShorthand(n) {
 
 /* ---------------- transport ---------------- */
 
+// Every request aborts after 15 s so a hung fetch resolves into the normal
+// offline/retry paths instead of pinning the app on 'loading' (GET) or
+// parking every reload behind an unfinished flush (POST). Long enough for
+// an Apps Script cold start; optional call — pre-16 Safari simply gets no
+// signal. A timed-out POST that actually landed is harmless (unacked →
+// retried → server upsert).
+const FETCH_TIMEOUT_MS = 15_000;
+const timeoutSignal = () => AbortSignal.timeout?.(FETCH_TIMEOUT_MS);
+
 // Apps Script quirk: Content-Type text/plain dodges the CORS preflight.
 // An opaque/status-0 response still means the write landed. On a network
 // throw, retry once in no-cors mode (v1-proven fallback) before giving up.
@@ -63,7 +78,7 @@ export async function post(payload, { keepalive = false } = {}) {
     keepalive,
   };
   try {
-    const r = await fetch(SCRIPT_URL, opts);
+    const r = await fetch(SCRIPT_URL, { ...opts, signal: timeoutSignal() });
     if (r.type === 'opaque' || r.status === 0) return { ok: true, opaque: true };
     // fetch resolves on HTTP errors — a 4xx/5xx never carried the save,
     // so report it as retryable rather than letting it count as synced.
@@ -76,7 +91,7 @@ export async function post(payload, { keepalive = false } = {}) {
     return { ok: true, json };
   } catch {
     try {
-      await fetch(SCRIPT_URL, { ...opts, mode: 'no-cors' });
+      await fetch(SCRIPT_URL, { ...opts, mode: 'no-cors', signal: timeoutSignal() });
       return { ok: true, opaque: true };
     } catch {
       return { ok: false, network: true };
@@ -88,14 +103,16 @@ export async function post(payload, { keepalive = false } = {}) {
 // An HTTP error (or an Apps Script HTML error page) must not read as a real
 // answer — throw so callers treat it as a network failure, not not_found.
 export async function getByDate(dateISO) {
-  const r = await fetch(SCRIPT_URL + '?date=' + encodeURIComponent(isoToSheetDate(dateISO)));
+  const r = await fetch(SCRIPT_URL + '?date=' + encodeURIComponent(isoToSheetDate(dateISO)), {
+    signal: timeoutSignal(),
+  });
   if (!r.ok) throw new Error('getByDate HTTP ' + r.status);
   return r.json();
 }
 
 // Bare array of the most recent Dough Counts rows, newest first.
 export async function getHistory() {
-  const r = await fetch(SCRIPT_URL);
+  const r = await fetch(SCRIPT_URL, { signal: timeoutSignal() });
   return r.json();
 }
 

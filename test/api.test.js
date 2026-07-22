@@ -3,8 +3,8 @@ import assert from 'node:assert/strict';
 
 import { blankRecord } from '../js/calc.js';
 import {
-  todayISO, isoToSheetDate, mdyToISO, sheetDateToLocal, toShorthand,
-  post, buildPayloads, recordFromRow,
+  todayISO, isoToSheetDate, mdyToISO, sheetDateToLocal, rowToISO, toShorthand,
+  post, getByDate, getHistory, buildPayloads, recordFromRow,
 } from '../js/api.js';
 
 /* ---------------- date helpers ---------------- */
@@ -366,4 +366,54 @@ test('post: keepalive rides through to fetch for unload flushes', async () => {
     () => post({ type: 'dough' }, { keepalive: true })
   );
   assert.equal(seen.keepalive, true);
+});
+
+test('rowToISO: history/GET rows normalize straight to the ISO date', () => {
+  assert.equal(rowToISO({ Date: '7/16/2026' }), '2026-07-16');
+  assert.equal(rowToISO({ date: '7/4/2026' }), '2026-07-04'); // lowercase variant
+  assert.equal(rowToISO({}), null);
+  assert.equal(rowToISO({ Date: 'garbage' }), null);
+});
+
+/* ---------------- timeouts (v2·18) ---------------- */
+
+test('every request carries an abort signal so a hung fetch cannot wedge the app', async () => {
+  const seen = [];
+  await withFetch(
+    async (url, opts) => {
+      seen.push(opts?.signal);
+      return { ...jsonResponse({ status: 'ok' }), json: async () => ({ status: 'not_found' }) };
+    },
+    async () => {
+      await post({ type: 'dough' });
+      await getByDate('2026-07-16');
+      await getHistory();
+    }
+  );
+  assert.equal(seen.length, 3);
+  for (const s of seen) assert.ok(s instanceof AbortSignal);
+});
+
+test('the no-cors retry gets a fresh signal, not the spent one', async () => {
+  const seen = [];
+  await withFetch(
+    async (url, opts) => {
+      seen.push(opts.signal);
+      if (seen.length === 1) throw new TypeError('Failed to fetch');
+      return { type: 'opaque', status: 0 };
+    },
+    () => post({ type: 'dough' })
+  );
+  assert.equal(seen.length, 2);
+  assert.ok(seen[1] instanceof AbortSignal);
+  assert.notEqual(seen[0], seen[1]);
+});
+
+test('getByDate: a timeout abort propagates as a throw (offline), never as not_found', async () => {
+  await assert.rejects(
+    withFetch(
+      async () => { throw new DOMException('The operation timed out.', 'TimeoutError'); },
+      () => getByDate('2026-07-16')
+    )
+  );
 });

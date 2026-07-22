@@ -4,9 +4,9 @@
 
 import { ALL, TRAYS_PER_BATCH } from '../config.js';
 import { fmt } from '../calc.js';
-import { $, setText } from './fields.js';
+import { $, setText, roundPills } from './fields.js';
 
-let stampedRound = null; // RAW record.batchRound from the last update(view)
+let updateRoundPills = null;
 
 export function init(ctx) {
   const wrap = $('trayChips');
@@ -18,14 +18,8 @@ export function init(ctx) {
     chip.innerHTML = `<span class="dot"></span><span class="monocaps">${s.chip}</span><span class="chip-val" id="chip-${s.id}-val">—</span>`;
     wrap.appendChild(chip);
   }
-  for (const id of ['up', 'down']) {
-    // Guard on the RAW stamp (not the resolved direction): tapping the
-    // value the auto rule currently resolves to PINS it against live inputs.
-    $(`batchRoundPill-${id}`).addEventListener('click', () => {
-      if (stampedRound === id) return;
-      ctx.patch((r) => { r.batchRound = id; });
-    });
-  }
+  updateRoundPills = roundPills('batchRoundPill', 'batchRoundAutoTag',
+    (id) => ctx.patch((r) => { r.batchRound = id; }));
 }
 
 export function update(view) {
@@ -77,11 +71,7 @@ export function update(view) {
     empty.classList.remove('hidden');
   }
 
-  stampedRound = view.record.batchRound ?? null;
-  for (const id of ['up', 'down']) {
-    $(`batchRoundPill-${id}`).classList.toggle('active', p.rounding.batches === id);
-  }
-  $('batchRoundAutoTag').classList.toggle('hidden', view.record.batchRound != null);
+  updateRoundPills(view.record.batchRound, p.rounding.batches);
 
   const alert = $('setoutAlert');
   if (p.setout.length) {

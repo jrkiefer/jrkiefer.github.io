@@ -173,14 +173,6 @@ button:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; }
   color: var(--accent);
 }
 
-.subline {
-  margin-top: 7px;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-.subline .bullet { color: var(--rule); font-size: 8px; }
-
 /* ─── Sections & cards ─── */
 
 .section { display: flex; flex-direction: column; gap: 8px; }

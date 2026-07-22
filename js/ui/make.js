@@ -4,17 +4,13 @@
 // (the store POSTs it as a type:'make' correction automatically).
 
 import { ALL } from '../config.js';
-import { $, bindInput, setText, setInputValue, wireCollapse } from './fields.js';
+import { $, bindInput, setText, setInputValue, wireCollapse, sizeRow } from './fields.js';
 
 export function init(ctx) {
   wireCollapse('makeSec', 'makeToggle');
   const wrap = $('makeRows');
   for (const s of ALL) {
-    const row = document.createElement('div');
-    row.className = 'make-row';
-    row.style.setProperty('--c', `var(--${s.id})`);
-    row.innerHTML = `
-      <div class="plan-size"><span class="dot sm"></span><span class="monocaps">${s.chip}</span></div>
+    wrap.appendChild(sizeRow(s, 'make-row', `
       <div class="field">
         <input id="make-${s.id}" inputmode="numeric" placeholder="—" aria-label="${s.label} actual balls made">
         <span class="saved-chip">✓ saved</span>
@@ -23,8 +19,7 @@ export function init(ctx) {
       <div class="make-eff">
         <span class="make-eff-val mute" id="make-${s.id}-eff">—</span>
         <span class="make-eff-src" id="make-${s.id}-src"></span>
-      </div>`;
-    wrap.appendChild(row);
+      </div>`));
     bindInput($(`make-${s.id}`), {
       onValue: (v) => ctx.patch((r) => { r.actualMake[s.id] = v; }),
     });

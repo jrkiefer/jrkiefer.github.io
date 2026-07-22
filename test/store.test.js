@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
 import { blankRecord } from '../js/calc.js';
-import { buildPayloads, recordFromRow, sheetDateToLocal, mdyToISO } from '../js/api.js';
+import { buildPayloads, recordFromRow, rowToISO } from '../js/api.js';
 import { createStore } from '../js/store.js';
 
 /* ---------------- harness ---------------- */
@@ -28,8 +28,7 @@ function harness(t, { postImpl, getImpl, debounceMs = 2500 } = {}) {
   const api = {
     buildPayloads,
     recordFromRow,
-    sheetDateToLocal,
-    mdyToISO,
+    rowToISO,
     post: async (payload, opts = {}) => {
       calls.push({ payload, opts });
       return postImpl ? postImpl(payload, calls.length) : { ok: true, json: { status: 'ok' } };
@@ -626,5 +625,128 @@ test('reload invalidates the ack cache — a re-typed number reposts even when i
   // the phone reads "synced" while the sheet keeps the other phone's 7000.
   assert.equal(calls.length, 2);
   assert.equal(calls[1].payload.eonSales, 5000);
+  assert.equal(store.getState().status, 'synced');
+});
+
+/* ---------------- v2·18: gated-empty flush + quiet no-change reloads ---------------- */
+
+test('a gated-empty flush never wedges reload (the flushRun poison)', async (t) => {
+  // Only Current Sales typed: the record is dirty but nothing passes the
+  // backend's non-empty gates, so the debounced flush has zero payloads and
+  // bails synchronously. Before the fix, that pass's settled promise was
+  // stored back into flushRun after its finally had already cleared it —
+  // and reload()'s wait-for-flush loop then spun on it forever (the page
+  // hard-froze on the next auto-load or Load tap).
+  let row = null;
+  const { store, calls, tick } = harness(t, {
+    getImpl: async () => (row ? { status: 'found', data: row } : { status: 'not_found' }),
+  });
+  await store.setDate('2026-07-16');
+  store.patch((r) => { r.twopm.currentSales = '2'; });
+  await tick(2500); // the gated-empty flush runs
+  assert.equal(calls.length, 0);
+  row = sheetRow716;
+  await store.reload({ force: true }); // pre-fix: never resolves
+  assert.equal(store.getState().record.twopm.todayForecast, '10');
+  assert.equal(store.getState().status, 'synced');
+});
+
+test('the reconnect sequence (flush + reload) recovers a phone that opened offline', async (t) => {
+  // Boot offline on a blank date, then the network returns: main.js fires
+  // flush() and reload() together. The flush is a no-op (nothing unsynced)
+  // and the reload must fetch and apply the sheet's row.
+  let down = true;
+  const { store } = harness(t, {
+    getImpl: async () => {
+      if (down) throw new Error('offline');
+      return { status: 'found', data: sheetRow716 };
+    },
+  });
+  await store.setDate('2026-07-16');
+  assert.equal(store.getState().status, 'offline');
+  down = false;
+  store.flush();
+  await store.reload();
+  const s = store.getState();
+  assert.equal(s.record.twopm.todayForecast, '10');
+  assert.equal(s.status, 'synced');
+});
+
+test('flush on a clean loaded record posts nothing (reconnect must not re-upload)', async (t) => {
+  const { store, calls } = harness(t, {
+    getImpl: async () => ({ status: 'found', data: sheetRow716 }),
+  });
+  await store.setDate('2026-07-16'); // loads the row; the ack cache is empty
+  await store.flush(); // the 'online' handler fires this on every reconnect
+  assert.equal(calls.length, 0); // nothing unsynced — the copy is not re-uploaded
+});
+
+test('a no-change reload is quiet — no load notify, ack cache kept', async (t) => {
+  let row = null;
+  const { store, calls, tick } = harness(t, {
+    getImpl: async () => (row ? { status: 'found', data: row } : { status: 'not_found' }),
+  });
+  await store.setDate('2026-07-16');
+  store.patch((r) => { r.eon.sales = '5'; });
+  await tick(2500);
+  assert.equal(calls.length, 1); // synced + acked
+  row = { Date: '7/16/2026', 'EON Sales': 5000 }; // the sheet echoes this phone's save
+  const reasons = [];
+  store.subscribe((_s, meta) => reasons.push(meta.reason));
+  await store.reload(); // the periodic background refresh
+  assert.ok(!reasons.includes('load')); // no rehydrate, no 2 PM yank
+  assert.equal(store.getState().status, 'synced');
+  store.patch((r) => { r.eon.sales = '5'; }); // byte-identical re-type
+  await tick(2500);
+  // The kept ack correctly suppresses the repost — the sheet provably
+  // holds this exact content (contrast with the changed-row reload above,
+  // which must clear the cache).
+  assert.equal(calls.length, 1);
+  assert.equal(store.getState().status, 'synced');
+});
+
+test('a force-load on an up-to-date phone says so instead of rehydrating', async (t) => {
+  let row = null;
+  const { store, tick } = harness(t, {
+    getImpl: async () => (row ? { status: 'found', data: row } : { status: 'not_found' }),
+  });
+  await store.setDate('2026-07-16');
+  store.patch((r) => { r.eon.sales = '5'; });
+  await tick(2500);
+  row = { Date: '7/16/2026', 'EON Sales': 5000 };
+  const reasons = [];
+  store.subscribe((_s, meta) => reasons.push(meta.reason));
+  await store.reload({ force: true });
+  assert.ok(reasons.includes('loadsame')); // "Up to date with the sheet."
+  assert.ok(!reasons.includes('load'));
+  assert.equal(store.getState().status, 'synced');
+});
+
+test('a dirty record identical to the sheet force-loads straight to synced', async (t) => {
+  const { store } = harness(t, {
+    getImpl: async () => ({ status: 'found', data: { Date: '7/16/2026', 'EON Sales': 5000 } }),
+  });
+  await store.setDate('2026-07-16'); // hydrates eon.sales '5'
+  store.patch((r) => { r.eon.sales = '5'; }); // both phones typed the same number
+  assert.equal(store.getState().dirty, true);
+  await store.reload({ force: true });
+  const s = store.getState();
+  assert.equal(s.dirty, false); // content verified on the sheet — nothing to protect
+  assert.equal(s.status, 'synced');
+});
+
+test('a background refresh recovers an offline status even when nothing changed', async (t) => {
+  let down = true;
+  const { store, storage } = harness(t, {
+    getImpl: async () => {
+      if (down) throw new Error('offline');
+      return { status: 'found', data: { Date: '7/16/2026', 'EON Sales': 5000 } };
+    },
+  });
+  seedEntry(storage, '2026-07-16', eonSalesRecord('5'), { updatedAt: 100, syncedAt: 100 });
+  await store.setDate('2026-07-16');
+  assert.equal(store.getState().status, 'offline'); // local copy shown, network down
+  down = false;
+  await store.reload(); // the next periodic refresh gets through
   assert.equal(store.getState().status, 'synced');
 });
