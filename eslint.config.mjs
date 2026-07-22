@@ -3,6 +3,7 @@ import js from '@eslint/js';
 const browserGlobals = {
   window: 'readonly', document: 'readonly', fetch: 'readonly',
   console: 'readonly', setTimeout: 'readonly', clearTimeout: 'readonly',
+  setInterval: 'readonly', AbortSignal: 'readonly',
   localStorage: 'readonly', navigator: 'readonly'
 };
 
@@ -41,7 +42,10 @@ export default [
     languageOptions: {
       ecmaVersion: 2023,
       sourceType: 'module',
-      globals: { console: 'readonly', process: 'readonly', setImmediate: 'readonly' }
+      globals: {
+        console: 'readonly', process: 'readonly', setImmediate: 'readonly',
+        AbortSignal: 'readonly', DOMException: 'readonly'
+      }
     }
   }
 ];

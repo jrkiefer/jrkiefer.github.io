@@ -5,7 +5,7 @@
 import { createStore } from './store.js';
 import * as api from './api.js';
 import { computePlan, effectiveMake, autoBibleFor, parseSales, fmtDate } from './calc.js';
-import { BIBLES, APP_VERSION } from './config.js';
+import { APP_VERSION } from './config.js';
 import { $, setText } from './ui/fields.js';
 import * as sales from './ui/sales.js';
 import { createCounts } from './ui/counts.js';
@@ -25,6 +25,14 @@ const STATUS_LABELS = {
   offline: 'Offline — will retry',
 };
 
+// UI timing.
+const RESET_DISARM_MS = 2500; // two-tap reset: second tap window
+const LOAD_DISARM_MS = 3000; // "Discard edits & load?" confirm window
+const LOAD_NOTE_MS = 4000; // transient note under the date card
+const REFRESH_MIN_GAP_MS = 60_000; // skip a refresh if one just ran
+const REFRESH_EVERY_MS = 5 * 60_000; // counter-top re-pull while the app stays open
+const HISTORY_SHOWN = 10; // recent nights listed in the History card
+
 const store = createStore({ api, storage: window.localStorage });
 
 // History fetch + mapping lives here so history.js stays render-only
@@ -32,20 +40,17 @@ const store = createStore({ api, storage: window.localStorage });
 async function loadHistoryEntries() {
   const rows = await api.getHistory();
   store.cacheHistory(rows); // keep recent days ready to load offline
-  return (Array.isArray(rows) ? rows : []).slice(0, 10).map((row) => {
-    const mdy = api.sheetDateToLocal(row.Date ?? row.date ?? '');
-    const iso = api.mdyToISO(mdy);
+  return (Array.isArray(rows) ? rows : []).slice(0, HISTORY_SHOWN).map((row) => {
+    const iso = api.rowToISO(row);
     const batchesRaw = Number(row.Batches ?? row.batches);
-    let eonSales = null;
-    try {
-      const entry = JSON.parse(window.localStorage.getItem(`dough:${iso}`));
-      eonSales = parseSales(entry?.record?.eon?.sales ?? '');
-    } catch { /* no local copy */ }
+    // EON sales only live in the local cache — the bare history GET
+    // carries Dough Counts rows alone.
+    const local = iso ? store.getLocalRecord(iso) : null;
     return {
       iso,
-      label: iso ? fmtDate(iso) : mdy,
+      label: iso ? fmtDate(iso) : String(row.Date ?? row.date ?? ''),
       batches: Number.isFinite(batchesRaw) ? batchesRaw : null,
-      eonSales,
+      eonSales: local ? parseSales(local.eon.sales) : null,
     };
   });
 }
@@ -64,6 +69,7 @@ const ctx = {
 
 let mode = 'twopm';
 let lastState = store.getState();
+let lastLoadAt = Date.now(); // last load/refresh — gates the wake re-pull
 
 /* ─── UI modules ─── */
 
@@ -132,7 +138,7 @@ function showLoadNote(msg) {
   if (!msg) { el.classList.add('hidden'); el.textContent = ''; return; }
   el.textContent = msg;
   el.classList.remove('hidden');
-  loadNoteTimer = setTimeout(() => { el.classList.add('hidden'); el.textContent = ''; loadNoteTimer = null; }, 4000);
+  loadNoteTimer = setTimeout(() => { el.classList.add('hidden'); el.textContent = ''; loadNoteTimer = null; }, LOAD_NOTE_MS);
 }
 
 store.subscribe((state, meta) => {
@@ -146,13 +152,13 @@ store.subscribe((state, meta) => {
     showLoadNote('');
   }
   if (meta.reason === 'reset') setMode('twopm');
-  // A force-load that found no sheet row for the date — say so instead of
-  // leaving the button looking dead.
+  // A force-load that found no sheet row for the date, or one that found
+  // nothing new — say so instead of leaving the button looking dead.
   if (meta.reason === 'loadmiss') showLoadNote(`No saved data on the sheet for ${fmtDate(state.date)}.`);
+  if (meta.reason === 'loadsame') showLoadNote('Up to date with the sheet.');
 
   // Derive once, after any mode change — the view carries the mode.
   const view = deriveView(state);
-  setText($('bibleTag'), BIBLES[view.bibleId].label + (state.record.bible == null ? ' · auto' : ''));
 
   const rehydrate = meta.reason === 'load' || meta.reason === 'reset'
     || (meta.reason === 'status' && state.status === 'loading'); // clear while loading
@@ -177,7 +183,7 @@ resetBtn.addEventListener('click', () => {
   if (!resetTimer) {
     resetBtn.classList.add('armed');
     resetBtn.textContent = 'Tap again';
-    resetTimer = setTimeout(disarmReset, 2500);
+    resetTimer = setTimeout(disarmReset, RESET_DISARM_MS);
     return;
   }
   disarmReset();
@@ -216,7 +222,7 @@ loadBtn.addEventListener('click', () => {
   if (!loadTimer) {
     loadBtn.classList.add('armed');
     loadBtn.textContent = 'Discard edits & load?';
-    loadTimer = setTimeout(disarmLoad, 3000);
+    loadTimer = setTimeout(disarmLoad, LOAD_DISARM_MS);
     return;
   }
   disarmLoad();
@@ -229,20 +235,31 @@ document.addEventListener('visibilitychange', () => {
   if (document.visibilityState === 'hidden') store.flush({ keepalive: true });
 });
 window.addEventListener('pagehide', () => store.flush({ keepalive: true }));
-window.addEventListener('online', () => store.flush());
+
+// Reconnect: push any unsynced edits, then re-pull the sheet — a phone that
+// opened the app offline (blank fields, "Offline — will retry") recovers the
+// moment the network is back, without waiting for a resurface. reload()
+// itself waits out the flush so the GET sees this phone's own writes.
+window.addEventListener('online', () => {
+  store.flush();
+  store.reload();
+});
 
 // A phone that keeps the tab open never re-fetched — numbers typed on
 // another phone stayed invisible until a manual reload. Re-pull on
-// resurface; the non-force rules keep any unsynced local edits safe.
-let lastLoadAt = Date.now();
+// resurface AND on a slow interval while the app sits open on the counter;
+// the non-force rules keep any unsynced local edits safe, and the store
+// skips the rehydrate entirely when the sheet holds nothing new.
 function refreshOnWake() {
   if (document.visibilityState !== 'visible') return;
   if (store.getState().status === 'loading') return;
-  if (Date.now() - lastLoadAt < 60_000) return;
+  if (Date.now() - lastLoadAt < REFRESH_MIN_GAP_MS) return;
+  lastLoadAt = Date.now(); // stamp the attempt — a quiet no-change reload never notifies
   store.reload();
 }
 document.addEventListener('visibilitychange', refreshOnWake);
 window.addEventListener('pageshow', refreshOnWake);
+setInterval(refreshOnWake, REFRESH_EVERY_MS);
 
 /* ─── boot ─── */
 

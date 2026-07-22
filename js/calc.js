@@ -43,7 +43,7 @@ export const countBlank = (c) => c.trays === '' && c.singles === '';
 
 /* ---------------- record shape ---------------- */
 
-export const blankCounts = () => Object.fromEntries(ALL.map((s) => [s.id, { trays: '', singles: '' }]));
+const blankCounts = () => Object.fromEntries(ALL.map((s) => [s.id, { trays: '', singles: '' }]));
 
 export const blankRecord = () => ({
   bible: null, // null = follow the month default
@@ -64,14 +64,14 @@ export function autoBibleFor(dateISO) {
 
 // Slow day: both money forecasts entered and strictly under $12,000 — the
 // shared gate for the auto round-down rules (bible lookups and batches).
-export function slowDay(tf, tmf) {
+function slowDay(tf, tmf) {
   return tf != null && tmf != null && tf < SLOW_DAY_UNDER && tmf < SLOW_DAY_UNDER;
 }
 
 // Resolved forecast-rounding policy for a record: a stamped pill wins,
 // otherwise slow days round down. (`??` also covers records from before
 // the field existed.)
-export function resolveForecastRound(record) {
+function resolveForecastRound(record) {
   const tp = record.twopm;
   return record.forecastRound
     ?? (slowDay(parseSales(tp.todayForecast), parseSales(tp.tomorrowForecast)) ? 'down' : 'up');

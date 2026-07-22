@@ -7,13 +7,12 @@
 
 import { BIBLES } from '../config.js';
 import { money } from '../calc.js';
-import { $, setText, wireCollapse } from './fields.js';
+import { $, setText, wireCollapse, roundPills } from './fields.js';
 
 const IDS = ['regular', 'peach'];
-const ROUNDS = ['up', 'down'];
 
 let activeBible = null; // effective bibleId from the last update(view)
-let stampedRound = null; // RAW record.forecastRound from the last update(view)
+let updateRoundPills = null;
 
 export function init(ctx) {
   wireCollapse('bibleSec', 'bibleToggle');
@@ -36,14 +35,8 @@ export function init(ctx) {
     $(`biblePill-${id}`).addEventListener('click', stamp);
     $(`bibleQuickPill-${id}`).addEventListener('click', stamp);
   }
-  for (const id of ROUNDS) {
-    // Unlike the bible pills, guard on the RAW stamp: tapping the value
-    // the auto rule currently resolves to PINS it against live inputs.
-    $(`forecastRoundPill-${id}`).addEventListener('click', () => {
-      if (stampedRound === id) return;
-      ctx.patch((r) => { r.forecastRound = id; });
-    });
-  }
+  updateRoundPills = roundPills('forecastRoundPill', 'forecastRoundAutoTag',
+    (id) => ctx.patch((r) => { r.forecastRound = id; }));
 }
 
 export function update(view) {
@@ -60,11 +53,7 @@ export function update(view) {
   $('bibleQuick').classList.toggle('hidden', autoBible !== 'peach');
   $('bibleQuickAutoTag').classList.toggle('hidden', record.bible != null);
 
-  stampedRound = record.forecastRound ?? null;
-  for (const id of ROUNDS) {
-    $(`forecastRoundPill-${id}`).classList.toggle('active', plan.rounding.forecast === id);
-  }
-  $('forecastRoundAutoTag').classList.toggle('hidden', record.forecastRound != null);
+  updateRoundPills(record.forecastRound, plan.rounding.forecast);
 
   const tonightTier = plan.use && plan.use.tier > 0 ? plan.use.tier : null;
   const tomorrowTier = plan.need && plan.need.tier > 0 ? plan.need.tier : null;

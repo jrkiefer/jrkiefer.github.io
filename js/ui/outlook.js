@@ -6,23 +6,18 @@
 
 import { ALL } from '../config.js';
 import { parseSales, money, fmt, computeOutlook } from '../calc.js';
-import { $, bindInput, setText, setInputValue } from './fields.js';
+import { $, bindInput, setText, setInputValue, sizeRow } from './fields.js';
 
 export function init(ctx) {
   const wrap = $('outlookRows');
   for (const s of ALL) {
-    const row = document.createElement('div');
-    row.className = 'outlook-row';
-    row.style.setProperty('--c', `var(--${s.id})`);
-    row.innerHTML = `
-      <div class="plan-size"><span class="dot sm"></span><span class="monocaps">${s.chip}</span></div>
+    wrap.appendChild(sizeRow(s, 'outlook-row', `
       <span class="outlook-have" id="ol-${s.id}-have">—</span>
       <span class="outlook-need" id="ol-${s.id}-need">vs —</span>
       <div class="outlook-diff">
         <span class="outlook-diff-trays none" id="ol-${s.id}-tdiff">—</span>
         <span class="outlook-diff-balls" id="ol-${s.id}-balls"></span>
-      </div>`;
-    wrap.appendChild(row);
+      </div>`));
   }
 
   bindInput($('outlookForecast'), {

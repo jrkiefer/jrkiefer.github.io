@@ -9,8 +9,8 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400;0,9..144,500;0,9..144,600;0,9..144,700;1,9..144,400;1,9..144,500;1,9..144,700&family=Inter+Tight:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;700&family=Permanent+Marker&display=swap" rel="stylesheet">
   <!-- ?v= busts stale phone caches — bump with APP_VERSION in js/config.js -->
-  <link rel="stylesheet" href="css/styles.css?v=2.17">
-  <script type="module" src="js/main.js?v=2.17"></script>
+  <link rel="stylesheet" href="css/styles.css?v=2.18">
+  <script type="module" src="js/main.js?v=2.18"></script>
 </head>
 <body>
 
@@ -24,11 +24,6 @@
       <button type="button" class="masthead-reset" id="resetBtn">Reset</button>
     </div>
     <h1 class="wordmark">Dough <em>Tracker</em></h1>
-    <div class="subline">
-      <span class="monocaps" id="bibleTag">Dough Bible 2026 · auto</span>
-      <span class="bullet">●</span>
-      <span class="monocaps">Pizzeria Ops</span>
-    </div>
   </header>
 
   <main>
@@ -38,7 +33,6 @@
       <div class="section-head">
         <span class="step-num">00</span>
         <span class="step-title">Active Date</span>
-        <span class="step-sub monocaps">Auto-loads · Load pulls the sheet</span>
       </div>
       <div class="card date-card">
         <input type="date" id="activeDate" aria-label="Active date">
@@ -61,8 +55,8 @@
 
     <!-- ─── Mode tabs ─── -->
     <div class="mode-tabs" role="tablist" aria-label="Workflow mode">
-      <button type="button" class="mode-tab active" id="tab-twopm" role="tab" aria-selected="true" data-mode="twopm">2 PM</button>
-      <button type="button" class="mode-tab" id="tab-eon" role="tab" aria-selected="false" data-mode="eon">EON</button>
+      <button type="button" class="mode-tab active" role="tab" aria-selected="true" data-mode="twopm">2 PM</button>
+      <button type="button" class="mode-tab" role="tab" aria-selected="false" data-mode="eon">EON</button>
     </div>
 
     <!-- ─── 01 Sales & Forecast (2 PM) ─── -->
@@ -70,7 +64,7 @@
       <div class="section-head">
         <span class="step-num">01</span>
         <span class="step-title">Sales &amp; Forecast</span>
-        <span class="step-sub monocaps">10 = $10,000 · 6.7 = $6,700</span>
+        <span class="step-sub monocaps">10 = $10,000</span>
       </div>
       <div class="card sales-card">
         <div class="sales-row">
@@ -226,7 +220,7 @@
           <div class="plan-size"><span class="dot sm"></span><span class="monocaps">BOIL</span></div>
           <div class="boil-stats">
             <div><span class="eyebrow">have</span><div><span class="num" id="bs-boil-have">—</span></div></div>
-            <div><span class="eyebrow">target</span><div><span class="num">36</span></div></div>
+            <div><span class="eyebrow">target</span><div><span class="num" id="bs-boil-target">36</span></div></div>
             <div><span class="eyebrow">make</span><div><span class="num" id="bs-boil-make">—</span></div></div>
           </div>
           <div class="boil-trays">

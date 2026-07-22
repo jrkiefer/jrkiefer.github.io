@@ -2,26 +2,22 @@
 // per size plus the tinted trays column (final numbers only — the extras
 // breakdown lives in the Day's Work line), and the boil row beneath.
 
-import { SIZES, SIC_MIN, SIC_MIN_WAIVER } from '../config.js';
+import { SIZES, BOIL, SIC_MIN, SIC_MIN_WAIVER } from '../config.js';
 import { fmt } from '../calc.js';
-import { $, setText } from './fields.js';
+import { $, setText, sizeRow } from './fields.js';
 
 export function init() {
   const wrap = $('bysizeRows');
   for (const s of SIZES) {
-    const row = document.createElement('div');
-    row.className = 'plan-grid plan-row';
-    row.style.setProperty('--c', `var(--${s.id})`);
-    row.innerHTML = `
-      <div class="plan-size"><span class="dot sm"></span><span class="monocaps">${s.chip}</span></div>
+    wrap.appendChild(sizeRow(s, 'plan-grid plan-row', `
       <div class="plan-cell" id="bs-${s.id}-have">—</div>
       <div class="plan-cell mute" id="bs-${s.id}-use">—</div>
       <div class="plan-cell" id="bs-${s.id}-left">—</div>
       <div class="plan-cell mute" id="bs-${s.id}-need">—</div>
       <div class="plan-cell bold" id="bs-${s.id}-make">—</div>
-      <div class="plan-trays"><span id="bs-${s.id}-trays">—</span></div>`;
-    wrap.appendChild(row);
+      <div class="plan-trays"><span id="bs-${s.id}-trays">—</span></div>`));
   }
+  setText($('bs-boil-target'), String(BOIL.target));
 }
 
 export function update(view) {
