@@ -571,3 +571,183 @@ test('handleMakePost rejects missing date, missing makes, and negatives', () => 
   }));
   assert.match(neg.message, /Negative/);
 });
+
+/* ---------------- station temps (v2·20) ---------------- */
+
+test('SHEETS: station tabs — 11-column data tab, 4-column Latest tab', () => {
+  assert.equal(g.SHEETS.stations.headers.length, 11);
+  assert.equal(g.SHEETS.stations.headers[1], 'Slot');
+  assert.equal(g.SHEETS.stations.headers[2], 'Time Taken');
+  assert.equal(g.SHEETS.stations.headers[3], 'Pizza 1');
+  assert.equal(g.SHEETS.stations.headers[10], 'Freezer');
+  assert.equal(g.SHEETS.stationsLatest.headers.length, 4);
+});
+
+function stationsContext(rows) {
+  const sheet = {
+    getDataRange() { return { getValues: () => rows.map((r) => r.slice()) }; },
+    getRange(row, col, numRows, numCols) {
+      return {
+        setValues(vals) {
+          for (let i = 0; i < numRows; i++)
+            for (let j = 0; j < numCols; j++)
+              rows[row - 1 + i][col - 1 + j] = vals[i][j];
+        }
+      };
+    },
+    appendRow(r) { rows.push(r); },
+    getLastRow() { return rows.length; }
+  };
+  return loadContext(['apps-script/Code.gs'], {
+    ContentService: ContentServiceStub,
+    Utilities: UtilitiesStub,
+    SpreadsheetApp: {
+      getActiveSpreadsheet: () => ({
+        getSheetByName: (n) => (n === 'Station Temps' ? sheet : null),
+        getSpreadsheetTimeZone: () => 'America/Denver',
+      })
+    }
+  });
+}
+
+test('handleStationsPost: upsert by date+slot, full-row clear, negative freezer ok', () => {
+  const rows = [plain(g.SHEETS.stations.headers)];
+  const ctx2 = stationsContext(rows);
+  const { handleStationsPost } = getRefs(ctx2, ['handleStationsPost']);
+
+  assert.equal(responseOf(handleStationsPost({})).status, 'error'); // missing date
+  assert.equal(responseOf(handleStationsPost({ date: '7/4/2026' })).action, 'stations_noop');
+
+  const res = responseOf(handleStationsPost({
+    date: '7/4/2026',
+    slots: [
+      { slot: 'Morning', takenAt: '9:04 AM', temps: {
+        pizza1: 35.1, lowboy: 37.2, pizza2: 33, slice: 40.1,
+        salad: 33, reachin: 38.3, walkin: 38.2, freezer: 32.7 } },
+      { slot: 'Night', takenAt: '8:31 PM', temps: { freezer: -2 } },
+    ],
+  }));
+  assert.equal(res.status, 'ok');
+  assert.equal(rows.length, 3); // two slots → two data rows
+  assert.equal(rows[1].length, 11);
+  assert.deepEqual(plain(rows[1].slice(0, 5)), ['7/4/2026', 'Morning', '9:04 AM', 35.1, 37.2]);
+  assert.equal(plain(rows[2])[10], -2); // negative freezer lands — no hasNegative
+  assert.ok(rows[2].slice(3, 10).every((c) => c === ''));
+
+  // Re-save Morning with one temp: upserts the same row, clears stale cells.
+  handleStationsPost({
+    date: '7/4/2026',
+    slots: [{ slot: 'Morning', takenAt: '9:30 AM', temps: { pizza1: 36 } }],
+  });
+  assert.equal(rows.length, 3); // still two data rows
+  assert.deepEqual(plain(rows[1].slice(0, 4)), ['7/4/2026', 'Morning', '9:30 AM', 36]);
+  assert.ok(rows[1].slice(4).every((c) => c === ''));
+
+  // A third slot for the same date appends its own row.
+  handleStationsPost({
+    date: '7/4/2026',
+    slots: [{ slot: '2 PM', takenAt: '2:12 PM', temps: { salad: 39.1 } }],
+  });
+  assert.equal(rows.length, 4);
+  assert.equal(rows[3][1], '2 PM');
+});
+
+test('getByDate: station rows merge slot-prefixed; a stations-only date counts as found', () => {
+  const empty = (headers) => fakeGridSheet([plain(headers)]);
+  const byName = {
+    'Dough Counts': empty(g.SHEETS.dough.headers),
+    Temperatures: empty(g.SHEETS.temps.headers),
+    'End of Night Count': empty(g.SHEETS.eon.headers),
+    'Station Temps': fakeGridSheet([
+      plain(g.SHEETS.stations.headers),
+      ['7/4/2026', 'Morning', '9:04 AM', 35.1, 37.2, '', '', '', '', '', ''],
+      ['7/4/2026', 'Night', '8:31 PM', '', '', '', '', '', '', '', -2],
+    ]),
+  };
+  const ctx2 = seedContextFor(byName);
+  const { getByDate } = getRefs(ctx2, ['getByDate']);
+
+  const found = responseOf(getByDate('7/4/2026'));
+  assert.equal(found.status, 'found');
+  assert.equal(found.data['Morning Pizza 1'], 35.1);
+  assert.equal(found.data['Morning Time Taken'], '9:04 AM');
+  assert.equal(found.data['Night Freezer'], -2);
+  assert.equal('Morning Date' in found.data, false); // Date/Slot never leak prefixed
+  assert.equal('Morning Slot' in found.data, false);
+
+  assert.equal(responseOf(getByDate('7/5/2026')).status, 'not_found');
+
+  // A deploy that hasn't run seedSheets() yet: no stations tab, no throw.
+  delete byName['Station Temps'];
+  assert.equal(responseOf(getByDate('7/4/2026')).status, 'not_found');
+});
+
+test('getStationsLast: bottom-up per column — the last reading, not the last row', () => {
+  const rows = [
+    plain(g.SHEETS.stations.headers),
+    ['7/21/2026', 'Morning', '9:00 AM', 35.1, 37.2, '', 40.1, '', 38.3, 38.2, 32.7],
+    ['7/21/2026', 'Night', '8:30 PM', 41.5, '', '', '', '', '', 39.4, ''],
+    ['7/22/2026', 'Morning', '9:05 AM', '', 33.2, '', '', '', '', '', ''],
+  ];
+  const ctx2 = stationsContext(rows);
+  const { getStationsLast } = getRefs(ctx2, ['getStationsLast']);
+
+  const res = responseOf(getStationsLast());
+  assert.equal(res.status, 'ok');
+  // Pizza 1's last non-empty cell is the 7/21 Night row, not the sheet's last row.
+  assert.deepEqual(res.latest['Pizza 1'], { temp: 41.5, date: '7/21/2026', slot: 'Night', time: '8:30 PM' });
+  assert.deepEqual(res.latest['Pizza Lowboy'], { temp: 33.2, date: '7/22/2026', slot: 'Morning', time: '9:05 AM' });
+  assert.equal(res.latest['Freezer'].temp, 32.7);
+  assert.equal('Pizza 2' in res.latest, false); // never recorded → absent
+
+  // Headers-only tab → empty map; so does a missing tab.
+  const emptyCtx = stationsContext([plain(g.SHEETS.stations.headers)]);
+  assert.deepEqual(responseOf(getRefs(emptyCtx, ['getStationsLast']).getStationsLast()).latest, {});
+});
+
+test('seedSheets: creates both station tabs, Latest gets 8 live-formula rows, idempotent', () => {
+  const byName = {
+    'Dough Counts': fakeGridSheet([plain(g.SHEETS.dough.headers)]),
+    Temperatures: fakeGridSheet([plain(g.SHEETS.temps.headers)]),
+    'Dough Bible': fakeGridSheet([plain(g.SHEETS.bible.headers), [3750, 11, 52, 44, 2]]),
+    'Peach Bible': fakeGridSheet([plain(g.SHEETS.peachBible.headers), [3000, 20, 56, 51, 2]]),
+    '2pm Make Amount': fakeGridSheet([plain(g.SHEETS.make.headers)]),
+    'Final Dough Amount at 2pm': fakeGridSheet([plain(g.SHEETS.final.headers)]),
+    'End of Night Count': fakeGridSheet([plain(g.SHEETS.eon.headers)])
+  };
+  const ctx2 = seedContextFor(byName);
+
+  evalIn(ctx2, 'seedSheets()');
+  const data = byName['Station Temps'];
+  const latest = byName['Station Temps Latest'];
+  assert.ok(data, 'Station Temps tab created');
+  assert.deepEqual(plain(data.rows[0]), plain(g.SHEETS.stations.headers));
+  assert.ok(latest, 'Station Temps Latest tab created');
+  assert.equal(latest.rows.length, 9); // headers + 8 station rows
+  assert.equal(latest.rows[1][0], 'Pizza 1');
+  assert.equal(latest.rows[8][0], 'Freezer');
+  assert.match(latest.rows[1][1], /^=IFERROR\(LOOKUP\(2,1\/\('Station Temps'!D\$2:D<>""\)/);
+  assert.match(latest.rows[1][2], /TEXT\('Station Temps'!\$A\$2:\$A,"M\/d"\)/);
+  assert.match(latest.rows[1][3], /SPARKLINE\(FILTER\(/);
+  assert.match(latest.rows[8][1], /'Station Temps'!K\$2:K/); // Freezer reads column K
+
+  // Every formula: leading =, balanced parens, even quote count.
+  for (const row of latest.rows.slice(1)) {
+    for (const f of row.slice(1)) {
+      assert.equal(f[0], '=');
+      let depth = 0;
+      for (const ch of f) {
+        if (ch === '(') depth++;
+        if (ch === ')') depth--;
+        assert.ok(depth >= 0);
+      }
+      assert.equal(depth, 0);
+      assert.equal((f.match(/"/g) || []).length % 2, 0);
+    }
+  }
+
+  // Rerun — byte-identical.
+  const before = JSON.stringify(plain({ data: data.rows, latest: latest.rows }));
+  evalIn(ctx2, 'seedSheets()');
+  assert.equal(JSON.stringify(plain({ data: data.rows, latest: latest.rows })), before);
+});

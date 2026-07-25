@@ -6,11 +6,11 @@
 // sheet payloads in the background. Status reflects the two-stage journey:
 // 'local' (saved on phone) → 'synced' (landed in the sheet).
 
-import { blankRecord } from './calc.js';
+import { blankRecord, blankStations } from './calc.js';
 
 const KEY_PREFIX = 'dough:';
 const BLANK_JSON = JSON.stringify(blankRecord());
-const POST_ORDER = ['dough', 'make', 'temps', 'eon']; // make needs the dough row
+const POST_ORDER = ['dough', 'make', 'temps', 'eon', 'stations']; // make needs the dough row
 
 export function createStore({ api, storage, now = Date.now, debounceMs = 2500 }) {
   let date = null;
@@ -69,6 +69,10 @@ export function createStore({ api, storage, now = Date.now, debounceMs = 2500 })
       if (!raw) return null;
       const entry = JSON.parse(raw);
       if (!entry || entry.v !== 2 || !entry.record) return null;
+      // v2·20 upgrade: pre-stations cached records gain the blank shape,
+      // appended LAST so the JSON.stringify blank-comparisons (isBlank,
+      // reload's no-change check) still line up with BLANK_JSON's key order.
+      if (!entry.record.stations) entry.record.stations = blankStations();
       return entry;
     } catch {
       return null;

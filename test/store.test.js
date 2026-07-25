@@ -752,3 +752,54 @@ test('a non-force reload recovers an offline status even when nothing changed', 
   await store.reload(); // a later re-pull gets through
   assert.equal(store.getState().status, 'synced');
 });
+
+/* ---------------- v2·20: station temps ---------------- */
+
+// A cached record written before the stations field existed. The store's
+// readLocal upgrade must append the blank shape LAST so JSON.stringify
+// blank-comparisons still line up with BLANK_JSON's key order.
+function legacyRecord(mutate) {
+  const r = JSON.parse(JSON.stringify(blankRecord()));
+  delete r.stations;
+  if (mutate) mutate(r);
+  return r;
+}
+
+test('a pre-stations cached blank still reads blank (upgrade keeps key order)', async (t) => {
+  const { store, storage } = harness(t);
+  // Unsynced blank — pre-fix, the missing key made isBlank fail, the blank
+  // "won" over the sheet, and the phone dead-blocked server loads.
+  seedEntry(storage, '2026-07-16', legacyRecord(), { updatedAt: 100, syncedAt: 0 });
+  await store.setDate('2026-07-16'); // server: not_found
+  const s = store.getState();
+  assert.equal(s.status, 'new');
+  assert.deepEqual(s.record, blankRecord());
+});
+
+test('a pre-stations record with real edits keeps them and gains blank stations', async (t) => {
+  const { store, storage } = harness(t);
+  seedEntry(storage, '2026-07-16', legacyRecord((r) => { r.eon.sales = '5'; }), {
+    updatedAt: 100, syncedAt: 0,
+  });
+  await store.setDate('2026-07-16'); // real unsynced edits — local wins
+  const rec = store.getState().record;
+  assert.equal(rec.eon.sales, '5');
+  assert.deepEqual(rec.stations, blankRecord().stations);
+  assert.equal(Object.keys(rec).at(-1), 'stations');
+});
+
+test('stations posts last and does not depend on the dough row', async (t) => {
+  const { store, calls } = harness(t, {
+    postImpl: async (p) => (p.type === 'dough' ? { ok: false, network: true } : { ok: true }),
+  });
+  await store.setDate('2026-04-01');
+  store.patch((r) => {
+    Object.assign(r, full2pm());
+    r.stations.morning.temps.walkin = '38.2';
+    r.stations.morning.takenAt = '9:04 AM';
+  });
+  await store.flush();
+  // dough fails (network) → make would be skipped; stations still lands.
+  assert.deepEqual(calls.map((c) => c.payload.type), ['dough', 'stations']);
+  assert.equal(calls[1].payload.slots[0].temps.walkin, 38.2);
+});

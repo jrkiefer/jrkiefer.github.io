@@ -9,8 +9,8 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400;0,9..144,500;0,9..144,600;0,9..144,700;1,9..144,400;1,9..144,500;1,9..144,700&family=Inter+Tight:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;700&family=Permanent+Marker&display=swap" rel="stylesheet">
   <!-- ?v= busts stale phone caches — bump with APP_VERSION in js/config.js -->
-  <link rel="stylesheet" href="css/styles.css?v=2.19">
-  <script type="module" src="js/main.js?v=2.19"></script>
+  <link rel="stylesheet" href="css/styles.css?v=2.20">
+  <script type="module" src="js/main.js?v=2.20"></script>
 </head>
 <body>
 
@@ -42,7 +42,7 @@
     </section>
 
     <!-- ─── Quick bible toggle (peach season only) ─── -->
-    <div class="card bible-quick hidden" id="bibleQuick">
+    <div class="card bible-quick hidden hide-in-stations" id="bibleQuick">
       <div class="bible-quick-label">
         <span class="eyebrow soft">Dough Bible</span>
         <span class="monocaps bible-auto-tag hidden" id="bibleQuickAutoTag">auto</span>
@@ -55,12 +55,29 @@
 
     <!-- ─── Mode tabs ─── -->
     <div class="mode-tabs" role="tablist" aria-label="Workflow mode">
+      <button type="button" class="mode-tab mode-tab-wide" role="tab" aria-selected="false" data-mode="stations">Station Temps</button>
       <button type="button" class="mode-tab active" role="tab" aria-selected="true" data-mode="twopm">2 PM</button>
       <button type="button" class="mode-tab" role="tab" aria-selected="false" data-mode="eon">EON</button>
     </div>
 
+    <!-- ─── 09 Station Temps (its own mode) ─── -->
+    <section class="section show-in-stations">
+      <div class="section-head">
+        <span class="step-num">09</span>
+        <span class="step-title">Station Temps</span>
+        <span class="step-sub monocaps">°F · 3× daily</span>
+      </div>
+      <div class="card stations-card">
+        <div class="bible-pills" id="stationSlots"></div>
+        <div class="station-taken monocaps" id="stationTakenAt"></div>
+        <div id="stationRows"></div>
+        <button type="button" class="history-load" id="stationLoadLast">Load last temps</button>
+        <div class="load-note hidden" id="stationLastNote" role="status"></div>
+      </div>
+    </section>
+
     <!-- ─── 01 Sales & Forecast (2 PM) ─── -->
-    <section class="section hide-in-eon">
+    <section class="section hide-in-eon hide-in-stations">
       <div class="section-head">
         <span class="step-num">01</span>
         <span class="step-title">Sales &amp; Forecast</span>
@@ -113,7 +130,7 @@
     </section>
 
     <!-- ─── 01 End of Night Sales (EON) ─── -->
-    <section class="section hide-in-twopm">
+    <section class="section hide-in-twopm hide-in-stations">
       <div class="section-head">
         <span class="step-num">01</span>
         <span class="step-title">End of Night Sales</span>
@@ -135,7 +152,7 @@
     </section>
 
     <!-- ─── 02 Current Dough Counts (one instance per mode) ─── -->
-    <section class="section hide-in-eon">
+    <section class="section hide-in-eon hide-in-stations">
       <div class="section-head">
         <span class="step-num">02</span>
         <span class="step-title">Current Dough Counts</span>
@@ -144,7 +161,7 @@
       <div class="counts-grid" id="counts-tp"></div>
     </section>
 
-    <section class="section hide-in-twopm">
+    <section class="section hide-in-twopm hide-in-stations">
       <div class="section-head">
         <span class="step-num">02</span>
         <span class="step-title">Current Dough Counts</span>
@@ -154,7 +171,7 @@
     </section>
 
     <!-- ─── 03 The Day's Work (2 PM) ─── -->
-    <section class="section hide-in-eon">
+    <section class="section hide-in-eon hide-in-stations">
       <div class="section-head">
         <span class="step-num">03</span>
         <span class="step-title">The Day's Work</span>
@@ -198,7 +215,7 @@
     </section>
 
     <!-- ─── 04 By Size (2 PM) ─── -->
-    <section class="section hide-in-eon">
+    <section class="section hide-in-eon hide-in-stations">
       <div class="section-head">
         <span class="step-num">04</span>
         <span class="step-title">By Size</span>
@@ -233,7 +250,7 @@
     </section>
 
     <!-- ─── 08 EON Outlook ─── -->
-    <section class="section hide-in-twopm">
+    <section class="section hide-in-twopm hide-in-stations">
       <div class="section-head">
         <span class="step-num">08</span>
         <span class="step-title">EON Outlook</span>
@@ -259,7 +276,7 @@
 
     <!-- ─── Collapsibles ─── -->
 
-    <section class="collapse dashed" id="bibleSec">
+    <section class="collapse dashed hide-in-stations" id="bibleSec">
       <button type="button" class="collapse-head" id="bibleToggle" aria-expanded="false" aria-controls="bibleBody">
         <span class="collapse-title">Dough <em>Bible</em></span>
         <span class="collapse-hint monocaps" data-hint>Tap to expand ▾</span>
@@ -289,7 +306,7 @@
       </div>
     </section>
 
-    <section class="collapse" id="tempsSec">
+    <section class="collapse hide-in-stations" id="tempsSec">
       <button type="button" class="collapse-head" id="tempsToggle" aria-expanded="false" aria-controls="tempsBody">
         <span class="step-num">05</span>
         <span class="collapse-title">Batch Temperatures</span>
@@ -301,7 +318,7 @@
       </div>
     </section>
 
-    <section class="collapse" id="historySec">
+    <section class="collapse hide-in-stations" id="historySec">
       <button type="button" class="collapse-head" id="historyToggle" aria-expanded="false" aria-controls="historyBody">
         <span class="step-num">06</span>
         <span class="collapse-title">Recent History</span>
@@ -313,7 +330,7 @@
       </div>
     </section>
 
-    <section class="collapse" id="makeSec">
+    <section class="collapse hide-in-stations" id="makeSec">
       <button type="button" class="collapse-head" id="makeToggle" aria-expanded="false" aria-controls="makeBody">
         <span class="step-num">07</span>
         <span class="collapse-title">Actual Make Amount</span>

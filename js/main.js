@@ -16,6 +16,7 @@ import * as bible from './ui/bible.js';
 import * as temps from './ui/temps.js';
 import * as history from './ui/history.js';
 import * as make from './ui/make.js';
+import * as stations from './ui/stations.js';
 
 const STATUS_LABELS = {
   new: 'New night',
@@ -63,6 +64,9 @@ const ctx = {
       window.scrollTo({ top: 0 });
     },
   },
+  stations: {
+    loadLast: () => api.getStationsLast(),
+  },
 };
 
 let mode = 'twopm';
@@ -78,6 +82,7 @@ bible.init(ctx);
 temps.init(ctx);
 history.init(ctx);
 make.init(ctx);
+stations.init(ctx);
 const parts = [
   sales,
   createCounts('tp', (r) => r.twopm.counts, ctx),
@@ -88,6 +93,7 @@ const parts = [
   bible,
   temps,
   make,
+  stations,
 ];
 
 function deriveView(state) {
@@ -121,6 +127,7 @@ function setMode(m) {
 for (const tab of document.querySelectorAll('.mode-tab')) {
   tab.addEventListener('click', () => {
     setMode(tab.dataset.mode); // manual taps always win
+    if (tab.dataset.mode === 'stations') stations.onEnter(); // re-default the slot by clock
     updateAll(deriveView(lastState));
   });
 }

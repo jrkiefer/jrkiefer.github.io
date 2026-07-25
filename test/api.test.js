@@ -4,7 +4,7 @@ import assert from 'node:assert/strict';
 import { blankRecord } from '../js/calc.js';
 import {
   todayISO, isoToSheetDate, mdyToISO, sheetDateToLocal, rowToISO, toShorthand,
-  post, getByDate, getHistory, buildPayloads, recordFromRow,
+  post, getByDate, getHistory, getStationsLast, buildPayloads, recordFromRow,
 } from '../js/api.js';
 
 /* ---------------- date helpers ---------------- */
@@ -209,6 +209,40 @@ test('buildPayloads: all-zero EON counts with no sales would be rejected — omi
   assert.equal('eon' in buildPayloads('2026-04-01', r), false);
 });
 
+test('buildPayloads: stations carries only slots with a reading; blanks travel as empty cells', () => {
+  const r = blankRecord();
+  r.stations.morning.temps.pizza1 = '35.1';
+  r.stations.morning.takenAt = '9:04 AM';
+  r.stations.night.temps.freezer = '-2'; // signed — freezers go below zero
+  const p = buildPayloads('2026-04-01', r);
+  assert.deepEqual(p.stations, {
+    type: 'stations',
+    date: '4/1/2026',
+    slots: [
+      {
+        slot: 'Morning',
+        takenAt: '9:04 AM',
+        temps: {
+          pizza1: 35.1, lowboy: '', pizza2: '', slice: '',
+          salad: '', reachin: '', walkin: '', freezer: '',
+        },
+      },
+      {
+        slot: 'Night',
+        takenAt: '',
+        temps: {
+          pizza1: '', lowboy: '', pizza2: '', slice: '',
+          salad: '', reachin: '', walkin: '', freezer: -2,
+        },
+      },
+    ],
+  });
+  // A lone minus is not a reading — the gate stays closed.
+  const dash = blankRecord();
+  dash.stations.twopm.temps.salad = '-';
+  assert.equal('stations' in buildPayloads('2026-04-01', dash), false);
+});
+
 /* ---------------- hydration ---------------- */
 
 test('recordFromRow: a realistic merged row round-trips into the record shape', () => {
@@ -280,6 +314,26 @@ test('recordFromRow: junk rounding cells hydrate as auto', () => {
   });
   assert.equal(r.forecastRound, null);
   assert.equal(r.batchRound, null);
+});
+
+test('recordFromRow: slot-prefixed station columns hydrate; a stationless row stays blank', () => {
+  const r = recordFromRow({
+    Date: '4/1/2026',
+    'Morning Pizza 1': 35.1,
+    'Morning Time Taken': '9:04 AM',
+    '2 PM Slice': 40,
+    'Night Freezer': -2,
+  });
+  assert.equal(r.stations.morning.temps.pizza1, '35.1');
+  assert.equal(r.stations.morning.takenAt, '9:04 AM');
+  assert.equal(r.stations.twopm.temps.slice, '40');
+  assert.equal(r.stations.twopm.takenAt, '');
+  assert.equal(r.stations.night.temps.freezer, '-2');
+  assert.equal(r.stations.morning.temps.lowboy, '');
+  // An old-backend row (no station columns) must hydrate exactly blank, so
+  // the reload deep-equal / isBlank comparisons keep working.
+  const bare = recordFromRow({ Date: '4/1/2026', "Today's Forecast": 9000 });
+  assert.deepEqual(bare.stations, blankRecord().stations);
 });
 
 /* ---------------- transport ---------------- */
@@ -375,6 +429,27 @@ test('rowToISO: history/GET rows normalize straight to the ISO date', () => {
   assert.equal(rowToISO({ Date: 'garbage' }), null);
 });
 
+test('getStationsLast: hits ?stations=last and returns the latest map', async () => {
+  let seenUrl;
+  const body = { status: 'ok', latest: { 'Pizza 1': { temp: 35.1, date: '7/24/2026', slot: 'Night', time: '8:31 PM' } } };
+  const res = await withFetch(
+    async (url) => {
+      seenUrl = url;
+      return { ...jsonResponse(body), json: async () => body };
+    },
+    () => getStationsLast()
+  );
+  assert.ok(seenUrl.includes('?stations=last'));
+  assert.deepEqual(res, body);
+  // An HTTP error throws (network failure), never reads as an answer.
+  await assert.rejects(
+    withFetch(
+      async () => ({ type: 'basic', status: 500, ok: false }),
+      () => getStationsLast()
+    )
+  );
+});
+
 /* ---------------- timeouts (v2·18) ---------------- */
 
 test('every request carries an abort signal so a hung fetch cannot wedge the app', async () => {
@@ -388,9 +463,10 @@ test('every request carries an abort signal so a hung fetch cannot wedge the app
       await post({ type: 'dough' });
       await getByDate('2026-07-16');
       await getHistory();
+      await getStationsLast();
     }
   );
-  assert.equal(seen.length, 3);
+  assert.equal(seen.length, 4);
   for (const s of seen) assert.ok(s instanceof AbortSignal);
 });
 

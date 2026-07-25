@@ -4,6 +4,7 @@ import assert from 'node:assert/strict';
 import {
   parseSales, money, fmt, countTotal, countBlank, blankRecord,
   autoBibleFor, bibleLookup, computePlan, effectiveMake, computeOutlook,
+  defaultStationSlot,
 } from '../js/calc.js';
 import { BIBLES, SIZES } from '../js/config.js';
 import { loadContext, getRefs, plain } from './helpers/load.js';
@@ -606,6 +607,32 @@ test('outlook: no forecast (or explicit 0) means no need to compare against', ()
   assert.equal(at0.rows.boil.need, null);
   const blank = computeOutlook(blankRecord(), 'regular', 8000);
   assert.equal(blank.anyCount, false);
+});
+
+/* ---------------- station temps (v2·20) ---------------- */
+
+test('defaultStationSlot: morning until 11, 2 PM until 16, night after', () => {
+  assert.equal(defaultStationSlot(0), 'morning');
+  assert.equal(defaultStationSlot(10), 'morning');
+  assert.equal(defaultStationSlot(11), 'twopm');
+  assert.equal(defaultStationSlot(15), 'twopm');
+  assert.equal(defaultStationSlot(16), 'night');
+  assert.equal(defaultStationSlot(23), 'night');
+});
+
+test('blankRecord: stations shape, three slots, appended last', () => {
+  const r = blankRecord();
+  assert.deepEqual(Object.keys(r.stations), ['morning', 'twopm', 'night']);
+  assert.deepEqual(r.stations.morning, {
+    takenAt: '',
+    temps: {
+      pizza1: '', lowboy: '', pizza2: '', slice: '',
+      salad: '', reachin: '', walkin: '', freezer: '',
+    },
+  });
+  // The store's legacy-entry upgrade appends `stations` onto pre-v2·20
+  // records — key order must match or a blank stops comparing blank.
+  assert.equal(Object.keys(r).at(-1), 'stations');
 });
 
 /* ---------------- v1 parity ---------------- */

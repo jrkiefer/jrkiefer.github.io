@@ -2,7 +2,7 @@
 
 // Shown in the footer by main.js (a blank footer = stale cached scripts).
 // Bump together with the ?v= query on the css/js URLs in index.html.
-export const APP_VERSION = 'v2·19';
+export const APP_VERSION = 'v2·20';
 
 export const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbysGE_0ynpVxJNdmvsfPjAdkQA3Lng7YMDp1OjP-EXbdx3xqEixgjwCKxVeSisECo-j/exec';
 export const SHEET_URL = 'https://docs.google.com/spreadsheets/d/1MVjVlKd3pwXB_JkHZkP00FnM0fBerfwStfqJ-GBza0M/edit?gid=0#gid=0';
@@ -23,6 +23,28 @@ export const SIC_MIN = 2;
 export const SIC_MIN_WAIVER = 10; // 10+ Sicilians on hand → no minimum
 export const PEACH_MONTHS = [7, 8]; // Peach bible auto-default July 1 – Aug 31
 export const MAX_BATCH_TEMPS = 10;
+
+// Station Temps (v2·20): 8 kitchen stations, logged 3× daily.
+// Labels double as the sheet column headers / wire keys — change together
+// with SHEETS.stations + STATION_IDS in apps-script/Code.gs.
+export const STATIONS = [
+  { id: 'pizza1', label: 'Pizza 1' },
+  { id: 'lowboy', label: 'Pizza Lowboy' },
+  { id: 'pizza2', label: 'Pizza 2' },
+  { id: 'slice', label: 'Slice' },
+  { id: 'salad', label: 'Salad' },
+  { id: 'reachin', label: 'Reach-In' },
+  { id: 'walkin', label: 'Walk-In' },
+  { id: 'freezer', label: 'Freezer' },
+];
+// Slot labels are the sheet's Slot cell values and the merged GET's key prefixes.
+export const STATION_SLOTS = [
+  { id: 'morning', label: 'Morning' },
+  { id: 'twopm', label: '2 PM' },
+  { id: 'night', label: 'Night' },
+];
+export const STATION_MORNING_UNTIL = 11; // slot default: morning before 11:00
+export const STATION_NIGHT_FROM = 16; // …2 PM until 15:59, night from 16:00
 
 // Slow-day rounding (v2·10): with both forecasts strictly under $12,000 the
 // bible lookups and the batch count default to rounding down.
