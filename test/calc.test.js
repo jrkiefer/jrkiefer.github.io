@@ -4,6 +4,7 @@ import assert from 'node:assert/strict';
 import {
   parseSales, money, fmt, countTotal, countBlank, blankRecord,
   autoBibleFor, bibleLookup, computePlan, effectiveMake, computeOutlook,
+  defaultStationSlot,
 } from '../js/calc.js';
 import { BIBLES, SIZES } from '../js/config.js';
 import { loadContext, getRefs, plain } from './helpers/load.js';
@@ -564,6 +565,39 @@ test('outlook: a shortage that rounds to zero trays still reports its balls', ()
   assert.equal(ol.shortfall, 2); // UI renders this as "less than a tray"
 });
 
+test('outlook: a Sicilian shortage bottoms out at 0 — never negative, never shortfall', () => {
+  const ol = computeOutlook(eonRecord({ sic: 1 }), 'regular', 8000); // need 3
+  assert.deepEqual(ol.rows.sic, { have: 1, need: 3, diff: 0, tDiff: 0 });
+  assert.equal(ol.shortfall, 0);
+  assert.equal(ol.shortTrays, 0);
+  assert.equal(ol.surplus, 0); // a clamped 0 adds nothing to surplus either
+  assert.equal(ol.surplusTrays, 0);
+});
+
+test('outlook: a sic-only shortage no longer drags the summary into same-day dough', () => {
+  // Every other size exactly covered; sic 0 on hand vs need 3.
+  const ol = computeOutlook(eonRecord({ indi: 24, small: 115, large: 106, sic: 0, boil: 36 }), 'regular', 8000);
+  assert.deepEqual(ol.rows.sic, { have: 0, need: 3, diff: 0, tDiff: 0 });
+  assert.equal(ol.shortfall, 0); // pre-clamp this was 3 → the "same-day dough" summary
+  assert.equal(ol.shortTrays, 0);
+  assert.equal(ol.surplus, 0);
+});
+
+test('outlook: the clamp only removes the sic contribution — other shortages still count', () => {
+  const ol = computeOutlook(eonRecord({ large: 100, sic: 0 }), 'regular', 8000); // large 6 short
+  assert.equal(ol.shortfall, 6); // large only — was 9 before the clamp
+  assert.equal(ol.shortTrays, 1);
+  assert.deepEqual(ol.rows.sic, { have: 0, need: 3, diff: 0, tDiff: 0 });
+});
+
+test('outlook: a real Sicilian surplus still counts toward the leftover summary', () => {
+  const ol = computeOutlook(eonRecord({ sic: 9 }), 'regular', 8000); // +6 balls
+  assert.deepEqual(ol.rows.sic, { have: 9, need: 3, diff: 6, tDiff: 2 });
+  assert.equal(ol.surplus, 6);
+  assert.equal(ol.surplusTrays, 2);
+  assert.equal(ol.shortfall, 0);
+});
+
 test('outlook: no forecast (or explicit 0) means no need to compare against', () => {
   const r = eonRecord({ indi: 10 });
   assert.equal(computeOutlook(r, 'regular', null).hasNeed, false);
@@ -573,6 +607,32 @@ test('outlook: no forecast (or explicit 0) means no need to compare against', ()
   assert.equal(at0.rows.boil.need, null);
   const blank = computeOutlook(blankRecord(), 'regular', 8000);
   assert.equal(blank.anyCount, false);
+});
+
+/* ---------------- station temps (v2·20) ---------------- */
+
+test('defaultStationSlot: morning until 11, 2 PM until 16, night after', () => {
+  assert.equal(defaultStationSlot(0), 'morning');
+  assert.equal(defaultStationSlot(10), 'morning');
+  assert.equal(defaultStationSlot(11), 'twopm');
+  assert.equal(defaultStationSlot(15), 'twopm');
+  assert.equal(defaultStationSlot(16), 'night');
+  assert.equal(defaultStationSlot(23), 'night');
+});
+
+test('blankRecord: stations shape, three slots, appended last', () => {
+  const r = blankRecord();
+  assert.deepEqual(Object.keys(r.stations), ['morning', 'twopm', 'night']);
+  assert.deepEqual(r.stations.morning, {
+    takenAt: '',
+    temps: {
+      pizza1: '', lowboy: '', pizza2: '', slice: '',
+      salad: '', reachin: '', walkin: '', freezer: '',
+    },
+  });
+  // The store's legacy-entry upgrade appends `stations` onto pre-v2·20
+  // records — key order must match or a blank stops comparing blank.
+  assert.equal(Object.keys(r).at(-1), 'stations');
 });
 
 /* ---------------- v1 parity ---------------- */

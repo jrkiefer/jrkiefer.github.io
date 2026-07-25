@@ -9,6 +9,7 @@ import {
   PEACH_MONTHS, BIBLES,
   SLOW_DAY_UNDER, ROUND_DOWN_MAX_GAP, BATCH_DOWN_MAX_OVER,
   BATCH_DOWN_ALWAYS_MAX_OVER, EXTRA_LG_RATIO,
+  STATIONS, STATION_MORNING_UNTIL, STATION_NIGHT_FROM,
 } from './config.js';
 
 /* ---------------- parsing & formatting ---------------- */
@@ -45,6 +46,21 @@ export const countBlank = (c) => c.trays === '' && c.singles === '';
 
 const blankCounts = () => Object.fromEntries(ALL.map((s) => [s.id, { trays: '', singles: '' }]));
 
+const blankStationSlot = () => ({
+  takenAt: '',
+  temps: Object.fromEntries(STATIONS.map((s) => [s.id, ''])),
+});
+
+// Exported for store.js's legacy-record upgrade and UI grow-on-demand.
+export const blankStations = () => ({
+  morning: blankStationSlot(),
+  twopm: blankStationSlot(),
+  night: blankStationSlot(),
+});
+
+// `stations` must stay the LAST key: isBlank/reload compare records by
+// JSON.stringify, and the store's legacy-entry upgrade appends the key —
+// key order has to match for a blank to still read blank.
 export const blankRecord = () => ({
   bible: null, // null = follow the month default
   forecastRound: null, // null = auto (slow-day rule)
@@ -53,7 +69,16 @@ export const blankRecord = () => ({
   actualMake: { indi: '', small: '', large: '', sic: '', boil: '' },
   temps: [],
   eon: { sales: '', counts: blankCounts(), outlookForecast: '', outlookManual: false },
+  stations: blankStations(),
 });
+
+// Which station-temps slot the clock defaults to: morning until 11:00,
+// 2 PM from 11:00–15:59, night from 16:00.
+export function defaultStationSlot(hour) {
+  if (hour < STATION_MORNING_UNTIL) return 'morning';
+  if (hour < STATION_NIGHT_FROM) return 'twopm';
+  return 'night';
+}
 
 /* ---------------- bible lookup ---------------- */
 
@@ -230,16 +255,19 @@ export function effectiveMake(record, plan) {
 
 // EON counts vs tomorrow's need on the given forecast (whole dollars).
 // The primary diff is trays rounded to the NEAREST tray; the exact ball
-// diff rides along. Sicilian is treated like every other size here —
-// EON-made Sicilian IS usable tomorrow (unlike the same-night 2 PM clamp).
+// diff rides along. Sicilian's diff clamps at 0 (v2·19): a sic shortage
+// reads as a neutral 0-ball row and never feeds the shortfall aggregate,
+// so it can't flip the summary into "same-day dough" on its own. A real
+// sic surplus still counts toward the leftover summary.
 export function computeOutlook(record, bibleId, forecast) {
   // Need follows the night's resolved rounding — the gate reads the 2 PM
   // forecasts, never the EON-typed one.
   const need = bibleLookup(bibleId, forecast, resolveForecastRound(record));
   const rows = {};
   let anyCount = false, surplus = 0, shortfall = 0, surplusTrays = 0, shortTrays = 0;
-  const add = (id, have, needN, perTray) => {
-    const diff = have != null && needN != null ? have - needN : null;
+  const add = (id, have, needN, perTray, clampZero = false) => {
+    let diff = have != null && needN != null ? have - needN : null;
+    if (clampZero && diff != null) diff = Math.max(0, diff); // Sicilian bottoms out at 0
     // `|| 0` normalizes the -0 that Math.sign produces on sub-tray shortages
     const tDiff = diff != null ? Math.sign(diff) * Math.round(Math.abs(diff) / perTray) || 0 : null;
     if (diff != null) {
@@ -252,7 +280,7 @@ export function computeOutlook(record, bibleId, forecast) {
     const blank = countBlank(record.eon.counts[s.id]);
     const have = blank ? null : countTotal(record.eon.counts[s.id], s);
     if (have != null) anyCount = true;
-    add(s.id, have, need && need.tier > 0 ? need[s.id] : null, s.perTray);
+    add(s.id, have, need && need.tier > 0 ? need[s.id] : null, s.perTray, s.id === 'sic');
   }
   const bBlank = countBlank(record.eon.counts.boil);
   const bHave = bBlank ? null : countTotal(record.eon.counts.boil, BOIL);

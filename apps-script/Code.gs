@@ -51,8 +51,24 @@ var SHEETS = {
   newPeachBible: {
     name: "New Peach Bible",
     headers: ["Sales","Indi","Small","Large","Sicilian"]
+  },
+  // v2·20: kitchen station temperatures, one row per date+slot. The Latest
+  // tab is derived — 8 live-formula rows written once by seedSheets().
+  stations: {
+    name: "Station Temps",
+    headers: ["Date","Slot","Time Taken","Pizza 1","Pizza Lowboy","Pizza 2",
+              "Slice","Salad","Reach-In","Walk-In","Freezer"]
+  },
+  stationsLatest: {
+    name: "Station Temps Latest",
+    headers: ["Station","Latest Temp","Taken","Trend"]
   }
 };
+
+// Wire ids for SHEETS.stations.headers[3..10], in column order — mirrors
+// STATIONS in js/config.js. Change both together.
+var STATION_IDS = ["pizza1","lowboy","pizza2","slice","salad","reachin","walkin","freezer"];
+var STATION_SLOT_LABELS = ["Morning","2 PM","Night"];
 
 // Mirror of BIBLES.regular.rows in js/config.js. Update both together —
 // npm test enforces the sync.
@@ -193,6 +209,26 @@ function findRowByDate(sheet, targetDate) {
   return -1;
 }
 
+// Station Temps keeps up to three rows per date (one per slot) — the upsert
+// key is date AND slot.
+function findStationRow(sheet, targetDate, slot) {
+  var allData = sheet.getDataRange().getValues();
+  var normalized = normalizeDate(targetDate);
+  for (var i = allData.length - 1; i >= 1; i--) {
+    if (normalizeDate(formatDate(allData[i][0])) === normalized &&
+        String(allData[i][1]) === slot) {
+      return i + 1;
+    }
+  }
+  return -1;
+}
+
+// A Time Taken cell Sheets coerced into a time serial comes back as an
+// 1899-based Date — render it as the clock string the phone sent.
+function timeCell(v) {
+  return v instanceof Date ? Utilities.formatDate(v, ssTimeZone(), "h:mm a") : v;
+}
+
 function readRowAsObject(sheet, rowNumber) {
   var allData = sheet.getDataRange().getValues();
   var headers = allData[0];
@@ -223,6 +259,9 @@ function doPost(e) {
   try {
     if (type === "temps") {
       return handleTempsPost(data);
+    }
+    if (type === "stations") {
+      return handleStationsPost(data);
     }
     if (type === "make") {
       return handleMakePost(data);
@@ -457,11 +496,80 @@ function handleTempsPost(data) {
   return jsonResponse({status: "ok", action: "temps_saved", row: row, date: data.date});
 }
 
+// Station temps (v2·20): one row per date+slot, upserted per slot. Each
+// included slot writes the full 11-cell row (blank temps as "") so a
+// re-save clears stale cells — same semantics as handleTempsPost. No
+// hasNegative check: a freezer can legitimately read below 0°F.
+function handleStationsPost(data) {
+  if (!data.date) {
+    return jsonResponse({status: "error", message: "Missing date"});
+  }
+  if (!data.slots || !data.slots.length) {
+    return jsonResponse({status: "ok", action: "stations_noop", date: data.date});
+  }
+  var sheet = getSheet("stations");
+  var rows = [];
+  for (var i = 0; i < data.slots.length; i++) {
+    var s = data.slots[i];
+    if (!s || !s.slot) continue;
+    var rowData = [data.date, s.slot, s.takenAt != null ? s.takenAt : ""];
+    var temps = s.temps || {};
+    for (var j = 0; j < STATION_IDS.length; j++) {
+      var v = temps[STATION_IDS[j]];
+      rowData.push(v == null || v === "" ? "" : v);
+    }
+    var row = findStationRow(sheet, data.date, s.slot);
+    if (row !== -1) {
+      sheet.getRange(row, 1, 1, rowData.length).setValues([rowData]);
+    } else {
+      sheet.appendRow(rowData);
+      row = sheet.getLastRow();
+    }
+    rows.push(row);
+  }
+  return jsonResponse({status: "ok", action: "stations_saved", rows: rows, date: data.date});
+}
+
 function doGet(e) {
+  if (e.parameter.stations === "last") {
+    return getStationsLast();
+  }
   if (e.parameter.date) {
     return getByDate(e.parameter.date);
   }
   return getRecentDough();
+}
+
+// Per-station most recent reading: bottom-up first non-empty cell in each
+// station column (row order ≈ chronological — per-slot upserts keep normal
+// use append-only by date).
+function getStationsLast() {
+  var latest = {};
+  var sheet = null;
+  try {
+    sheet = getSheet("stations");
+  } catch (err) {
+    // tab not seeded yet — answer with an empty map instead of erroring
+  }
+  if (sheet) {
+    var allData = sheet.getDataRange().getValues();
+    var headers = SHEETS.stations.headers;
+    for (var c = 3; c < headers.length; c++) {
+      for (var i = allData.length - 1; i >= 1; i--) {
+        var v = allData[i][c];
+        if (v !== "" && v != null) {
+          latest[headers[c]] = {
+            temp: v,
+            date: formatDate(allData[i][0]),
+            slot: String(allData[i][1]),
+            time: String(timeCell(allData[i][2]) || "")
+          };
+          break;
+        }
+      }
+    }
+  }
+  return jsonResponse({status: "ok", latest: latest});
 }
 
 function getByDate(date) {
@@ -472,7 +580,23 @@ function getByDate(date) {
   var tempsRow = findRowByDate(temps, date);
   var eonRow   = findRowByDate(eon, date);
 
-  if (doughRow === -1 && tempsRow === -1 && eonRow === -1) {
+  // Station Temps holds up to three rows per date (one per slot). Guarded:
+  // a redeploy that hasn't run seedSheets() yet must not break every GET.
+  var stationsSheet = null;
+  try {
+    stationsSheet = getSheet("stations");
+  } catch (err) {
+    // pre-seedSheets deploy — no station data yet
+  }
+  var stationRows = [];
+  if (stationsSheet) {
+    for (var si = 0; si < STATION_SLOT_LABELS.length; si++) {
+      var sr = findStationRow(stationsSheet, date, STATION_SLOT_LABELS[si]);
+      if (sr !== -1) stationRows.push({label: STATION_SLOT_LABELS[si], row: sr});
+    }
+  }
+
+  if (doughRow === -1 && tempsRow === -1 && eonRow === -1 && stationRows.length === 0) {
     return jsonResponse({status: "not_found"});
   }
 
@@ -490,6 +614,15 @@ function getByDate(date) {
     // EON columns are already prefixed ("EON Sales", "EON Indi Count", ...)
     // so they don't collide with the morning Dough Counts columns.
     for (var k3 in n) merged[k3] = n[k3];
+  }
+  // Station rows merge slot-prefixed ("Morning Pizza 1", "2 PM Time Taken")
+  // so three rows share one flat object without collisions.
+  for (var s4 = 0; s4 < stationRows.length; s4++) {
+    var so = readRowAsObject(stationsSheet, stationRows[s4].row);
+    for (var k4 in so) {
+      if (k4 === "Date" || k4 === "Slot") continue;
+      merged[stationRows[s4].label + " " + k4] = timeCell(so[k4]);
+    }
   }
   return jsonResponse({status: "found", data: merged});
 }
@@ -600,6 +733,27 @@ function seedSheets() {
       sheet.getRange(2, 1, PEACH_BIBLE_DATA.length, PEACH_BIBLE_DATA[0].length).setValues(PEACH_BIBLE_DATA);
       report.push("seeded " + PEACH_BIBLE_DATA.length + " peach bible rows");
     }
+    if (key === "stations" && sheet.getLastRow() < 2) {
+      // Time Taken stays literal text ("9:04 AM"), never a Sheets time
+      // serial — the Latest tab concatenates it and the GET echoes it.
+      sheet.getRange("C2:C").setNumberFormat("@");
+      report.push("formatted Time Taken column as text: " + cfg.name);
+    }
+    if (key === "stationsLatest" && sheet.getLastRow() < 2) {
+      // 8 live-formula rows: latest reading, when it was taken, and a
+      // sparkline trend per station. Live — no rebuild button needed.
+      var stHeaders = SHEETS.stations.headers;
+      var colLetters = ["D","E","F","G","H","I","J","K"];
+      var names = [];
+      var fs = [];
+      for (var st = 0; st < STATION_IDS.length; st++) {
+        names.push([stHeaders[st + 3]]);
+        fs.push(stationsLatestFormulas(colLetters[st]));
+      }
+      sheet.getRange(2, 1, names.length, 1).setValues(names);
+      sheet.getRange(2, 2, fs.length, 3).setFormulas(fs);
+      report.push("seeded " + names.length + " station rows with live formulas: " + cfg.name);
+    }
   }
 
   // Additive migration: older deployments have a narrower Dough Counts tab
@@ -618,6 +772,20 @@ function seedSheets() {
   }
 
   Logger.log(report.length ? report.join("\n") : "all sheets already seeded — no-op");
+}
+
+// One Station Temps Latest row: [Latest Temp, Taken, Trend] formulas for a
+// station column letter (D..K on the Station Temps tab). Row-order "latest"
+// via LOOKUP(2, 1/(range<>"")) — per-slot upserts keep normal use
+// append-only in date order. IFERROR-guarded so an empty tab renders blank.
+function stationsLatestFormulas(col) {
+  var t = function (c) { return "'Station Temps'!" + c + "$2:" + c; };
+  return [
+    '=IFERROR(LOOKUP(2,1/(' + t(col) + '<>""),' + t(col) + '),"")',
+    '=IFERROR(LOOKUP(2,1/(' + t(col) + '<>""),' +
+      'TEXT(\'Station Temps\'!$A$2:$A,"M/d")&" "&\'Station Temps\'!$B$2:$B&" · "&\'Station Temps\'!$C$2:$C),"")',
+    '=IFERROR(SPARKLINE(FILTER(' + t(col) + ',' + t(col) + '<>"")),"")'
+  ];
 }
 
 // ─── Dough Use + data-driven bibles (v2·11–13) ──────────────────────────

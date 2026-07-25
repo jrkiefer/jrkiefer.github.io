@@ -16,6 +16,7 @@ import * as bible from './ui/bible.js';
 import * as temps from './ui/temps.js';
 import * as history from './ui/history.js';
 import * as make from './ui/make.js';
+import * as stations from './ui/stations.js';
 
 const STATUS_LABELS = {
   new: 'New night',
@@ -29,8 +30,6 @@ const STATUS_LABELS = {
 const RESET_DISARM_MS = 2500; // two-tap reset: second tap window
 const LOAD_DISARM_MS = 3000; // "Discard edits & load?" confirm window
 const LOAD_NOTE_MS = 4000; // transient note under the date card
-const REFRESH_MIN_GAP_MS = 60_000; // skip a refresh if one just ran
-const REFRESH_EVERY_MS = 5 * 60_000; // counter-top re-pull while the app stays open
 const HISTORY_SHOWN = 10; // recent nights listed in the History card
 
 const store = createStore({ api, storage: window.localStorage });
@@ -65,11 +64,13 @@ const ctx = {
       window.scrollTo({ top: 0 });
     },
   },
+  stations: {
+    loadLast: () => api.getStationsLast(),
+  },
 };
 
 let mode = 'twopm';
 let lastState = store.getState();
-let lastLoadAt = Date.now(); // last load/refresh — gates the wake re-pull
 
 /* ─── UI modules ─── */
 
@@ -81,6 +82,7 @@ bible.init(ctx);
 temps.init(ctx);
 history.init(ctx);
 make.init(ctx);
+stations.init(ctx);
 const parts = [
   sales,
   createCounts('tp', (r) => r.twopm.counts, ctx),
@@ -91,6 +93,7 @@ const parts = [
   bible,
   temps,
   make,
+  stations,
 ];
 
 function deriveView(state) {
@@ -124,6 +127,7 @@ function setMode(m) {
 for (const tab of document.querySelectorAll('.mode-tab')) {
   tab.addEventListener('click', () => {
     setMode(tab.dataset.mode); // manual taps always win
+    if (tab.dataset.mode === 'stations') stations.onEnter(); // re-default the slot by clock
     updateAll(deriveView(lastState));
   });
 }
@@ -147,7 +151,6 @@ store.subscribe((state, meta) => {
   setText($('statusLabel'), STATUS_LABELS[state.status] ?? state.status);
 
   if (meta.reason === 'load') {
-    lastLoadAt = Date.now();
     setMode('twopm'); // always open on 2 PM; EON is a manual tap
     showLoadNote('');
   }
@@ -236,30 +239,11 @@ document.addEventListener('visibilitychange', () => {
 });
 window.addEventListener('pagehide', () => store.flush({ keepalive: true }));
 
-// Reconnect: push any unsynced edits, then re-pull the sheet — a phone that
-// opened the app offline (blank fields, "Offline — will retry") recovers the
-// moment the network is back, without waiting for a resurface. reload()
-// itself waits out the flush so the GET sees this phone's own writes.
-window.addEventListener('online', () => {
-  store.flush();
-  store.reload();
-});
-
-// A phone that keeps the tab open never re-fetched — numbers typed on
-// another phone stayed invisible until a manual reload. Re-pull on
-// resurface AND on a slow interval while the app sits open on the counter;
-// the non-force rules keep any unsynced local edits safe, and the store
-// skips the rehydrate entirely when the sheet holds nothing new.
-function refreshOnWake() {
-  if (document.visibilityState !== 'visible') return;
-  if (store.getState().status === 'loading') return;
-  if (Date.now() - lastLoadAt < REFRESH_MIN_GAP_MS) return;
-  lastLoadAt = Date.now(); // stamp the attempt — a quiet no-change reload never notifies
-  store.reload();
-}
-document.addEventListener('visibilitychange', refreshOnWake);
-window.addEventListener('pageshow', refreshOnWake);
-setInterval(refreshOnWake, REFRESH_EVERY_MS);
+// Reconnect: push any unsynced edits the moment the network returns.
+// No re-pull — since v2·19 the sheet is read only on open, date-change,
+// and the Load button; a background reload could yank the mode back to
+// 2 PM mid-EON count, so there is no background refresh at all.
+window.addEventListener('online', () => store.flush());
 
 /* ─── boot ─── */
 

@@ -14,21 +14,24 @@ function markHasValue(input) {
   if (field) field.classList.toggle('has-value', input.value !== '');
 }
 
-function clean(v, decimal) {
+function clean(v, decimal, signed) {
+  const neg = signed && v.trimStart().startsWith('-');
   v = v.replace(decimal ? /[^0-9.]/g : /[^0-9]/g, '');
   if (decimal) {
     const i = v.indexOf('.');
     if (i !== -1) v = v.slice(0, i + 1) + v.slice(i + 1).replace(/\./g, '');
   }
-  return v;
+  return (neg ? '-' : '') + v;
 }
 
 // Bind an input once: filter characters (preserving the caret), flag
 // has-value, hand the clean value to the patcher. update() never touches
 // input values — only hydrate() does, via setInputValue below.
-export function bindInput(input, { decimal = false, onValue }) {
+// signed allows one leading minus (station temps — a freezer can read
+// negative °F); everything else stays digits-only.
+export function bindInput(input, { decimal = false, signed = false, onValue }) {
   input.addEventListener('input', () => {
-    const v = clean(input.value, decimal);
+    const v = clean(input.value, decimal, signed);
     if (v !== input.value) {
       const pos = Math.max(0, (input.selectionStart ?? v.length) - (input.value.length - v.length));
       input.value = v;

@@ -82,6 +82,9 @@ button:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; }
 .hidden { display: none !important; }
 [data-mode="eon"] .hide-in-eon { display: none !important; }
 [data-mode="twopm"] .hide-in-twopm { display: none !important; }
+[data-mode="stations"] .hide-in-stations { display: none !important; }
+[data-mode="twopm"] .show-in-stations,
+[data-mode="eon"] .show-in-stations { display: none !important; }
 
 /* type helpers */
 .eyebrow {
@@ -98,6 +101,14 @@ button:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; }
   font-size: 10px;
   font-weight: 500;
   letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--ink-mute);
+}
+.unit-tag { /* small explicit unit beside a number (SIC is shown in balls) */
+  font-family: var(--font-mono);
+  font-size: 8px;
+  font-weight: 500;
+  letter-spacing: 0.08em;
   text-transform: uppercase;
   color: var(--ink-mute);
 }
@@ -322,6 +333,7 @@ input[type="date"] {
 
 .mode-tabs {
   display: flex;
+  flex-wrap: wrap; /* the wide Station Temps tab sits on its own row above the pair */
   border: 1.5px solid var(--ink);
   border-radius: var(--radius);
   overflow: hidden;
@@ -338,6 +350,8 @@ input[type="date"] {
   background: var(--paper);
   color: var(--ink);
 }
+/* full flex shorthand — .mode-tab's flex:1 zeroes the basis at equal specificity */
+.mode-tab-wide { flex: 1 1 100%; border-bottom: 1.5px solid var(--ink); }
 .mode-tab.active { background: var(--ink); color: var(--paper); }
 
 /* ─── 01 Sales ─── */
@@ -640,6 +654,13 @@ input[type="date"] {
   color: var(--c);
   font-variant-numeric: tabular-nums;
 }
+.plan-trays .unit-tag { /* stacks under the number; outranks .plan-trays span */
+  display: block;
+  font-family: var(--font-mono);
+  font-weight: 500;
+  font-size: 8px;
+  color: var(--c);
+}
 
 .boil-row {
   --c: var(--boil);
@@ -877,6 +898,29 @@ input[type="date"] {
 }
 .temp-row > .eyebrow { width: 64px; flex-shrink: 0; }
 .temp-row .field { flex: 1; }
+
+/* ─── 09 Station Temps ─── */
+
+.stations-card { padding: 4px 12px 12px; }
+.station-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding-top: 8px;
+}
+.station-label { width: 118px; flex-shrink: 0; }
+.station-row .field { flex: 1; }
+.station-last {
+  display: block;
+  font-size: 10px;
+  letter-spacing: 0.04em;
+  color: var(--ink-mute);
+}
+.station-taken {
+  font-size: 10px;
+  color: var(--ink-soft);
+  min-height: 14px;
+}
 
 /* ─── 06 History ─── */
 

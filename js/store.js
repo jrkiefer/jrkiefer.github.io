@@ -6,11 +6,11 @@
 // sheet payloads in the background. Status reflects the two-stage journey:
 // 'local' (saved on phone) → 'synced' (landed in the sheet).
 
-import { blankRecord } from './calc.js';
+import { blankRecord, blankStations } from './calc.js';
 
 const KEY_PREFIX = 'dough:';
 const BLANK_JSON = JSON.stringify(blankRecord());
-const POST_ORDER = ['dough', 'make', 'temps', 'eon']; // make needs the dough row
+const POST_ORDER = ['dough', 'make', 'temps', 'eon', 'stations']; // make needs the dough row
 
 export function createStore({ api, storage, now = Date.now, debounceMs = 2500 }) {
   let date = null;
@@ -69,6 +69,10 @@ export function createStore({ api, storage, now = Date.now, debounceMs = 2500 })
       if (!raw) return null;
       const entry = JSON.parse(raw);
       if (!entry || entry.v !== 2 || !entry.record) return null;
+      // v2·20 upgrade: pre-stations cached records gain the blank shape,
+      // appended LAST so the JSON.stringify blank-comparisons (isBlank,
+      // reload's no-change check) still line up with BLANK_JSON's key order.
+      if (!entry.record.stations) entry.record.stations = blankStations();
       return entry;
     } catch {
       return null;
@@ -284,20 +288,19 @@ export function createStore({ api, storage, now = Date.now, debounceMs = 2500 })
   }
 
   // Re-pull the active date from the sheet without blanking state first.
-  // Non-force applies only when this phone has nothing unsynced — the
-  // foreground auto-refresh rides this, so another phone's numbers appear
-  // on wake but never clobber local edits. Force (the Load button) applies
-  // the sheet copy wholesale — the one deliberate way past local-wins,
-  // including after a Reset.
+  // Non-force applies only when this phone has nothing unsynced — no UI
+  // path fires it since v2·19 (the background auto-refresh is gone); it
+  // remains a tested store API whose guards made the refresh safe. Force
+  // (the Load button) applies the sheet copy wholesale — the one deliberate
+  // way past local-wins, including after a Reset.
   async function reload({ force = false } = {}) {
     if (date == null) return;
     const mySeq = seq;
     if (force) setStatus('loading');
     // Let an in-flight sync land before fetching: its POSTs are changing what
     // the sheet holds, so a GET raced against them can return a row that
-    // predates this phone's own numbers (the wake sequence fires the `online`
-    // flush and the resurface reload together; and Load must show what the
-    // sheet holds AFTER this phone's own writes).
+    // predates this phone's own numbers (Load must show what the sheet holds
+    // AFTER this phone's own writes).
     while (flushing && flushRun) await flushRun;
     if (mySeq !== seq) return; // a setDate arrived while we waited
     const startUpdatedAt = updatedAt;
@@ -348,11 +351,11 @@ export function createStore({ api, storage, now = Date.now, debounceMs = 2500 })
     next.eon.outlookManual = record.eon.outlookManual;
 
     // Same content this phone already shows — refresh the sync stamps but
-    // skip the apply: no rehydrate (the periodic refresh must not rewrite
+    // skip the apply: no rehydrate (a no-change re-pull must not rewrite
     // inputs or yank the mode back to 2 PM when nothing changed) and the
     // ack cache stays (it describes content the sheet provably holds).
-    // Stamping synced also recovers an 'offline' status once a background
-    // refresh gets through.
+    // Stamping synced also recovers an 'offline' status once a later
+    // re-pull gets through.
     if (JSON.stringify(next) === JSON.stringify(record)) {
       updatedAt = syncedAt = now();
       persist();

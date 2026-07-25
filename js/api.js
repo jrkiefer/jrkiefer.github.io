@@ -2,7 +2,7 @@
 // POST/GET wrappers, payload builders, merged-GET → record hydration,
 // and the sheet-date helpers. No DOM. Storage lives in store.js.
 
-import { SCRIPT_URL, SIZES, BOIL, ALL, MAX_BATCH_TEMPS } from './config.js';
+import { SCRIPT_URL, SIZES, BOIL, ALL, MAX_BATCH_TEMPS, STATIONS, STATION_SLOTS } from './config.js';
 import {
   parseSales, countTotal, countBlank, blankRecord,
   autoBibleFor, computePlan, effectiveMake,
@@ -113,6 +113,14 @@ export async function getByDate(dateISO) {
 // Bare array of the most recent Dough Counts rows, newest first.
 export async function getHistory() {
   const r = await fetch(SCRIPT_URL, { signal: timeoutSignal() });
+  return r.json();
+}
+
+// Per-station most recent reading, keyed by station label:
+// {status:'ok', latest: {'Pizza 1': {temp, date, slot, time}, …}}.
+export async function getStationsLast() {
+  const r = await fetch(SCRIPT_URL + '?stations=last', { signal: timeoutSignal() });
+  if (!r.ok) throw new Error('getStationsLast HTTP ' + r.status);
   return r.json();
 }
 
@@ -231,6 +239,27 @@ export function buildPayloads(dateISO, record) {
     };
   }
 
+  // --- station temps (v2·20) ---
+  // Only slots with at least one real reading travel; blanks go up as ''
+  // (empty cell) so a full-row upsert clears stale cells. A lone '-' never
+  // opens the gate. Guarded for records built before the field existed.
+  if (record.stations) {
+    const slots = [];
+    for (const sl of STATION_SLOTS) {
+      const slot = record.stations[sl.id];
+      if (!slot) continue;
+      const temps = {};
+      let any = false;
+      for (const s of STATIONS) {
+        const n = parseFloat(slot.temps[s.id]);
+        temps[s.id] = Number.isFinite(n) ? n : '';
+        if (temps[s.id] !== '') any = true;
+      }
+      if (any) slots.push({ slot: sl.label, takenAt: slot.takenAt || '', temps });
+    }
+    if (slots.length) out.stations = { type: 'stations', date, slots };
+  }
+
   return out;
 }
 
@@ -300,6 +329,19 @@ export function recordFromRow(row) {
 
   r.eon.sales = moneyCell(row['EON Sales']);
   for (const s of ALL) r.eon.counts[s.id] = splitCount(row[EON_KEY[s.id]], s, false);
+
+  // Station temps arrive slot-prefixed ('Morning Pizza 1', '2 PM Time
+  // Taken', …). A row from an old backend has none of these keys, so
+  // r.stations stays exactly blank.
+  for (const sl of STATION_SLOTS) {
+    const slot = r.stations[sl.id];
+    const ta = row[sl.label + ' Time Taken'];
+    slot.takenAt = ta == null || ta === '' ? '' : String(ta);
+    for (const s of STATIONS) {
+      const v = row[sl.label + ' ' + s.label];
+      slot.temps[s.id] = v == null || v === '' ? '' : String(v);
+    }
+  }
 
   return r;
 }
