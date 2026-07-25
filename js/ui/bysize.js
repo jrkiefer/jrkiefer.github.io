@@ -1,6 +1,8 @@
 // js/ui/bysize.js — Step 04: the full-math table. HAVE/USE/LEFT/NEED/MAKE
 // per size plus the tinted trays column (final numbers only — the extras
 // breakdown lives in the Day's Work line), and the boil row beneath.
+// Sicilian is the trays-column exception: its chip shows the make in BALLS
+// with a unit tag (v2·19) — its trays still feed the batch math unchanged.
 
 import { SIZES, BOIL, SIC_MIN, SIC_MIN_WAIVER } from '../config.js';
 import { fmt } from '../calc.js';
@@ -15,7 +17,7 @@ export function init() {
       <div class="plan-cell" id="bs-${s.id}-left">—</div>
       <div class="plan-cell mute" id="bs-${s.id}-need">—</div>
       <div class="plan-cell bold" id="bs-${s.id}-make">—</div>
-      <div class="plan-trays"><span id="bs-${s.id}-trays">—</span></div>`));
+      <div class="plan-trays"><span id="bs-${s.id}-trays">—</span>${s.id === 'sic' ? '<span class="unit-tag">balls</span>' : ''}</div>`));
   }
   setText($('bs-boil-target'), String(BOIL.target));
 }
@@ -31,7 +33,9 @@ export function update(view) {
     left.classList.toggle('neg', r.left != null && r.left < 0);
     setText($(`bs-${s.id}-need`), fmt(r.need));
     setText($(`bs-${s.id}-make`), fmt(r.make));
-    setText($(`bs-${s.id}-trays`), fmt(p.finalTrays ? p.finalTrays[s.id] : r.trays));
+    setText($(`bs-${s.id}-trays`), s.id === 'sic'
+      ? fmt(r.make)
+      : fmt(p.finalTrays ? p.finalTrays[s.id] : r.trays));
   }
 
   setText($('bs-boil-have'), fmt(p.boilHave));
@@ -41,7 +45,7 @@ export function update(view) {
   const foot = $('bysizeFoot');
   if (p.ready) {
     foot.className = 'bysize-foot caps';
-    setText(foot, `Make in balls · trays includes batch extras/cuts · SIC min ${SIC_MIN} unless ${SIC_MIN_WAIVER}+ on hand`);
+    setText(foot, `Make in balls · trays includes batch extras/cuts · SIC shown in balls · SIC min ${SIC_MIN} unless ${SIC_MIN_WAIVER}+ on hand`);
   } else {
     foot.className = 'bysize-foot';
     setText(foot, "Fill in the counts, sales, and both forecasts to get tonight's make.");

@@ -389,7 +389,7 @@ test('cacheHistory pre-warms recent dates but never clobbers an existing copy', 
   assert.equal(storage.getItem('dough:2026-07-01'), null); // active date never cached
 });
 
-/* ---------------- reload: the Load button + foreground refresh ---------------- */
+/* ---------------- reload: the Load button (force) + the non-force store API ---------------- */
 
 const sheetRow716 = {
   Date: '7/16/2026',
@@ -409,7 +409,7 @@ test('reload pulls fresh sheet data onto an idle phone (the two-phone handoff)',
   await store.setDate('2026-07-16');
   assert.equal(store.getState().status, 'new');
   serverRow = sheetRow716; // the other phone saves at 1:30…
-  await store.reload(); // …this phone wakes at 2:50
+  await store.reload(); // …this phone re-pulls (e.g. a Load) at 2:50
   const s = store.getState();
   assert.equal(s.record.twopm.todayForecast, '10');
   assert.equal(s.record.bible, 'peach');
@@ -520,7 +520,7 @@ test('reload with nothing on the sheet leaves the phone alone; network failure r
   assert.equal(s.status, 'offline');
 });
 
-test('after a reset, the auto-refresh re-pulls the sheet (a blank has nothing to protect)', async (t) => {
+test('after a reset, a non-force reload re-pulls the sheet (a blank has nothing to protect)', async (t) => {
   const { store } = harness(t, {
     getImpl: async () => ({ status: 'found', data: sheetRow716 }),
   });
@@ -536,10 +536,10 @@ test('after a reset, the auto-refresh re-pulls the sheet (a blank has nothing to
 
 /* ---------------- reload/flush coordination (v2·16) ---------------- */
 
-test('resurface reload discards a stale row when a sync lands mid-fetch', async (t) => {
-  // The wake sequence fires the `online` flush and the resurface reload
-  // together; the GET can be served before the POSTs land and return the
-  // pre-edit row. Applying it would revert the numbers that just synced.
+test('a non-force reload discards a stale row when a sync lands mid-fetch', async (t) => {
+  // A reload's GET can be served before an in-flight flush's POSTs land
+  // and return the pre-edit row. Applying it would revert the numbers
+  // that just synced.
   const pendingGets = [];
   const { store, tick } = harness(t, {
     getImpl: () => new Promise((res) => { pendingGets.push(res); }),
@@ -651,10 +651,12 @@ test('a gated-empty flush never wedges reload (the flushRun poison)', async (t) 
   assert.equal(store.getState().status, 'synced');
 });
 
-test('the reconnect sequence (flush + reload) recovers a phone that opened offline', async (t) => {
-  // Boot offline on a blank date, then the network returns: main.js fires
-  // flush() and reload() together. The flush is a no-op (nothing unsynced)
-  // and the reload must fetch and apply the sheet's row.
+test('flush then reload back-to-back recovers a phone that opened offline', async (t) => {
+  // Boot offline on a blank date, then re-pull once the network is back.
+  // The flush is a no-op (nothing unsynced) and the reload must fetch and
+  // apply the sheet's row. Since v2·19 main.js no longer fires this pair
+  // on 'online' (reconnect only flushes) — the sequence stays pinned as a
+  // store-level contract (it's what a Load after reconnecting runs).
   let down = true;
   const { store } = harness(t, {
     getImpl: async () => {
@@ -693,7 +695,7 @@ test('a no-change reload is quiet — no load notify, ack cache kept', async (t)
   row = { Date: '7/16/2026', 'EON Sales': 5000 }; // the sheet echoes this phone's save
   const reasons = [];
   store.subscribe((_s, meta) => reasons.push(meta.reason));
-  await store.reload(); // the periodic background refresh
+  await store.reload(); // a non-force re-pull
   assert.ok(!reasons.includes('load')); // no rehydrate, no 2 PM yank
   assert.equal(store.getState().status, 'synced');
   store.patch((r) => { r.eon.sales = '5'; }); // byte-identical re-type
@@ -735,7 +737,7 @@ test('a dirty record identical to the sheet force-loads straight to synced', asy
   assert.equal(s.status, 'synced');
 });
 
-test('a background refresh recovers an offline status even when nothing changed', async (t) => {
+test('a non-force reload recovers an offline status even when nothing changed', async (t) => {
   let down = true;
   const { store, storage } = harness(t, {
     getImpl: async () => {
@@ -747,6 +749,6 @@ test('a background refresh recovers an offline status even when nothing changed'
   await store.setDate('2026-07-16');
   assert.equal(store.getState().status, 'offline'); // local copy shown, network down
   down = false;
-  await store.reload(); // the next periodic refresh gets through
+  await store.reload(); // a later re-pull gets through
   assert.equal(store.getState().status, 'synced');
 });

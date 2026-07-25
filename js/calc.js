@@ -230,16 +230,19 @@ export function effectiveMake(record, plan) {
 
 // EON counts vs tomorrow's need on the given forecast (whole dollars).
 // The primary diff is trays rounded to the NEAREST tray; the exact ball
-// diff rides along. Sicilian is treated like every other size here —
-// EON-made Sicilian IS usable tomorrow (unlike the same-night 2 PM clamp).
+// diff rides along. Sicilian's diff clamps at 0 (v2·19): a sic shortage
+// reads as a neutral 0-ball row and never feeds the shortfall aggregate,
+// so it can't flip the summary into "same-day dough" on its own. A real
+// sic surplus still counts toward the leftover summary.
 export function computeOutlook(record, bibleId, forecast) {
   // Need follows the night's resolved rounding — the gate reads the 2 PM
   // forecasts, never the EON-typed one.
   const need = bibleLookup(bibleId, forecast, resolveForecastRound(record));
   const rows = {};
   let anyCount = false, surplus = 0, shortfall = 0, surplusTrays = 0, shortTrays = 0;
-  const add = (id, have, needN, perTray) => {
-    const diff = have != null && needN != null ? have - needN : null;
+  const add = (id, have, needN, perTray, clampZero = false) => {
+    let diff = have != null && needN != null ? have - needN : null;
+    if (clampZero && diff != null) diff = Math.max(0, diff); // Sicilian bottoms out at 0
     // `|| 0` normalizes the -0 that Math.sign produces on sub-tray shortages
     const tDiff = diff != null ? Math.sign(diff) * Math.round(Math.abs(diff) / perTray) || 0 : null;
     if (diff != null) {
@@ -252,7 +255,7 @@ export function computeOutlook(record, bibleId, forecast) {
     const blank = countBlank(record.eon.counts[s.id]);
     const have = blank ? null : countTotal(record.eon.counts[s.id], s);
     if (have != null) anyCount = true;
-    add(s.id, have, need && need.tier > 0 ? need[s.id] : null, s.perTray);
+    add(s.id, have, need && need.tier > 0 ? need[s.id] : null, s.perTray, s.id === 'sic');
   }
   const bBlank = countBlank(record.eon.counts.boil);
   const bHave = bBlank ? null : countTotal(record.eon.counts.boil, BOIL);

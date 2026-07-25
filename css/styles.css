@@ -101,6 +101,14 @@ button:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; }
   text-transform: uppercase;
   color: var(--ink-mute);
 }
+.unit-tag { /* small explicit unit beside a number (SIC is shown in balls) */
+  font-family: var(--font-mono);
+  font-size: 8px;
+  font-weight: 500;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink-mute);
+}
 .num {
   font-family: var(--font-mono);
   font-variant-numeric: tabular-nums;
@@ -639,6 +647,13 @@ input[type="date"] {
   font-size: 17px;
   color: var(--c);
   font-variant-numeric: tabular-nums;
+}
+.plan-trays .unit-tag { /* stacks under the number; outranks .plan-trays span */
+  display: block;
+  font-family: var(--font-mono);
+  font-weight: 500;
+  font-size: 8px;
+  color: var(--c);
 }
 
 .boil-row {

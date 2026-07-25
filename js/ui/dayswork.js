@@ -15,7 +15,7 @@ export function init(ctx) {
     chip.className = 'tray-chip';
     chip.id = `chip-${s.id}`;
     chip.style.setProperty('--c', `var(--${s.id})`);
-    chip.innerHTML = `<span class="dot"></span><span class="monocaps">${s.chip}</span><span class="chip-val" id="chip-${s.id}-val">—</span>`;
+    chip.innerHTML = `<span class="dot"></span><span class="monocaps">${s.chip}</span><span class="chip-val" id="chip-${s.id}-val">—</span>${s.id === 'sic' ? '<span class="unit-tag">balls</span>' : ''}`;
     wrap.appendChild(chip);
   }
   updateRoundPills = roundPills('batchRoundPill', 'batchRoundAutoTag',
@@ -26,9 +26,13 @@ export function update(view) {
   const p = view.plan;
 
   for (const s of ALL) {
+    // Sicilian's chip shows BALLS (its make), never trays — the batch math
+    // underneath still counts its trays (v2·19).
     const val = s.id === 'boil'
       ? (p.ready && p.boilMake != null ? p.boilTrays : null)
-      : (p.finalTrays ? p.finalTrays[s.id] : null);
+      : s.id === 'sic'
+        ? (p.ready ? p.rows.sic.make : null)
+        : (p.finalTrays ? p.finalTrays[s.id] : null);
     setText($(`chip-${s.id}-val`), fmt(val));
     $(`chip-${s.id}`).classList.toggle('zero', val === 0);
   }

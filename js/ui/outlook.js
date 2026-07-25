@@ -1,8 +1,10 @@
 // js/ui/outlook.js — Step 08, EON mode only: closing counts vs tomorrow's
 // need. Tray-first diffs (nearest tray, sign/color from the ball diff, exact
-// balls small underneath). No warning banner — dipping into same-day dough
-// is normal. The forecast pre-fills from the 2 PM save; any keystroke flips
-// a manual flag that wins from then on (only Reset clears it).
+// balls small underneath) — except Sicilian, whose ball diff IS the primary
+// line (balls only, clamped ≥ 0 in calc, v2·19). No warning banner — dipping
+// into same-day dough is normal. The forecast pre-fills from the 2 PM save;
+// any keystroke flips a manual flag that wins from then on (only Reset
+// clears it).
 
 import { ALL } from '../config.js';
 import { parseSales, money, fmt, computeOutlook } from '../calc.js';
@@ -68,6 +70,12 @@ export function update(view) {
       if (r.diff == null) {
         setText(tdiff, '—');
         tdiff.className = 'outlook-diff-trays none';
+        setText($(`ol-${s.id}-balls`), '');
+      } else if (s.id === 'sic') {
+        // Balls only — the ball diff IS the primary line, no tray line.
+        // calc clamps it at 0, so it reads surplus (pos) or neutral (none).
+        setText(tdiff, `${r.diff > 0 ? '+' : ''}${r.diff} balls`);
+        tdiff.className = `outlook-diff-trays ${r.diff > 0 ? 'pos' : 'none'}`;
         setText($(`ol-${s.id}-balls`), '');
       } else {
         setText(tdiff, `${r.tDiff > 0 ? '+' : r.tDiff < 0 ? '−' : ''}${Math.abs(r.tDiff)} tr`);
