@@ -153,7 +153,7 @@ test('a backend rejection is terminal until the record changes', async (t) => {
   store.patch((r) => { r.eon.sales = '5'; });
   await store.flush();
   assert.equal(calls.length, 1);
-  assert.equal(store.getState().status, 'synced'); // handled, not a network failure
+  assert.equal(store.getState().status, 'rejected'); // v2·22: visible, never "Synced"
   await store.flush();
   assert.equal(calls.length, 1); // not retried verbatim
   store.patch((r) => { r.eon.sales = '5.5'; });
@@ -802,4 +802,62 @@ test('stations posts last and does not depend on the dough row', async (t) => {
   // dough fails (network) → make would be skipped; stations still lands.
   assert.deepEqual(calls.map((c) => c.payload.type), ['dough', 'stations']);
   assert.equal(calls[1].payload.slots[0].temps.walkin, 38.2);
+});
+
+/* ---------------- status truth (v2·22) ---------------- */
+
+test('a backend rejection reads rejected, never Synced (v2·22)', async (t) => {
+  // The July 27 incident: station temps POSTed to a pre-v2·20 backend got a
+  // terminal "Unknown type" rejection while the masthead read Synced and the
+  // chips read ✓ saved — the temps were never on the sheet.
+  const { store, tick } = harness(t, {
+    postImpl: async (p) => (p.type === 'stations'
+      ? { ok: false, rejected: true, message: 'Unknown type: stations' }
+      : { ok: true }),
+  });
+  const events = [];
+  store.subscribe((state, meta) => events.push(meta));
+  await store.setDate('2026-07-27');
+  store.patch((r) => {
+    r.stations.night.temps.freezer = '-2';
+    r.stations.night.takenAt = '9:04 PM';
+  });
+  await tick(2500);
+  assert.equal(store.getState().status, 'rejected');
+  // The rejection is terminal for this payload version: syncedAt advances so
+  // the record isn't dirty forever, but the notify carries the message.
+  assert.equal(store.getState().dirty, false);
+  const rej = events.find((e) => e.reason === 'rejected');
+  assert.ok(rej);
+  assert.match(rej.message, /stations: Unknown type/);
+});
+
+test('a later clean flush recovers rejected back to synced', async (t) => {
+  let rejectStations = true;
+  const { store, tick } = harness(t, {
+    postImpl: async (p) => (p.type === 'stations' && rejectStations
+      ? { ok: false, rejected: true, message: 'Unknown type: stations' }
+      : { ok: true }),
+  });
+  await store.setDate('2026-07-27');
+  store.patch((r) => { r.stations.twopm.temps.slice = '37'; r.stations.twopm.takenAt = '2:10 PM'; });
+  await tick(2500);
+  assert.equal(store.getState().status, 'rejected');
+  rejectStations = false; // "the backend got redeployed"
+  // A new keystroke re-serializes the stations payload past the ack cache.
+  store.patch((r) => { r.stations.twopm.temps.slice = '37.5'; r.stations.twopm.takenAt = '2:11 PM'; });
+  await tick(2500);
+  assert.equal(store.getState().status, 'synced');
+});
+
+test('a localStorage failure reads unsaved, never Saved-on-phone (v2·22)', async (t) => {
+  const { store, storage, tick } = harness(t);
+  await store.setDate('2026-07-27');
+  storage.setItem = () => { throw new Error('QuotaExceededError'); };
+  store.patch((r) => { r.eon.sales = '5'; });
+  // Before v2·22 this claimed "Saved on phone" while nothing was persisted.
+  assert.equal(store.getState().status, 'unsaved');
+  // The debounced sync still runs — once the sheet has it, synced is true.
+  await tick(2500);
+  assert.equal(store.getState().status, 'synced');
 });
