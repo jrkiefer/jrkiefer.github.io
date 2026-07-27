@@ -17,7 +17,7 @@ export function createStore({ api, storage, now = Date.now, debounceMs = 2500 })
   let record = blankRecord();
   let updatedAt = 0;
   let syncedAt = 0;
-  let status = 'new'; // new | loading | local | synced | offline
+  let status = 'new'; // new | loading | local | synced | offline | rejected | unsaved
   let hasServerDoughRow = false;
   let seq = 0; // bumped by setDate — kills stale loads and stale flushes
   let debounceTimer = null;
@@ -41,9 +41,9 @@ export function createStore({ api, storage, now = Date.now, debounceMs = 2500 })
   // force-load's 'loading' when nothing ends up applied).
   const idleStatus = () => (hasUnsyncedEdits() ? 'local' : isBlank(record) ? 'new' : 'synced');
 
-  function notify(reason) {
+  function notify(reason, extra) {
     const state = getState();
-    for (const fn of subscribers) fn(state, { reason });
+    for (const fn of subscribers) fn(state, { reason, ...extra });
   }
 
   function getState() {
@@ -58,8 +58,10 @@ export function createStore({ api, storage, now = Date.now, debounceMs = 2500 })
   function persist() {
     try {
       storage.setItem(keyFor(date), JSON.stringify({ v: 2, record, updatedAt, syncedAt }));
+      return true;
     } catch (e) {
       console.warn('localStorage write failed', e);
+      return false;
     }
   }
 
@@ -98,16 +100,22 @@ export function createStore({ api, storage, now = Date.now, debounceMs = 2500 })
     fn(next);
     record = next;
     updatedAt = now();
-    persist(); // synchronous — data is safe on the phone from here
-    status = 'local';
+    // Synchronous write-through — data is safe on the phone from here.
+    // Unless storage refused (quota/private mode): then the status must say
+    // so instead of claiming "Saved on phone". The debounced sync still runs
+    // and usually lands the data anyway; the fix is honesty, not machinery.
+    status = persist() ? 'local' : 'unsaved';
     notify('patch');
     armDebounce();
   }
 
-  // Send one date's payloads in order. Returns {networkFailed}. Shared by
-  // the live flush and the boot retry; `ack` collects successful sends.
+  // Send one date's payloads in order. Returns {networkFailed, rejected}.
+  // Shared by the live flush and the boot retry; `ack` collects successful
+  // sends; `rejected` carries the first backend refusal's message so the
+  // flush can surface it instead of reading "Synced".
   async function postPayloads(payloads, doughRowKnown, ack) {
     let networkFailed = false;
+    let rejected = null;
     let doughOk = doughRowKnown;
     for (const type of POST_ORDER) {
       const payload = payloads[type];
@@ -127,12 +135,13 @@ export function createStore({ api, storage, now = Date.now, debounceMs = 2500 })
         // Terminal for this payload version — a backend rule said no.
         // Retried only after the record changes (new serialization).
         ack[type] = ser;
+        if (!rejected) rejected = `${type}: ${res.message}`;
         console.warn(`backend rejected ${type} save: ${res.message}`);
       } else {
         networkFailed = true;
       }
     }
-    return { networkFailed };
+    return { networkFailed, rejected };
   }
 
   async function flush({ keepalive = false } = {}) {
@@ -180,7 +189,7 @@ export function createStore({ api, storage, now = Date.now, debounceMs = 2500 })
             // so a stale sheet row can't resurrect on the next load.
             return;
           }
-          const { networkFailed } = await postPayloads(payloads, hasServerDoughRow, sent);
+          const { networkFailed, rejected } = await postPayloads(payloads, hasServerDoughRow, sent);
           // Date changed mid-flight — this pass's state was replaced. Don't
           // bail out entirely: a flush attempt for the NEW date may have set
           // `rerun` while this one was in flight, and returning here would
@@ -191,7 +200,17 @@ export function createStore({ api, storage, now = Date.now, debounceMs = 2500 })
           } else if (updatedAt === flushedAt) {
             syncedAt = flushedAt;
             persist();
-            setStatus('synced');
+            if (rejected) {
+              // The backend refused part of this save — that data is NOT on
+              // the sheet. syncedAt still advances (the rejection is terminal
+              // for this payload version; re-flushing forever would change
+              // nothing) but the status must say so instead of "Synced", and
+              // the message rides on the notify so main.js can show it.
+              status = 'rejected';
+              notify('rejected', { message: rejected });
+            } else {
+              setStatus('synced');
+            }
           }
           // else: edits landed mid-flight — stay 'local', debounce re-flushes
         } while (rerun);

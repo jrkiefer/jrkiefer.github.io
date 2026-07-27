@@ -145,6 +145,10 @@ button:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; }
 [data-status="loading"] .status-dot { background: var(--ink-mute); animation: pulse 1s ease-in-out infinite; }
 [data-status="synced"] .status-dot { background: var(--good); }
 [data-status="offline"] .status-dot { background: var(--neg); }
+/* v2·22 honesty states: pulsing red = needs attention (vs offline's steady red).
+   rejected = the backend refused a save; unsaved = localStorage write failed. */
+[data-status="rejected"] .status-dot,
+[data-status="unsaved"] .status-dot { background: var(--neg); animation: pulse 1s ease-in-out infinite; }
 
 @keyframes pulse {
   0%, 100% { opacity: 1; }

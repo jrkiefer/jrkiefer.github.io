@@ -24,6 +24,8 @@ const STATUS_LABELS = {
   local: 'Saved on phone',
   synced: 'Synced',
   offline: 'Offline — will retry',
+  rejected: 'Sheet refused a save', // backend said no — data NOT on the sheet
+  unsaved: 'Not saved — keep app open', // localStorage write failed (quota)
 };
 
 // UI timing.
@@ -159,6 +161,9 @@ store.subscribe((state, meta) => {
   // nothing new — say so instead of leaving the button looking dead.
   if (meta.reason === 'loadmiss') showLoadNote(`No saved data on the sheet for ${fmtDate(state.date)}.`);
   if (meta.reason === 'loadsame') showLoadNote('Up to date with the sheet.');
+  // The backend refused part of a save — say which and why, loudly enough
+  // to notice on a kitchen phone (before v2·22 this displayed as "Synced").
+  if (meta.reason === 'rejected') showLoadNote(`Sheet refused this save — ${meta.message}. The data is NOT on the sheet.`);
 
   // Derive once, after any mode change — the view carries the mode.
   const view = deriveView(state);

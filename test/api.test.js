@@ -413,6 +413,24 @@ test('post: double failure reports a network error', async () => {
   assert.deepEqual(res, { ok: false, network: true });
 });
 
+test('post: a timeout abort is a network failure, never a no-cors "success" (v2·21)', async () => {
+  // Before v2·21 the 15 s AbortSignal.timeout throw fell into the no-cors
+  // retry, whose unreadable opaque response was reported as landed — a save
+  // the server never acknowledged displayed as Synced.
+  for (const name of ['TimeoutError', 'AbortError']) {
+    const calls = [];
+    const res = await withFetch(
+      async (url, opts) => {
+        calls.push(opts);
+        throw new DOMException('The operation timed out.', name);
+      },
+      () => post({ type: 'dough' })
+    );
+    assert.deepEqual(res, { ok: false, network: true });
+    assert.equal(calls.length, 1); // no second no-cors attempt
+  }
+});
+
 test('post: keepalive rides through to fetch for unload flushes', async () => {
   let seen;
   await withFetch(
@@ -427,6 +445,15 @@ test('rowToISO: history/GET rows normalize straight to the ISO date', () => {
   assert.equal(rowToISO({ date: '7/4/2026' }), '2026-07-04'); // lowercase variant
   assert.equal(rowToISO({}), null);
   assert.equal(rowToISO({ Date: 'garbage' }), null);
+});
+
+test('getHistory: an HTTP error throws (offline), never parses as rows (v2·21)', async () => {
+  await assert.rejects(
+    withFetch(
+      async () => ({ type: 'basic', status: 500, ok: false, text: async () => '<html>error</html>' }),
+      () => getHistory()
+    )
+  );
 });
 
 test('getStationsLast: hits ?stations=last and returns the latest map', async () => {

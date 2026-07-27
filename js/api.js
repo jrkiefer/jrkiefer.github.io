@@ -89,7 +89,15 @@ export async function post(payload, { keepalive = false } = {}) {
       return { ok: false, rejected: true, message: json.message || 'save failed' };
     }
     return { ok: true, json };
-  } catch {
+  } catch (err) {
+    // A timeout abort never takes the no-cors fallback: the fallback's
+    // opaque response can't be read, so it would launder "the server never
+    // answered in 15 s" into a reported success. Erring toward "not landed"
+    // is safe (unacked → retried → server upsert); erring toward "landed"
+    // silently drops the save. Only a genuine network/CORS throw retries.
+    if (err && (err.name === 'TimeoutError' || err.name === 'AbortError')) {
+      return { ok: false, network: true };
+    }
     try {
       await fetch(SCRIPT_URL, { ...opts, mode: 'no-cors', signal: timeoutSignal() });
       return { ok: true, opaque: true };
@@ -110,9 +118,12 @@ export async function getByDate(dateISO) {
   return r.json();
 }
 
-// Bare array of the most recent Dough Counts rows, newest first.
+// Bare array of the most recent Dough Counts rows, newest first. An HTTP
+// error throws like the other GETs — an Apps Script HTML error page must
+// not parse-explode or feed garbage rows into cacheHistory.
 export async function getHistory() {
   const r = await fetch(SCRIPT_URL, { signal: timeoutSignal() });
+  if (!r.ok) throw new Error('getHistory HTTP ' + r.status);
   return r.json();
 }
 
