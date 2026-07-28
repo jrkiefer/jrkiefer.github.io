@@ -51,9 +51,16 @@ var SHEETS = {
   newPeachBible: {
     name: "New Peach Bible",
     headers: ["Sales","Indi","Small","Large","Sicilian"]
-  },
-  // v2·20: kitchen station temperatures, one row per date+slot. The Latest
-  // tab is derived — 8 live-formula rows written once by seedSheets().
+  }
+};
+
+// v2·21: kitchen station temperatures live in their OWN standalone
+// spreadsheet (created automatically on first need, ID remembered in script
+// properties) — never tabs in the dough spreadsheet. Kept out of SHEETS so
+// seedSheets' main loop and getSheet can never resolve them against the
+// bound file. One data row per date+slot; the Latest tab is derived —
+// 8 live-formula rows written at seed time.
+var STATION_SHEETS = {
   stations: {
     name: "Station Temps",
     headers: ["Date","Slot","Time Taken","Pizza 1","Pizza Lowboy","Pizza 2",
@@ -65,8 +72,8 @@ var SHEETS = {
   }
 };
 
-// Wire ids for SHEETS.stations.headers[3..10], in column order — mirrors
-// STATIONS in js/config.js. Change both together.
+// Wire ids for STATION_SHEETS.stations.headers[3..10], in column order —
+// mirrors STATIONS in js/config.js. Change both together.
 var STATION_IDS = ["pizza1","lowboy","pizza2","slice","salad","reachin","walkin","freezer"];
 var STATION_SLOT_LABELS = ["Morning","2 PM","Night"];
 
@@ -147,6 +154,118 @@ function getSheet(key) {
   return sheet;
 }
 
+// The station spreadsheet's ID lives in script properties — zero manual
+// pasting. Created automatically on first need; an unreachable ID (deleted
+// and purged file, revoked access) self-heals: the property is cleared and
+// a fresh file is created. The old file, if it still exists, is never
+// touched again — its ID is error-logged first for forensics.
+var STATIONS_SS_PROP = "stationsSpreadsheetId";
+var STATIONS_SS_NAME = "Hot Tomato Station Temps";
+
+var __stationsSs = null; // request-scoped, like __ssTz — one openById per request
+function stationsSpreadsheet() {
+  if (__stationsSs) return __stationsSs;
+  var props = PropertiesService.getScriptProperties();
+  var id = props.getProperty(STATIONS_SS_PROP);
+  if (id) {
+    try {
+      __stationsSs = SpreadsheetApp.openById(id);
+      return __stationsSs;
+    } catch (err) {
+      console.error("station spreadsheet " + id + " unreachable (" + err + ") — recreating");
+      props.deleteProperty(STATIONS_SS_PROP);
+    }
+  }
+  var ss = SpreadsheetApp.create(STATIONS_SS_NAME);
+  props.setProperty(STATIONS_SS_PROP, ss.getId());
+  __stationsSs = ss;
+  // Seed immediately so the very request that triggered creation (a
+  // stations POST, or a ?stations=last GET) finds its tabs.
+  seedStationSpreadsheet(ss);
+  return __stationsSs;
+}
+
+function getStationSheet(key) {
+  var cfg = STATION_SHEETS[key];
+  var ss = stationsSpreadsheet();
+  var sheet = ss.getSheetByName(cfg.name);
+  if (!sheet) {
+    seedStationSpreadsheet(ss); // a hand-deleted tab self-heals too
+    sheet = ss.getSheetByName(cfg.name);
+  }
+  if (!sheet) throw new Error("Sheet '" + cfg.name + "' missing from the station temps spreadsheet");
+  return sheet;
+}
+
+// Read-only variant for GET paths, which run WITHOUT the script lock — two
+// concurrent GETs must never both trigger SpreadsheetApp.create (one file
+// would be orphaned). Returns null when the spreadsheet doesn't exist yet
+// or is unreachable; callers answer with empty station data, and the next
+// stations POST (or seedSheets) creates/heals under the lock.
+function stationSheetIfExists(key) {
+  try {
+    if (!__stationsSs) {
+      var id = PropertiesService.getScriptProperties().getProperty(STATIONS_SS_PROP);
+      if (!id) return null;
+      __stationsSs = SpreadsheetApp.openById(id);
+    }
+    return __stationsSs.getSheetByName(STATION_SHEETS[key].name);
+  } catch (err) {
+    return null;
+  }
+}
+
+// Idempotent, like seedSheets: creates missing tabs, writes headers, the
+// Slot + Time Taken text formats, and the 8 Latest live-formula rows. The
+// Latest formulas reference 'Station Temps'! by tab name only — both tabs
+// are siblings inside this spreadsheet, so they resolve correctly here.
+function seedStationSpreadsheet(ss) {
+  var report = [];
+  // Same timezone as the dough spreadsheet — findStationRow/formatDate use
+  // the bound file's cached tz (ssTimeZone), and a mismatch would re-open
+  // the v2·16 off-by-one-day class on Date-typed cells.
+  ss.setSpreadsheetTimeZone(ssTimeZone());
+  for (var key in STATION_SHEETS) {
+    var cfg = STATION_SHEETS[key];
+    var sheet = ss.getSheetByName(cfg.name);
+    if (!sheet) {
+      sheet = ss.insertSheet(cfg.name);
+      report.push("created sheet: " + cfg.name);
+    }
+    if (sheet.getLastRow() === 0) {
+      sheet.getRange(1, 1, 1, cfg.headers.length).setValues([cfg.headers]);
+      sheet.setFrozenRows(1);
+      report.push("wrote headers: " + cfg.name);
+    }
+    if (key === "stations" && sheet.getLastRow() < 2) {
+      // Slot ("2 PM") and Time Taken ("9:04 AM") stay literal text — Sheets
+      // would otherwise coerce both into time serials, and a coerced Slot
+      // cell breaks the date+slot upsert (see slotCell).
+      sheet.getRange("B2:C").setNumberFormat("@");
+      report.push("formatted Slot + Time Taken columns as text: " + cfg.name);
+    }
+    if (key === "stationsLatest" && sheet.getLastRow() < 2) {
+      var stHeaders = STATION_SHEETS.stations.headers;
+      var colLetters = ["D","E","F","G","H","I","J","K"];
+      var names = [];
+      var fs = [];
+      for (var st = 0; st < STATION_IDS.length; st++) {
+        names.push([stHeaders[st + 3]]);
+        fs.push(stationsLatestFormulas(colLetters[st]));
+      }
+      sheet.getRange(2, 1, names.length, 1).setValues(names);
+      sheet.getRange(2, 2, fs.length, 3).setFormulas(fs);
+      report.push("seeded " + names.length + " station rows with live formulas: " + cfg.name);
+    }
+  }
+  // Drop the empty default "Sheet1" that SpreadsheetApp.create leaves behind.
+  var stray = ss.getSheetByName("Sheet1");
+  if (stray && stray.getLastRow() === 0 && ss.getSheets().length > 1) {
+    try { ss.deleteSheet(stray); } catch (e) { /* cosmetic only */ }
+  }
+  return report;
+}
+
 function jsonResponse(obj) {
   return ContentService.createTextOutput(JSON.stringify(obj))
     .setMimeType(ContentService.MimeType.JSON);
@@ -216,7 +335,7 @@ function findStationRow(sheet, targetDate, slot) {
   var normalized = normalizeDate(targetDate);
   for (var i = allData.length - 1; i >= 1; i--) {
     if (normalizeDate(formatDate(allData[i][0])) === normalized &&
-        String(allData[i][1]) === slot) {
+        slotCell(allData[i][1]) === slot) {
       return i + 1;
     }
   }
@@ -227,6 +346,16 @@ function findStationRow(sheet, targetDate, slot) {
 // 1899-based Date — render it as the clock string the phone sent.
 function timeCell(v) {
   return v instanceof Date ? Utilities.formatDate(v, ssTimeZone(), "h:mm a") : v;
+}
+
+// Same coercion class for the Slot column: Sheets parses the string "2 PM"
+// into a time serial exactly like "9:04 AM" (Morning/Night are plain words
+// and unaffected). A coerced cell would never match findStationRow's slot
+// key — every 2 PM save would append a duplicate row and never hydrate
+// back. seedStationSpreadsheet text-formats B2:C to prevent it; this
+// renders any already-coerced cell back to its label.
+function slotCell(v) {
+  return v instanceof Date ? Utilities.formatDate(v, ssTimeZone(), "h a").toUpperCase() : String(v);
 }
 
 function readRowAsObject(sheet, rowNumber) {
@@ -273,6 +402,12 @@ function doPost(e) {
       return handleDoughPost(data);
     }
     return jsonResponse({status: "error", message: "Unknown type: " + type});
+  } catch (err) {
+    // Never let an exception escape as an Apps Script HTML error page — the
+    // frontend counts a 200 non-JSON body as a landed save. A JSON error is
+    // a terminal rejection the store records and the UI surfaces; any edit
+    // to the record produces a new payload version that retries.
+    return jsonResponse({status: "error", message: String(err && err.message || err)});
   } finally {
     lock.releaseLock();
   }
@@ -500,6 +635,7 @@ function handleTempsPost(data) {
 // included slot writes the full 11-cell row (blank temps as "") so a
 // re-save clears stale cells — same semantics as handleTempsPost. No
 // hasNegative check: a freezer can legitimately read below 0°F.
+// Since v2·21 the rows land in the standalone station spreadsheet.
 function handleStationsPost(data) {
   if (!data.date) {
     return jsonResponse({status: "error", message: "Missing date"});
@@ -507,7 +643,12 @@ function handleStationsPost(data) {
   if (!data.slots || !data.slots.length) {
     return jsonResponse({status: "ok", action: "stations_noop", date: data.date});
   }
-  var sheet = getSheet("stations");
+  var sheet;
+  try {
+    sheet = getStationSheet("stations");
+  } catch (err) {
+    return jsonResponse({status: "error", message: "Station temps spreadsheet unavailable: " + String(err && err.message || err)});
+  }
   var rows = [];
   for (var i = 0; i < data.slots.length; i++) {
     var s = data.slots[i];
@@ -545,15 +686,12 @@ function doGet(e) {
 // use append-only by date).
 function getStationsLast() {
   var latest = {};
-  var sheet = null;
-  try {
-    sheet = getSheet("stations");
-  } catch (err) {
-    // tab not seeded yet — answer with an empty map instead of erroring
-  }
+  // Null until the first stations POST (or seedSheets) has created the
+  // standalone spreadsheet — answer with an empty map instead of erroring.
+  var sheet = stationSheetIfExists("stations");
   if (sheet) {
     var allData = sheet.getDataRange().getValues();
-    var headers = SHEETS.stations.headers;
+    var headers = STATION_SHEETS.stations.headers;
     for (var c = 3; c < headers.length; c++) {
       for (var i = allData.length - 1; i >= 1; i--) {
         var v = allData[i][c];
@@ -561,7 +699,7 @@ function getStationsLast() {
           latest[headers[c]] = {
             temp: v,
             date: formatDate(allData[i][0]),
-            slot: String(allData[i][1]),
+            slot: slotCell(allData[i][1]),
             time: String(timeCell(allData[i][2]) || "")
           };
           break;
@@ -580,14 +718,10 @@ function getByDate(date) {
   var tempsRow = findRowByDate(temps, date);
   var eonRow   = findRowByDate(eon, date);
 
-  // Station Temps holds up to three rows per date (one per slot). Guarded:
-  // a redeploy that hasn't run seedSheets() yet must not break every GET.
-  var stationsSheet = null;
-  try {
-    stationsSheet = getSheet("stations");
-  } catch (err) {
-    // pre-seedSheets deploy — no station data yet
-  }
+  // Station Temps holds up to three rows per date (one per slot), in the
+  // standalone spreadsheet. Null when it doesn't exist yet or is
+  // unreachable — the dough/temps/eon merge still answers either way.
+  var stationsSheet = stationSheetIfExists("stations");
   var stationRows = [];
   if (stationsSheet) {
     for (var si = 0; si < STATION_SLOT_LABELS.length; si++) {
@@ -733,27 +867,6 @@ function seedSheets() {
       sheet.getRange(2, 1, PEACH_BIBLE_DATA.length, PEACH_BIBLE_DATA[0].length).setValues(PEACH_BIBLE_DATA);
       report.push("seeded " + PEACH_BIBLE_DATA.length + " peach bible rows");
     }
-    if (key === "stations" && sheet.getLastRow() < 2) {
-      // Time Taken stays literal text ("9:04 AM"), never a Sheets time
-      // serial — the Latest tab concatenates it and the GET echoes it.
-      sheet.getRange("C2:C").setNumberFormat("@");
-      report.push("formatted Time Taken column as text: " + cfg.name);
-    }
-    if (key === "stationsLatest" && sheet.getLastRow() < 2) {
-      // 8 live-formula rows: latest reading, when it was taken, and a
-      // sparkline trend per station. Live — no rebuild button needed.
-      var stHeaders = SHEETS.stations.headers;
-      var colLetters = ["D","E","F","G","H","I","J","K"];
-      var names = [];
-      var fs = [];
-      for (var st = 0; st < STATION_IDS.length; st++) {
-        names.push([stHeaders[st + 3]]);
-        fs.push(stationsLatestFormulas(colLetters[st]));
-      }
-      sheet.getRange(2, 1, names.length, 1).setValues(names);
-      sheet.getRange(2, 2, fs.length, 3).setFormulas(fs);
-      report.push("seeded " + names.length + " station rows with live formulas: " + cfg.name);
-    }
   }
 
   // Additive migration: older deployments have a narrower Dough Counts tab
@@ -771,7 +884,15 @@ function seedSheets() {
     }
   }
 
-  Logger.log(report.length ? report.join("\n") : "all sheets already seeded — no-op");
+  // Standalone station spreadsheet (v2·21): create-if-missing, seed, and
+  // ALWAYS log its URL — re-running seedSheets() is how the owner finds
+  // the link again. (An old "Station Temps" tab left in THIS spreadsheet by
+  // a v2·20 seed run is inert — nothing resolves it anymore; never delete.)
+  var stationSs = stationsSpreadsheet();
+  report = report.concat(seedStationSpreadsheet(stationSs));
+  report.push("Station Temps spreadsheet (bookmark this!): " + stationSs.getUrl());
+
+  Logger.log(report.join("\n"));
 }
 
 // One Station Temps Latest row: [Latest Temp, Taken, Trend] formulas for a

@@ -10,7 +10,7 @@ import {
   SLOW_DAY_UNDER, ROUND_DOWN_MAX_GAP, BATCH_DOWN_MAX_OVER,
   BATCH_DOWN_ALWAYS_MAX_OVER, EXTRA_LG_RATIO,
   STATIONS, STATION_MORNING_UNTIL, STATION_NIGHT_FROM,
-} from './config.js';
+} from './config.js?v=2.21';
 
 /* ---------------- parsing & formatting ---------------- */
 

@@ -13,8 +13,18 @@ const ContentServiceStub = {
 // Minimal stand-ins so formatDate (now timezone-aware) runs in the vm. The
 // spreadsheet timezone is fixed to Mountain (the shop's zone) so date-cell
 // formatting is deterministic regardless of the CI process timezone.
+// Handles the three formats Code.gs uses: "M/d/yyyy" (formatDate),
+// "h:mm a" (timeCell), and "h a" (slotCell).
 const UtilitiesStub = {
-  formatDate(d, tz /* fmt is always "M/d/yyyy" here */) {
+  formatDate(d, tz, fmt) {
+    if (fmt === 'h a' || fmt === 'h:mm a') {
+      const p = new Intl.DateTimeFormat('en-US', {
+        timeZone: tz, hour: 'numeric', minute: 'numeric', hour12: true,
+      }).formatToParts(d).reduce((o, part) => (o[part.type] = part.value, o), {});
+      return fmt === 'h a'
+        ? `${Number(p.hour)} ${p.dayPeriod}`
+        : `${Number(p.hour)}:${p.minute} ${p.dayPeriod}`;
+    }
     const p = new Intl.DateTimeFormat('en-US', {
       timeZone: tz, year: 'numeric', month: 'numeric', day: 'numeric',
     }).formatToParts(d).reduce((o, part) => (o[part.type] = part.value, o), {});
@@ -31,8 +41,8 @@ const gs = loadContext(['apps-script/Code.gs'], {
   SpreadsheetApp: SpreadsheetAppTzStub,
 });
 const g = getRefs(gs, [
-  'SHEETS', 'BIBLE_DATA', 'PEACH_BIBLE_DATA', 'formatDate', 'normalizeDate',
-  'hasNegative', 'handleDoughPost', 'handleEonPost', 'handleMakePost'
+  'SHEETS', 'STATION_SHEETS', 'BIBLE_DATA', 'PEACH_BIBLE_DATA', 'formatDate',
+  'normalizeDate', 'hasNegative', 'handleDoughPost', 'handleEonPost', 'handleMakePost'
 ]);
 
 function responseOf(output) {
@@ -136,7 +146,10 @@ function fakeGridSheet(rows) {
         },
         setFormulas(vals) { this.setValues(vals); },
         setFormula(f) { this.setValues([[f]]); },
-        setNumberFormat() {}
+        // Recorded so tests can assert the text-format defenses (a coerced
+        // Slot/Time cell breaks the station upsert). `row` is the A1 string
+        // when getRange was called with one ("B2:C").
+        setNumberFormat(fmt) { (self.formats ??= []).push([String(row), fmt]); }
       };
     },
     appendRow(r) { this.rows.push(r); },
@@ -159,18 +172,74 @@ function fakeCfBuilder() {
 }
 
 
-function seedContextFor(byName) {
+// In-memory PropertiesService — the map is shared by reference so tests can
+// pre-seed the station spreadsheet ID and assert what got stored.
+function fakeProps(seed = {}) {
+  const map = { ...seed };
+  return {
+    map,
+    service: {
+      getScriptProperties: () => ({
+        getProperty: (k) => (k in map ? map[k] : null),
+        setProperty: (k, v) => { map[k] = String(v); },
+        deleteProperty: (k) => { delete map[k]; },
+      }),
+    },
+  };
+}
+
+// A standalone station spreadsheet stub (the v2·21 openById/create target),
+// reusing fakeGridSheet for its tabs.
+function fakeStationSs(byName = {}, id = 'st-ss-1') {
+  return {
+    byName,
+    getId: () => id,
+    getUrl: () => 'https://sheets.example/' + id,
+    getSheetByName: (n) => byName[n] ?? null,
+    insertSheet(n) { byName[n] = fakeGridSheet([]); return byName[n]; },
+    getSheets: () => Object.values(byName),
+    deleteSheet(s) { for (const k of Object.keys(byName)) if (byName[k] === s) delete byName[k]; },
+    setSpreadsheetTimeZone() {},
+  };
+}
+
+// opts: props (fakeProps), stationSs (pre-existing station spreadsheet the
+// stored ID opens), created (records SpreadsheetApp.create results),
+// createThrows (simulate a create quota failure), logs (captures Logger).
+function seedContextFor(byName, opts = {}) {
+  const {
+    props = fakeProps(),
+    stationSs = null,
+    created = [],
+    createThrows = false,
+    logs = [],
+  } = opts;
   const ss = {
     getSheetByName: (n) => byName[n] ?? null,
-    insertSheet: (n) => { byName[n] = fakeGridSheet([]); return byName[n]; }
+    insertSheet: (n) => { byName[n] = fakeGridSheet([]); return byName[n]; },
+    getSpreadsheetTimeZone: () => 'America/Denver'
   };
   return loadContext(['apps-script/Code.gs'], {
     ContentService: ContentServiceStub,
-    Logger: { log() {} },
-    console: { error() {} },
+    Utilities: UtilitiesStub,
+    Logger: { log: (m) => logs.push(String(m)) },
+    console: { error() {}, warn() {} },
+    PropertiesService: props.service,
     SpreadsheetApp: {
       getActiveSpreadsheet: () => ss,
-      newConditionalFormatRule: fakeCfBuilder
+      newConditionalFormatRule: fakeCfBuilder,
+      openById: (id) => {
+        if (stationSs && stationSs.getId() === id) return stationSs;
+        const hit = created.find((c) => c.getId() === id);
+        if (hit) return hit;
+        throw new Error('not found: ' + id);
+      },
+      create: () => {
+        if (createThrows) throw new Error('quota exceeded');
+        const ns = fakeStationSs({}, 'created-' + (created.length + 1));
+        created.push(ns);
+        return ns;
+      }
     }
   });
 }
@@ -572,46 +641,46 @@ test('handleMakePost rejects missing date, missing makes, and negatives', () => 
   assert.match(neg.message, /Negative/);
 });
 
-/* ---------------- station temps (v2·20) ---------------- */
+/* ---------------- station temps (v2·20, standalone spreadsheet v2·21) ---------------- */
 
-test('SHEETS: station tabs — 11-column data tab, 4-column Latest tab', () => {
-  assert.equal(g.SHEETS.stations.headers.length, 11);
-  assert.equal(g.SHEETS.stations.headers[1], 'Slot');
-  assert.equal(g.SHEETS.stations.headers[2], 'Time Taken');
-  assert.equal(g.SHEETS.stations.headers[3], 'Pizza 1');
-  assert.equal(g.SHEETS.stations.headers[10], 'Freezer');
-  assert.equal(g.SHEETS.stationsLatest.headers.length, 4);
+test('STATION_SHEETS: split out of SHEETS — 11-column data tab, 4-column Latest tab', () => {
+  // v2·21: the station tabs left the dough spreadsheet's registry entirely,
+  // so seedSheets' main loop and getSheet can never resolve them there.
+  assert.equal('stations' in g.SHEETS, false);
+  assert.equal('stationsLatest' in g.SHEETS, false);
+  assert.equal(g.STATION_SHEETS.stations.headers.length, 11);
+  assert.equal(g.STATION_SHEETS.stations.headers[1], 'Slot');
+  assert.equal(g.STATION_SHEETS.stations.headers[2], 'Time Taken');
+  assert.equal(g.STATION_SHEETS.stations.headers[3], 'Pizza 1');
+  assert.equal(g.STATION_SHEETS.stations.headers[10], 'Freezer');
+  assert.equal(g.STATION_SHEETS.stationsLatest.headers.length, 4);
 });
 
+// A vm context whose stored station-spreadsheet ID opens a standalone file
+// holding the given Station Temps rows. The dough spreadsheet is empty —
+// station code must never look there.
 function stationsContext(rows) {
-  const sheet = {
-    getDataRange() { return { getValues: () => rows.map((r) => r.slice()) }; },
-    getRange(row, col, numRows, numCols) {
-      return {
-        setValues(vals) {
-          for (let i = 0; i < numRows; i++)
-            for (let j = 0; j < numCols; j++)
-              rows[row - 1 + i][col - 1 + j] = vals[i][j];
-        }
-      };
-    },
-    appendRow(r) { rows.push(r); },
-    getLastRow() { return rows.length; }
-  };
+  const stationSs = fakeStationSs({ 'Station Temps': fakeGridSheet(rows) });
+  const props = fakeProps({ stationsSpreadsheetId: stationSs.getId() });
   return loadContext(['apps-script/Code.gs'], {
     ContentService: ContentServiceStub,
     Utilities: UtilitiesStub,
+    PropertiesService: props.service,
     SpreadsheetApp: {
       getActiveSpreadsheet: () => ({
-        getSheetByName: (n) => (n === 'Station Temps' ? sheet : null),
+        getSheetByName: () => null,
         getSpreadsheetTimeZone: () => 'America/Denver',
-      })
+      }),
+      openById: (id) => {
+        if (id === stationSs.getId()) return stationSs;
+        throw new Error('not found: ' + id);
+      },
     }
   });
 }
 
 test('handleStationsPost: upsert by date+slot, full-row clear, negative freezer ok', () => {
-  const rows = [plain(g.SHEETS.stations.headers)];
+  const rows = [plain(g.STATION_SHEETS.stations.headers)];
   const ctx2 = stationsContext(rows);
   const { handleStationsPost } = getRefs(ctx2, ['handleStationsPost']);
 
@@ -658,13 +727,16 @@ test('getByDate: station rows merge slot-prefixed; a stations-only date counts a
     'Dough Counts': empty(g.SHEETS.dough.headers),
     Temperatures: empty(g.SHEETS.temps.headers),
     'End of Night Count': empty(g.SHEETS.eon.headers),
+  };
+  const stationSs = fakeStationSs({
     'Station Temps': fakeGridSheet([
-      plain(g.SHEETS.stations.headers),
+      plain(g.STATION_SHEETS.stations.headers),
       ['7/4/2026', 'Morning', '9:04 AM', 35.1, 37.2, '', '', '', '', '', ''],
       ['7/4/2026', 'Night', '8:31 PM', '', '', '', '', '', '', '', -2],
     ]),
-  };
-  const ctx2 = seedContextFor(byName);
+  });
+  const props = fakeProps({ stationsSpreadsheetId: stationSs.getId() });
+  const ctx2 = seedContextFor(byName, { props, stationSs });
   const { getByDate } = getRefs(ctx2, ['getByDate']);
 
   const found = responseOf(getByDate('7/4/2026'));
@@ -677,14 +749,31 @@ test('getByDate: station rows merge slot-prefixed; a stations-only date counts a
 
   assert.equal(responseOf(getByDate('7/5/2026')).status, 'not_found');
 
-  // A deploy that hasn't run seedSheets() yet: no stations tab, no throw.
-  delete byName['Station Temps'];
+  // The station spreadsheet losing its data tab must not break the GET —
+  // and being a GET (no script lock), it must NOT create anything either.
+  delete stationSs.byName['Station Temps'];
   assert.equal(responseOf(getByDate('7/4/2026')).status, 'not_found');
+  assert.equal('Station Temps' in stationSs.byName, false); // read paths never seed
+});
+
+test('GET paths never create the station spreadsheet (no stored ID → empty answers)', () => {
+  const empty = (headers) => fakeGridSheet([plain(headers)]);
+  const byName = {
+    'Dough Counts': empty(g.SHEETS.dough.headers),
+    Temperatures: empty(g.SHEETS.temps.headers),
+    'End of Night Count': empty(g.SHEETS.eon.headers),
+  };
+  const created = [];
+  const ctx2 = seedContextFor(byName, { created }); // empty props
+  const { getByDate, getStationsLast } = getRefs(ctx2, ['getByDate', 'getStationsLast']);
+  assert.equal(responseOf(getByDate('7/4/2026')).status, 'not_found');
+  assert.deepEqual(responseOf(getStationsLast()).latest, {});
+  assert.equal(created.length, 0); // creation happens only under the POST lock / seedSheets
 });
 
 test('getStationsLast: bottom-up per column — the last reading, not the last row', () => {
   const rows = [
-    plain(g.SHEETS.stations.headers),
+    plain(g.STATION_SHEETS.stations.headers),
     ['7/21/2026', 'Morning', '9:00 AM', 35.1, 37.2, '', 40.1, '', 38.3, 38.2, 32.7],
     ['7/21/2026', 'Night', '8:30 PM', 41.5, '', '', '', '', '', 39.4, ''],
     ['7/22/2026', 'Morning', '9:05 AM', '', 33.2, '', '', '', '', '', ''],
@@ -700,13 +789,41 @@ test('getStationsLast: bottom-up per column — the last reading, not the last r
   assert.equal(res.latest['Freezer'].temp, 32.7);
   assert.equal('Pizza 2' in res.latest, false); // never recorded → absent
 
-  // Headers-only tab → empty map; so does a missing tab.
-  const emptyCtx = stationsContext([plain(g.SHEETS.stations.headers)]);
+  // Headers-only tab → empty map.
+  const emptyCtx = stationsContext([plain(g.STATION_SHEETS.stations.headers)]);
   assert.deepEqual(responseOf(getRefs(emptyCtx, ['getStationsLast']).getStationsLast()).latest, {});
 });
 
-test('seedSheets: creates both station tabs, Latest gets 8 live-formula rows, idempotent', () => {
-  const byName = {
+test('slotCell: a Sheets-coerced "2 PM" Slot cell still matches and renders', () => {
+  // Sheets parses the string "2 PM" into a time serial exactly like it does
+  // "9:04 AM" (the class the Time Taken column already defends against).
+  // A coerced cell comes back as a Date; without slotCell every 2 PM save
+  // would append a duplicate row and never hydrate back. Build the Date in
+  // the vm's own realm (instanceof Date must match inside the context):
+  // 20:00 UTC on 7/4 = 2 PM Mountain (MDT, UTC-6).
+  const rows = [plain(g.STATION_SHEETS.stations.headers)];
+  const ctx2 = stationsContext(rows);
+  rows.push(evalIn(ctx2,
+    '["7/4/2026", new Date(Date.UTC(2026, 6, 4, 20, 0)), "2:12 PM", 39.1, "", "", "", "", "", "", ""]'));
+  const { handleStationsPost, getStationsLast } = getRefs(ctx2, ['handleStationsPost', 'getStationsLast']);
+
+  // The Load-last reference renders the label, not an 1899-style Date dump.
+  assert.equal(responseOf(getStationsLast()).latest['Pizza 1'].slot, '2 PM');
+
+  // A re-save of the 2 PM slot upserts the coerced row instead of appending.
+  handleStationsPost({
+    date: '7/4/2026',
+    slots: [{ slot: '2 PM', takenAt: '2:30 PM', temps: { pizza1: 40 } }],
+  });
+  assert.equal(rows.length, 2); // upserted — no duplicate
+  assert.equal(plain(rows[1])[2], '2:30 PM');
+  assert.equal(plain(rows[1])[3], 40);
+});
+
+// The dough spreadsheet's tabs, fully seeded — the fixture for the
+// standalone-spreadsheet seedSheets tests.
+function doughTabsSeeded() {
+  return {
     'Dough Counts': fakeGridSheet([plain(g.SHEETS.dough.headers)]),
     Temperatures: fakeGridSheet([plain(g.SHEETS.temps.headers)]),
     'Dough Bible': fakeGridSheet([plain(g.SHEETS.bible.headers), [3750, 11, 52, 44, 2]]),
@@ -715,13 +832,29 @@ test('seedSheets: creates both station tabs, Latest gets 8 live-formula rows, id
     'Final Dough Amount at 2pm': fakeGridSheet([plain(g.SHEETS.final.headers)]),
     'End of Night Count': fakeGridSheet([plain(g.SHEETS.eon.headers)])
   };
-  const ctx2 = seedContextFor(byName);
+}
+
+test('seedSheets: creates the standalone station spreadsheet, stores its ID, logs its URL', () => {
+  const byName = doughTabsSeeded();
+  const props = fakeProps();
+  const created = [];
+  const logs = [];
+  const ctx2 = seedContextFor(byName, { props, created, logs });
 
   evalIn(ctx2, 'seedSheets()');
-  const data = byName['Station Temps'];
-  const latest = byName['Station Temps Latest'];
-  assert.ok(data, 'Station Temps tab created');
-  assert.deepEqual(plain(data.rows[0]), plain(g.SHEETS.stations.headers));
+  assert.equal(created.length, 1); // exactly one SpreadsheetApp.create
+  assert.equal(props.map.stationsSpreadsheetId, created[0].getId());
+  // The station tabs live in the NEW file — never in the dough spreadsheet.
+  assert.equal('Station Temps' in byName, false);
+  assert.equal('Station Temps Latest' in byName, false);
+  const data = created[0].byName['Station Temps'];
+  const latest = created[0].byName['Station Temps Latest'];
+  assert.ok(data, 'Station Temps tab created in the standalone file');
+  assert.deepEqual(plain(data.rows[0]), plain(g.STATION_SHEETS.stations.headers));
+  // Slot + Time Taken text-formatted — the coercion defense (see slotCell).
+  // (Applied on create and again by seedSheets' re-seed — idempotent.)
+  assert.ok(data.formats.length >= 1);
+  for (const f of plain(data.formats)) assert.deepEqual(f, ['B2:C', '@']);
   assert.ok(latest, 'Station Temps Latest tab created');
   assert.equal(latest.rows.length, 9); // headers + 8 station rows
   assert.equal(latest.rows[1][0], 'Pizza 1');
@@ -746,8 +879,85 @@ test('seedSheets: creates both station tabs, Latest gets 8 live-formula rows, id
     }
   }
 
-  // Rerun — byte-identical.
+  // The URL is logged so the owner can find/bookmark the new file.
+  assert.ok(logs.some((l) => l.includes('Station Temps spreadsheet (bookmark this!): https://')));
+
+  // Rerun — no second create, tabs byte-identical, URL logged again.
   const before = JSON.stringify(plain({ data: data.rows, latest: latest.rows }));
+  logs.length = 0;
   evalIn(ctx2, 'seedSheets()');
+  assert.equal(created.length, 1);
   assert.equal(JSON.stringify(plain({ data: data.rows, latest: latest.rows })), before);
+  assert.ok(logs.some((l) => l.includes('bookmark this!')));
+});
+
+test('stationsSpreadsheet: a dead stored ID self-heals with a fresh seeded file', () => {
+  const props = fakeProps({ stationsSpreadsheetId: 'deleted-and-purged' });
+  const created = [];
+  const ctx2 = seedContextFor(doughTabsSeeded(), { props, created }); // openById throws
+  evalIn(ctx2, 'stationsSpreadsheet()');
+  assert.equal(created.length, 1);
+  assert.equal(props.map.stationsSpreadsheetId, created[0].getId());
+  assert.ok(created[0].byName['Station Temps'], 'seeded on creation');
+  assert.ok(created[0].byName['Station Temps Latest']);
+});
+
+test('a stray v2·20 station tab in the dough spreadsheet is inert', () => {
+  // A pre-v2·21 seedSheets run left real tabs in the dough file. Nothing
+  // resolves them anymore: posts land in the standalone file, and the
+  // decoy is never written or deleted.
+  const byName = doughTabsSeeded();
+  byName['Station Temps'] = fakeGridSheet([plain(g.STATION_SHEETS.stations.headers)]);
+  const stationSs = fakeStationSs({ 'Station Temps': fakeGridSheet([plain(g.STATION_SHEETS.stations.headers)]) });
+  const props = fakeProps({ stationsSpreadsheetId: stationSs.getId() });
+  const ctx2 = seedContextFor(byName, { props, stationSs });
+  const { handleStationsPost } = getRefs(ctx2, ['handleStationsPost']);
+
+  handleStationsPost({
+    date: '7/4/2026',
+    slots: [{ slot: 'Morning', takenAt: '9:04 AM', temps: { pizza1: 35 } }],
+  });
+  assert.equal(stationSs.byName['Station Temps'].rows.length, 2); // landed in the standalone file
+  assert.equal(byName['Station Temps'].rows.length, 1); // decoy untouched
+  evalIn(ctx2, 'seedSheets()');
+  assert.equal(byName['Station Temps'].rows.length, 1); // still untouched
+  assert.equal('Station Temps Latest' in byName, false); // no decoy sibling created
+});
+
+test('station spreadsheet unavailable: stations POST answers a JSON error, GETs stay clean', () => {
+  const byName = doughTabsSeeded();
+  const ctx2 = seedContextFor(byName, { createThrows: true }); // empty props + create fails
+  const { handleStationsPost, getByDate, getStationsLast } =
+    getRefs(ctx2, ['handleStationsPost', 'getByDate', 'getStationsLast']);
+
+  const r = responseOf(handleStationsPost({
+    date: '7/4/2026',
+    slots: [{ slot: 'Morning', takenAt: '9:04 AM', temps: { pizza1: 35 } }],
+  }));
+  assert.equal(r.status, 'error');
+  assert.match(r.message, /[Ss]tation/); // a real message, not an HTML error page
+  // The dough-side GETs never touch the broken create path.
+  assert.equal(responseOf(getByDate('7/4/2026')).status, 'not_found');
+  assert.deepEqual(responseOf(getStationsLast()).latest, {});
+});
+
+test('doPost: an escaped handler throw answers JSON and still releases the lock', () => {
+  // Without the v2·21 catch, an unexpected throw became an Apps Script HTML
+  // error page with HTTP 200 — which the frontend counts as a landed save.
+  const released = [];
+  const ctx2 = loadContext(['apps-script/Code.gs'], {
+    ContentService: ContentServiceStub,
+    console: { error() {} },
+    LockService: {
+      getScriptLock: () => ({ waitLock() {}, releaseLock() { released.push(1); } }),
+    },
+    SpreadsheetApp: { getActiveSpreadsheet: () => ({ getSheetByName: () => null }) },
+  });
+  const { doPost } = getRefs(ctx2, ['doPost']);
+  const res = responseOf(doPost({
+    postData: { contents: JSON.stringify({ type: 'dough', date: '7/4/2026', todayForecast: 9000 }) },
+  }));
+  assert.equal(res.status, 'error');
+  assert.match(res.message, /missing/i); // getSheet's "Sheet … missing" throw, as JSON
+  assert.equal(released.length, 1);
 });

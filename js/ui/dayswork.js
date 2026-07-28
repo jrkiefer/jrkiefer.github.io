@@ -2,9 +2,9 @@
 // extras/cuts), the hero batch count with its rounding pills, and the
 // set-out alert card.
 
-import { ALL, TRAYS_PER_BATCH } from '../config.js';
-import { fmt } from '../calc.js';
-import { $, setText, roundPills } from './fields.js';
+import { ALL, TRAYS_PER_BATCH } from '../config.js?v=2.21';
+import { fmt } from '../calc.js?v=2.21';
+import { $, setText, roundPills } from './fields.js?v=2.21';
 
 let updateRoundPills = null;
 

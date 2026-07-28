@@ -145,17 +145,24 @@ test('unchanged payload types are not re-posted', async (t) => {
   assert.equal(store.getState().status, 'synced');
 });
 
-test('a backend rejection is terminal until the record changes', async (t) => {
+test('a backend rejection is terminal until the record changes — and surfaced, not silent', async (t) => {
   const { store, calls } = harness(t, {
     postImpl: async () => ({ ok: false, rejected: true, message: 'nope' }),
   });
+  const reasons = [];
+  store.subscribe((_s, meta) => reasons.push(meta.reason));
   await store.setDate('2026-04-01');
   store.patch((r) => { r.eon.sales = '5'; });
   await store.flush();
   assert.equal(calls.length, 1);
   assert.equal(store.getState().status, 'synced'); // handled, not a network failure
+  // v2·21: the refusal is recorded and notified — the content never reached
+  // the sheet, and the UI must say so instead of reading "✓ saved".
+  assert.deepEqual(store.getState().rejection, { type: 'eon', message: 'nope' });
+  assert.ok(reasons.includes('rejection'));
   await store.flush();
   assert.equal(calls.length, 1); // not retried verbatim
+  assert.deepEqual(store.getState().rejection, { type: 'eon', message: 'nope' }); // still refused
   store.patch((r) => { r.eon.sales = '5.5'; });
   await store.flush();
   assert.equal(calls.length, 2); // new payload version → retried
@@ -700,9 +707,9 @@ test('a no-change reload is quiet — no load notify, ack cache kept', async (t)
   assert.equal(store.getState().status, 'synced');
   store.patch((r) => { r.eon.sales = '5'; }); // byte-identical re-type
   await tick(2500);
-  // The kept ack correctly suppresses the repost — the sheet provably
-  // holds this exact content (contrast with the changed-row reload above,
-  // which must clear the cache).
+  // The ack (rebuilt from the row in hand since v2·21) still suppresses the
+  // repost — the sheet provably holds this exact content (contrast with the
+  // changed-row reload above, which must clear the cache).
   assert.equal(calls.length, 1);
   assert.equal(store.getState().status, 'synced');
 });
@@ -802,4 +809,222 @@ test('stations posts last and does not depend on the dough row', async (t) => {
   // dough fails (network) → make would be skipped; stations still lands.
   assert.deepEqual(calls.map((c) => c.payload.type), ['dough', 'stations']);
   assert.equal(calls[1].payload.slots[0].temps.walkin, 38.2);
+});
+
+/* ---------------- v2·21: rejection ledger + Load races + honest acks ---------------- */
+
+test('a rejection clears when the changed payload finally lands', async (t) => {
+  let refuse = true;
+  const { store, tick } = harness(t, {
+    postImpl: async () => (refuse ? { ok: false, rejected: true, message: 'nope' } : { ok: true }),
+  });
+  const reasons = [];
+  store.subscribe((_s, meta) => reasons.push(meta.reason));
+  await store.setDate('2026-04-01');
+  store.patch((r) => { r.eon.sales = '5'; });
+  await tick(2500);
+  assert.equal(store.getState().rejection.type, 'eon');
+  refuse = false; // e.g. the fixed backend got deployed
+  store.patch((r) => { r.eon.sales = '5.5'; });
+  await tick(2500);
+  assert.equal(store.getState().rejection, null);
+  assert.equal(reasons.filter((r) => r === 'rejection').length, 2); // set, then cleared
+});
+
+test('a rejection survives an unrelated successful flush (an ack-skip must not clear it)', async (t) => {
+  // The load-bearing honesty rule: a later pass that merely SKIPS the
+  // rejected type via the ack cache hasn't put its content on the sheet.
+  const { store, tick } = harness(t, {
+    postImpl: async (p) => (p.type === 'eon' ? { ok: false, rejected: true, message: 'nope' } : { ok: true }),
+  });
+  await store.setDate('2026-04-01');
+  store.patch((r) => {
+    r.eon.sales = '5';
+    r.temps = [{ water: '58', dough: '78' }];
+  });
+  await tick(2500);
+  assert.equal(store.getState().rejection.type, 'eon');
+  store.patch((r) => { r.temps[0].dough = '80'; }); // unrelated edit — temps reposts fine
+  await tick(2500);
+  assert.equal(store.getState().status, 'synced');
+  assert.equal(store.getState().rejection.type, 'eon'); // eon still never landed
+});
+
+test('a rejection clears when the record stops producing the payload', async (t) => {
+  const { store, tick } = harness(t, {
+    postImpl: async (p) => (p.type === 'eon' ? { ok: false, rejected: true, message: 'nope' } : { ok: true }),
+  });
+  await store.setDate('2026-04-01');
+  // With temps alongside: clearing the eon field exercises the in-loop
+  // "no longer produced" clear (the flush still has a temps payload).
+  store.patch((r) => {
+    r.eon.sales = '5';
+    r.temps = [{ water: '58', dough: '78' }];
+  });
+  await tick(2500);
+  assert.equal(store.getState().rejection.type, 'eon');
+  store.patch((r) => { r.eon.sales = ''; }); // the offending field is gone
+  await tick(2500);
+  assert.equal(store.getState().rejection, null);
+});
+
+test('a rejection clears on the zero-payload bail (a blanked record)', async (t) => {
+  const { store, tick } = harness(t, {
+    postImpl: async () => ({ ok: false, rejected: true, message: 'nope' }),
+  });
+  await store.setDate('2026-04-01');
+  store.patch((r) => { r.eon.sales = '5'; });
+  await tick(2500);
+  assert.equal(store.getState().rejection.type, 'eon');
+  store.patch((r) => { r.eon.sales = ''; }); // record now blank → gated-empty flush
+  await tick(2500);
+  assert.equal(store.getState().rejection, null);
+});
+
+test('setDate, reset, and a force-load apply all replace the content and drop the rejection', async (t) => {
+  let row = null;
+  const { store, tick } = harness(t, {
+    postImpl: async () => ({ ok: false, rejected: true, message: 'nope' }),
+    getImpl: async () => (row ? { status: 'found', data: row } : { status: 'not_found' }),
+  });
+  const rejectNow = async () => {
+    store.patch((r) => { r.eon.sales = '5'; });
+    await tick(2500);
+    assert.equal(store.getState().rejection.type, 'eon');
+  };
+  await store.setDate('2026-04-01');
+  await rejectNow();
+  await store.setDate('2026-04-02'); // fresh date, fresh content
+  assert.equal(store.getState().rejection, null);
+  await rejectNow();
+  store.reset(); // the rejected content is gone with the record
+  assert.equal(store.getState().rejection, null);
+  await rejectNow();
+  row = { Date: '4/2/2026', 'EON Sales': 7000 }; // another phone's number
+  await store.reload({ force: true }); // applied wholesale
+  assert.equal(store.getState().rejection, null);
+});
+
+test('dough outranks eon when both payloads are refused', async (t) => {
+  const { store, tick } = harness(t, {
+    postImpl: async () => ({ ok: false, rejected: true, message: 'nope' }),
+  });
+  await store.setDate('2026-04-01');
+  store.patch((r) => {
+    Object.assign(r, full2pm());
+    r.eon.sales = '5';
+  });
+  await tick(2500);
+  assert.equal(store.getState().rejection.type, 'dough'); // POST_ORDER priority
+});
+
+test('a force-load cancels the armed debounce — discarded edits never reach the sheet', async (t) => {
+  // The v2·21 race fix: Load tapped inside the 2.5 s debounce window, GET
+  // slower than the debounce. Pre-fix the debounce fired mid-GET, the row
+  // applied while those POSTs were in the air, and the "discarded" edits
+  // then landed on the sheet with every phone reading Synced.
+  let release;
+  const gate = new Promise((r) => { release = r; });
+  let booted = false; // setDate's own GET must answer immediately
+  const { store, calls, tick, settle } = harness(t, {
+    getImpl: async () => {
+      if (!booted) return { status: 'not_found' };
+      await gate;
+      return { status: 'found', data: { Date: '7/16/2026', 'EON Sales': 7000 } };
+    },
+  });
+  await store.setDate('2026-07-16');
+  booted = true;
+  store.patch((r) => { r.eon.sales = '5'; }); // wrong number — debounce armed
+  const p = store.reload({ force: true }); // user confirms "Discard edits & load?"
+  await tick(2500); // the debounce window elapses while the GET hangs…
+  assert.equal(calls.length, 0); // …but the timer was cancelled — nothing posts
+  release();
+  await p;
+  await settle();
+  assert.equal(store.getState().record.eon.sales, '7'); // the sheet's number applied
+  assert.equal(calls.length, 0); // the discarded edit never posted
+  assert.equal(store.getState().status, 'synced');
+});
+
+test('a force-load bails when a flush starts mid-GET (its POSTs are still in the air)', async (t) => {
+  // A reconnect flush can begin while the Load's GET hangs; the row in hand
+  // predates whatever those POSTs are writing. The reload must drop it.
+  let releaseGet;
+  const getGate = new Promise((r) => { releaseGet = r; });
+  let releasePost;
+  const postGate = new Promise((r) => { releasePost = r; });
+  let booted = false; // setDate's own GET must answer immediately
+  const { store, settle } = harness(t, {
+    postImpl: async () => { await postGate; return { ok: true }; },
+    getImpl: async () => {
+      if (!booted) return { status: 'not_found' };
+      await getGate;
+      return { status: 'found', data: { Date: '7/16/2026', 'EON Sales': 7000 } };
+    },
+  });
+  await store.setDate('2026-07-16');
+  booted = true;
+  const p = store.reload({ force: true }); // clean record — nothing to wait for; GET hangs
+  await settle();
+  store.patch((r) => { r.eon.sales = '5'; }); // typed mid-GET…
+  const f = store.flush(); // …and the online handler flushes it immediately
+  await settle();
+  releaseGet(); // the GET returns while the eon POST is still in flight
+  await p;
+  assert.equal(store.getState().record.eon.sales, '5'); // stale row NOT applied
+  releasePost();
+  await f;
+  await settle();
+  assert.equal(store.getState().status, 'synced'); // the flush settles the status
+});
+
+test('a failed force-load re-arms the debounce for the edits it could not discard', async (t) => {
+  // The debounce-cancel must not strand real edits when the load then
+  // fails: offline or not_found leaves the numbers on the phone, so the
+  // retry timer has to come back.
+  let down = true;
+  const { store, calls, tick } = harness(t, {
+    getImpl: async () => { if (down) throw new Error('offline'); return { status: 'not_found' }; },
+  });
+  await store.setDate('2026-07-16');
+  store.patch((r) => { r.eon.sales = '5'; });
+  await store.reload({ force: true }); // network fails — nothing applied
+  assert.equal(store.getState().status, 'offline');
+  await tick(2500); // the re-armed debounce fires
+  assert.equal(calls.length, 1); // the edit still syncs
+  down = false;
+  store.patch((r) => { r.eon.sales = '5.5'; });
+  await store.reload({ force: true }); // sheet has nothing — loadmiss path
+  await tick(2500);
+  assert.ok(calls.length >= 2); // re-armed there too
+});
+
+test('a no-change reload rebuilds the ack — a later revert reposts instead of being swallowed', async (t) => {
+  // The timed-out-but-landed sequence: POST of Y times out client-side but
+  // lands server-side, so the ack still says X. A no-change Load then
+  // verifies the sheet holds Y. Pre-fix the kept ack (X) swallowed a later
+  // revert-to-X edit — the sheet kept Y while the phone showed X, Synced.
+  let failNext = false;
+  const { store, calls, tick } = harness(t, {
+    postImpl: async () => (failNext ? { ok: false, network: true } : { ok: true }),
+    getImpl: async () => ({ status: 'found', data: { Date: '7/16/2026', 'EON Sales': 5500 } }),
+  });
+  await store.setDate('2026-07-16'); // hydrates '5.5' (the sheet's Y)
+  store.patch((r) => { r.eon.sales = '5'; }); // X — posts and acks
+  await tick(2500);
+  assert.equal(calls.length, 1); // ack now says X
+  failNext = true;
+  store.patch((r) => { r.eon.sales = '5.5'; }); // Y — "times out"…
+  await tick(2500);
+  assert.equal(store.getState().status, 'offline'); // …but landed server-side
+  failNext = false;
+  await store.reload({ force: true }); // sheet returns Y — deep-equals the record
+  assert.equal(store.getState().status, 'synced');
+  store.patch((r) => { r.eon.sales = '5'; }); // revert to X
+  await tick(2500);
+  // Pre-fix: ser(X) === kept ack X → skipped, sheet stuck on Y forever.
+  assert.equal(calls.map((c) => c.payload.type).filter((x) => x === 'eon').length, 3);
+  assert.equal(calls.at(-1).payload.eonSales, 5000);
+  assert.equal(store.getState().status, 'synced');
 });

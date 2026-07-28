@@ -2,9 +2,9 @@
 // shorthand echoes and the Sales Left box, plus the EON Final Sales field
 // with its ± vs forecast line. Advisory range notes only — nothing blocks.
 
-import { BIBLES } from '../config.js';
-import { parseSales, money } from '../calc.js';
-import { $, bindInput, setText, setInputValue } from './fields.js';
+import { BIBLES } from '../config.js?v=2.21';
+import { parseSales, money } from '../calc.js?v=2.21';
+import { $, bindInput, setText, setInputValue } from './fields.js?v=2.21';
 
 const FIELDS = {
   todayForecast: {

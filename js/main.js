@@ -2,21 +2,21 @@
 // one view per state change, routes update/hydrate to the UI modules, and
 // owns the app-level bits: date, mode tabs, two-tap reset, unload flushes.
 
-import { createStore } from './store.js';
-import * as api from './api.js';
-import { computePlan, effectiveMake, autoBibleFor, parseSales, fmtDate } from './calc.js';
-import { APP_VERSION } from './config.js';
-import { $, setText } from './ui/fields.js';
-import * as sales from './ui/sales.js';
-import { createCounts } from './ui/counts.js';
-import * as dayswork from './ui/dayswork.js';
-import * as bysize from './ui/bysize.js';
-import * as outlook from './ui/outlook.js';
-import * as bible from './ui/bible.js';
-import * as temps from './ui/temps.js';
-import * as history from './ui/history.js';
-import * as make from './ui/make.js';
-import * as stations from './ui/stations.js';
+import { createStore } from './store.js?v=2.21';
+import * as api from './api.js?v=2.21';
+import { computePlan, effectiveMake, autoBibleFor, parseSales, fmtDate } from './calc.js?v=2.21';
+import { APP_VERSION } from './config.js?v=2.21';
+import { $, setText } from './ui/fields.js?v=2.21';
+import * as sales from './ui/sales.js?v=2.21';
+import { createCounts } from './ui/counts.js?v=2.21';
+import * as dayswork from './ui/dayswork.js?v=2.21';
+import * as bysize from './ui/bysize.js?v=2.21';
+import * as outlook from './ui/outlook.js?v=2.21';
+import * as bible from './ui/bible.js?v=2.21';
+import * as temps from './ui/temps.js?v=2.21';
+import * as history from './ui/history.js?v=2.21';
+import * as make from './ui/make.js?v=2.21';
+import * as stations from './ui/stations.js?v=2.21';
 
 const STATUS_LABELS = {
   new: 'New night',
@@ -126,8 +126,12 @@ function setMode(m) {
 
 for (const tab of document.querySelectorAll('.mode-tab')) {
   tab.addEventListener('click', () => {
+    // Re-default the station slot only on a real ENTRY — a stray re-tap of
+    // the already-active tab must not discard a manually-picked slot and
+    // rewrite the inputs from another slot's numbers.
+    const entering = tab.dataset.mode === 'stations' && mode !== 'stations';
     setMode(tab.dataset.mode); // manual taps always win
-    if (tab.dataset.mode === 'stations') stations.onEnter(); // re-default the slot by clock
+    if (entering) stations.onEnter(); // re-default the slot by clock
     updateAll(deriveView(lastState));
   });
 }
@@ -145,10 +149,36 @@ function showLoadNote(msg) {
   loadNoteTimer = setTimeout(() => { el.classList.add('hidden'); el.textContent = ''; loadNoteTimer = null; }, LOAD_NOTE_MS);
 }
 
+// Sticky warning for a backend-rejected save — the "says saved but didn't"
+// killer. Unlike showLoadNote it never auto-hides and can't be dismissed:
+// it clears itself only when the rejection actually resolves (the changed
+// payload lands, the offending fields are cleared, or a load/reset/
+// date-change replaces the record). Rendered from state on every
+// notification, so no reason-specific wiring is needed.
+const REJECT_LABELS = {
+  dough: '2 PM save',
+  make: 'make correction',
+  temps: 'batch temps',
+  eon: 'EON save',
+  stations: 'station temps',
+};
+function renderSyncWarn(rejection) {
+  const el = $('syncWarn');
+  if (!rejection) {
+    el.classList.add('hidden');
+    el.textContent = '';
+    return;
+  }
+  const label = REJECT_LABELS[rejection.type] ?? rejection.type;
+  setText(el, `⚠ The sheet refused the ${label} — ${rejection.message}. It is NOT saved to the sheet (still safe on this phone).`);
+  el.classList.remove('hidden');
+}
+
 store.subscribe((state, meta) => {
   lastState = state;
   document.documentElement.setAttribute('data-status', state.status);
   setText($('statusLabel'), STATUS_LABELS[state.status] ?? state.status);
+  renderSyncWarn(state.rejection);
 
   if (meta.reason === 'load') {
     setMode('twopm'); // always open on 2 PM; EON is a manual tap

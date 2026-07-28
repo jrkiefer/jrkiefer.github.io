@@ -2,7 +2,7 @@
 
 // Shown in the footer by main.js (a blank footer = stale cached scripts).
 // Bump together with the ?v= query on the css/js URLs in index.html.
-export const APP_VERSION = 'v2·20';
+export const APP_VERSION = 'v2·21';
 
 export const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbysGE_0ynpVxJNdmvsfPjAdkQA3Lng7YMDp1OjP-EXbdx3xqEixgjwCKxVeSisECo-j/exec';
 export const SHEET_URL = 'https://docs.google.com/spreadsheets/d/1MVjVlKd3pwXB_JkHZkP00FnM0fBerfwStfqJ-GBza0M/edit?gid=0#gid=0';
@@ -26,7 +26,7 @@ export const MAX_BATCH_TEMPS = 10;
 
 // Station Temps (v2·20): 8 kitchen stations, logged 3× daily.
 // Labels double as the sheet column headers / wire keys — change together
-// with SHEETS.stations + STATION_IDS in apps-script/Code.gs.
+// with STATION_SHEETS.stations + STATION_IDS in apps-script/Code.gs.
 export const STATIONS = [
   { id: 'pizza1', label: 'Pizza 1' },
   { id: 'lowboy', label: 'Pizza Lowboy' },

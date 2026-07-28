@@ -1,8 +1,8 @@
 // js/ui/temps.js — Step 05: water °F in / dough °F out per batch. Ten rows
 // exist from the start; visibility follows max(batches, entered, 3).
 
-import { MAX_BATCH_TEMPS } from '../config.js';
-import { $, bindInput, setInputValue, wireCollapse } from './fields.js';
+import { MAX_BATCH_TEMPS } from '../config.js?v=2.21';
+import { $, bindInput, setInputValue, wireCollapse } from './fields.js?v=2.21';
 
 export function init(ctx) {
   wireCollapse('tempsSec', 'tempsToggle');

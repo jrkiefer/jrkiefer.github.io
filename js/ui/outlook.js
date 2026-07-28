@@ -6,9 +6,9 @@
 // any keystroke flips a manual flag that wins from then on (only Reset
 // clears it).
 
-import { ALL } from '../config.js';
-import { parseSales, money, fmt, computeOutlook } from '../calc.js';
-import { $, bindInput, setText, setInputValue, sizeRow } from './fields.js';
+import { ALL } from '../config.js?v=2.21';
+import { parseSales, money, fmt, computeOutlook } from '../calc.js?v=2.21';
+import { $, bindInput, setText, setInputValue, sizeRow } from './fields.js?v=2.21';
 
 export function init(ctx) {
   const wrap = $('outlookRows');

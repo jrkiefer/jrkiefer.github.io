@@ -28,7 +28,7 @@ export default [
       globals: {
         SpreadsheetApp: 'readonly', ContentService: 'readonly',
         LockService: 'readonly', Logger: 'readonly', console: 'readonly',
-        Utilities: 'readonly'
+        Utilities: 'readonly', PropertiesService: 'readonly'
       }
     },
     rules: {
@@ -44,7 +44,7 @@ export default [
       sourceType: 'module',
       globals: {
         console: 'readonly', process: 'readonly', setImmediate: 'readonly',
-        AbortSignal: 'readonly', DOMException: 'readonly'
+        AbortSignal: 'readonly', DOMException: 'readonly', URL: 'readonly'
       }
     }
   }

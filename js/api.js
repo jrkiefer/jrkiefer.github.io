@@ -2,11 +2,11 @@
 // POST/GET wrappers, payload builders, merged-GET → record hydration,
 // and the sheet-date helpers. No DOM. Storage lives in store.js.
 
-import { SCRIPT_URL, SIZES, BOIL, ALL, MAX_BATCH_TEMPS, STATIONS, STATION_SLOTS } from './config.js';
+import { SCRIPT_URL, SIZES, BOIL, ALL, MAX_BATCH_TEMPS, STATIONS, STATION_SLOTS } from './config.js?v=2.21';
 import {
   parseSales, countTotal, countBlank, blankRecord,
   autoBibleFor, computePlan, effectiveMake,
-} from './calc.js';
+} from './calc.js?v=2.21';
 
 /* ---------------- dates ---------------- */
 

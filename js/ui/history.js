@@ -2,9 +2,9 @@
 // (cold starts never block boot on a slow backend). Tapping a night opens
 // that date. Rendering only — main.js supplies the fetch/mapping via ctx.
 
-import { SHEET_URL } from '../config.js';
-import { money } from '../calc.js';
-import { $, wireCollapse } from './fields.js';
+import { SHEET_URL } from '../config.js?v=2.21';
+import { money } from '../calc.js?v=2.21';
+import { $, wireCollapse } from './fields.js?v=2.21';
 
 export function init(ctx) {
   wireCollapse('historySec', 'historyToggle');

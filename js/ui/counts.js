@@ -2,9 +2,9 @@
 // The two instances stay hydrated in parallel so switching modes is just
 // the <html data-mode> attribute flip; only where the values live differs.
 
-import { ALL, BOIL } from '../config.js';
-import { countTotal } from '../calc.js';
-import { $, bindInput, setText, setInputValue } from './fields.js';
+import { ALL, BOIL } from '../config.js?v=2.21';
+import { countTotal } from '../calc.js?v=2.21';
+import { $, bindInput, setText, setInputValue } from './fields.js?v=2.21';
 
 const MODE_LABEL = { tp: '2 PM', eon: 'EON' };
 

@@ -4,9 +4,9 @@
 // Sicilian is the trays-column exception: its chip shows the make in BALLS
 // with a unit tag (v2·19) — its trays still feed the batch math unchanged.
 
-import { SIZES, BOIL, SIC_MIN, SIC_MIN_WAIVER } from '../config.js';
-import { fmt } from '../calc.js';
-import { $, setText, sizeRow } from './fields.js';
+import { SIZES, BOIL, SIC_MIN, SIC_MIN_WAIVER } from '../config.js?v=2.21';
+import { fmt } from '../calc.js?v=2.21';
+import { $, setText, sizeRow } from './fields.js?v=2.21';
 
 export function init() {
   const wrap = $('bysizeRows');

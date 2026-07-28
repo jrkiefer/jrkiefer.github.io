@@ -5,9 +5,9 @@
 // the quick toggle below the Active Date, which surfaces only while the
 // date is in peach season.
 
-import { BIBLES } from '../config.js';
-import { money } from '../calc.js';
-import { $, setText, wireCollapse, roundPills } from './fields.js';
+import { BIBLES } from '../config.js?v=2.21';
+import { money } from '../calc.js?v=2.21';
+import { $, setText, wireCollapse, roundPills } from './fields.js?v=2.21';
 
 const IDS = ['regular', 'peach'];
 

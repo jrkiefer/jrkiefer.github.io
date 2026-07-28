@@ -5,9 +5,9 @@
 // reference display (never fills the inputs). A slot tap re-hydrates the
 // inputs — a user action, so writing input values there is allowed.
 
-import { STATIONS, STATION_SLOTS } from '../config.js';
-import { defaultStationSlot, blankStations } from '../calc.js';
-import { $, bindInput, setInputValue, setText } from './fields.js';
+import { STATIONS, STATION_SLOTS } from '../config.js?v=2.21';
+import { defaultStationSlot, blankStations } from '../calc.js?v=2.21';
+import { $, bindInput, setInputValue, setText } from './fields.js?v=2.21';
 
 let slot = 'twopm';
 let lastRecord = null;
@@ -65,19 +65,31 @@ export function init(ctx) {
         <span class="eyebrow soft">${s.label}</span>
         <span class="station-last monocaps hidden" id="stationLast-${s.id}"></span>
       </div>
+      <button type="button" class="sign-btn" id="stationSign-${s.id}"
+        aria-label="${s.label} below zero">±</button>
       <div class="field has-suffix">
         <input id="station-${s.id}" inputmode="decimal" aria-label="${s.label} temp">
         <span class="suffix">°F</span><span class="saved-chip">✓ saved</span>
       </div>`;
     wrap.appendChild(row);
+    const writeTemp = (v) => ctx.patch((r) => {
+      if (!r.stations) r.stations = blankStations(); // pre-v2·20 local copy
+      r.stations[slot].temps[s.id] = v;
+      r.stations[slot].takenAt = timeNow(); // "last touched" stamp
+    });
     bindInput($(`station-${s.id}`), {
       decimal: true,
       signed: true, // a freezer can read negative °F
-      onValue: (v) => ctx.patch((r) => {
-        if (!r.stations) r.stations = blankStations(); // pre-v2·20 local copy
-        r.stations[slot].temps[s.id] = v;
-        r.stations[slot].takenAt = timeNow(); // "last touched" stamp
-      }),
+      onValue: writeTemp,
+    });
+    // The phone's decimal keypad has no minus key, so a signed filter alone
+    // can't produce a below-zero reading — this button flips the sign
+    // through the same write path as typing.
+    $(`stationSign-${s.id}`).addEventListener('click', () => {
+      const input = $(`station-${s.id}`);
+      const v = input.value.startsWith('-') ? input.value.slice(1) : `-${input.value}`;
+      setInputValue(input, v);
+      writeTemp(v);
     });
   }
 

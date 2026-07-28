@@ -6,7 +6,7 @@
 // sheet payloads in the background. Status reflects the two-stage journey:
 // 'local' (saved on phone) → 'synced' (landed in the sheet).
 
-import { blankRecord, blankStations } from './calc.js';
+import { blankRecord, blankStations } from './calc.js?v=2.21';
 
 const KEY_PREFIX = 'dough:';
 const BLANK_JSON = JSON.stringify(blankRecord());
@@ -25,6 +25,13 @@ export function createStore({ api, storage, now = Date.now, debounceMs = 2500 })
   let flushRun = null; // the in-flight flush's completion promise — reload waits on it
   let rerun = false;
   let sent = {}; // per-type serialized-payload ack cache (per date)
+  // v2·21: per-type backend-rejection ledger — type → the backend's message.
+  // A rejected payload is terminal-acked (never retried verbatim) but its
+  // content NEVER reached the sheet, so the UI must say so instead of
+  // reading "✓ saved". An entry clears only when that type's changed
+  // payload lands, the record stops producing the payload, or a
+  // load/reset/date-change replaces the content outright.
+  let rejected = {};
   const subscribers = new Set();
 
   const isBlank = (r) => JSON.stringify(r) === BLANK_JSON;
@@ -47,7 +54,13 @@ export function createStore({ api, storage, now = Date.now, debounceMs = 2500 })
   }
 
   function getState() {
-    return { date, record, status, updatedAt, syncedAt, dirty: hasUnsyncedEdits() };
+    // One rejection surfaces at a time; POST_ORDER is the priority (dough,
+    // the most fundamental payload, wins over a rejected eon or stations).
+    const rj = POST_ORDER.find((t) => t in rejected);
+    return {
+      date, record, status, updatedAt, syncedAt, dirty: hasUnsyncedEdits(),
+      rejection: rj ? { type: rj, message: rejected[rj] } : null,
+    };
   }
 
   function subscribe(fn) {
@@ -104,11 +117,14 @@ export function createStore({ api, storage, now = Date.now, debounceMs = 2500 })
     armDebounce();
   }
 
-  // Send one date's payloads in order. Returns {networkFailed}. Shared by
-  // the live flush and the boot retry; `ack` collects successful sends.
+  // Send one date's payloads in order. Returns {networkFailed, landed,
+  // rejections}. Shared by the live flush and the boot retry; `ack`
+  // collects successful sends.
   async function postPayloads(payloads, doughRowKnown, ack) {
     let networkFailed = false;
     let doughOk = doughRowKnown;
+    const landed = []; // types whose payload reached the sheet this pass
+    const rejections = {}; // type → message for backend-refused payloads
     for (const type of POST_ORDER) {
       const payload = payloads[type];
       if (!payload) continue;
@@ -122,17 +138,19 @@ export function createStore({ api, storage, now = Date.now, debounceMs = 2500 })
       const res = await api.post(payload);
       if (res.ok) {
         ack[type] = ser;
+        landed.push(type);
         if (type === 'dough') doughOk = true;
       } else if (res.rejected) {
         // Terminal for this payload version — a backend rule said no.
         // Retried only after the record changes (new serialization).
         ack[type] = ser;
+        rejections[type] = res.message || 'save rejected';
         console.warn(`backend rejected ${type} save: ${res.message}`);
       } else {
         networkFailed = true;
       }
     }
-    return { networkFailed };
+    return { networkFailed, landed, rejections };
   }
 
   async function flush({ keepalive = false } = {}) {
@@ -178,14 +196,35 @@ export function createStore({ api, storage, now = Date.now, debounceMs = 2500 })
             // Nothing the backend would accept (blank or reset record).
             // Deliberately NOT marked synced: a reset must keep local-wins
             // so a stale sheet row can't resurrect on the next load.
+            // The record no longer produces the content a rejection was
+            // about, so the ledger clears here too.
+            if (Object.keys(rejected).length) {
+              rejected = {};
+              notify('rejection');
+            }
             return;
           }
-          const { networkFailed } = await postPayloads(payloads, hasServerDoughRow, sent);
+          const { networkFailed, landed, rejections } = await postPayloads(payloads, hasServerDoughRow, sent);
           // Date changed mid-flight — this pass's state was replaced. Don't
           // bail out entirely: a flush attempt for the NEW date may have set
           // `rerun` while this one was in flight, and returning here would
           // drop it, stranding the new date's edits until the next event.
           if (seq !== flushSeq) continue;
+          // Ledger rules: a landed payload clears its rejection; a fresh
+          // refusal records it; a type the record stopped producing clears.
+          // A pass that merely SKIPS a type via the ack cache changes
+          // nothing — the rejected content still never reached the sheet.
+          let rejChanged = false;
+          for (const type of landed) {
+            if (type in rejected) { delete rejected[type]; rejChanged = true; }
+          }
+          for (const type in rejections) {
+            if (rejected[type] !== rejections[type]) { rejected[type] = rejections[type]; rejChanged = true; }
+          }
+          for (const type of Object.keys(rejected)) {
+            if (!payloads[type]) { delete rejected[type]; rejChanged = true; }
+          }
+          if (rejChanged) notify('rejection');
           if (networkFailed) {
             setStatus('offline');
           } else if (updatedAt === flushedAt) {
@@ -215,6 +254,7 @@ export function createStore({ api, storage, now = Date.now, debounceMs = 2500 })
     updatedAt = 0;
     syncedAt = 0;
     sent = {};
+    rejected = {}; // fresh date, fresh content — the 'load' notify re-renders
     hasServerDoughRow = false;
     setStatus('loading');
 
@@ -296,7 +336,20 @@ export function createStore({ api, storage, now = Date.now, debounceMs = 2500 })
   async function reload({ force = false } = {}) {
     if (date == null) return;
     const mySeq = seq;
-    if (force) setStatus('loading');
+    if (force) {
+      setStatus('loading');
+      // The user confirmed "Discard edits & load?" — a debounce still armed
+      // for those edits must not fire mid-GET and post the very numbers
+      // being discarded (the fetched row would apply while the POSTs were
+      // in the air, then the discarded edits would land on the sheet
+      // afterward with nothing left to reconcile). Edits that already made
+      // it into an in-flight flush are past discarding — the wait below
+      // lets them land and the GET then shows the sheet including them.
+      if (debounceTimer) {
+        clearTimeout(debounceTimer);
+        debounceTimer = null;
+      }
+    }
     // Let an in-flight sync land before fetching: its POSTs are changing what
     // the sheet holds, so a GET raced against them can return a row that
     // predates this phone's own numbers (Load must show what the sheet holds
@@ -321,10 +374,21 @@ export function createStore({ api, storage, now = Date.now, debounceMs = 2500 })
       if (force) setStatus(idleStatus());
       return;
     }
+    if (flushing) {
+      // A flush STARTED while the GET was in flight (reconnect, boot retry)
+      // and its POSTs are still in the air — the row in hand predates them.
+      // Same reasoning as the syncedAt guard above; the flush's own
+      // completion will settle the status.
+      if (force) setStatus(idleStatus());
+      return;
+    }
 
     const serverRow = server && server.status === 'found' && server.data ? server.data : null;
     if (netFail) {
       setStatus('offline');
+      // A force entry cancelled the armed debounce; with the load failed,
+      // any still-unsynced edits need their retry timer back.
+      if (force && hasUnsyncedEdits()) armDebounce();
       return;
     }
     if (!serverRow) {
@@ -334,6 +398,7 @@ export function createStore({ api, storage, now = Date.now, debounceMs = 2500 })
       if (force) {
         setStatus(idleStatus());
         notify('loadmiss');
+        if (hasUnsyncedEdits()) armDebounce(); // see the netFail branch
       }
       return;
     }
@@ -352,11 +417,24 @@ export function createStore({ api, storage, now = Date.now, debounceMs = 2500 })
 
     // Same content this phone already shows — refresh the sync stamps but
     // skip the apply: no rehydrate (a no-change re-pull must not rewrite
-    // inputs or yank the mode back to 2 PM when nothing changed) and the
-    // ack cache stays (it describes content the sheet provably holds).
+    // inputs or yank the mode back to 2 PM when nothing changed).
     // Stamping synced also recovers an 'offline' status once a later
-    // re-pull gets through.
+    // re-pull gets through. The ack cache is REBUILT from the row in hand
+    // rather than kept: the old ack is the last payload this phone posted,
+    // which lags the sheet when a timed-out POST landed anyway — a later
+    // edit that re-serializes into it would be swallowed while the dot
+    // reads Synced. Acks built from the current record (which deep-equals
+    // the sheet row) truthfully describe sheet content. `make` is carried
+    // over as-is — the GET doesn't reflect the make tab, so a rebuilt make
+    // ack could vouch for content the sheet may not hold.
     if (JSON.stringify(next) === JSON.stringify(record)) {
+      const fresh = api.buildPayloads(date, record);
+      const keepMake = sent.make;
+      sent = {};
+      for (const t of Object.keys(fresh)) {
+        if (t !== 'make') sent[t] = JSON.stringify(fresh[t]);
+      }
+      if (keepMake !== undefined) sent.make = keepMake;
       updatedAt = syncedAt = now();
       persist();
       setStatus('synced');
@@ -367,8 +445,10 @@ export function createStore({ api, storage, now = Date.now, debounceMs = 2500 })
     // The ack cache described the record this phone last posted — after
     // applying the sheet's copy (possibly another phone's numbers) a stale ack
     // could swallow a later edit that re-serializes the same payload, leaving
-    // the phone "synced" while the sheet disagrees.
+    // the phone "synced" while the sheet disagrees. The rejection ledger
+    // described content that's gone with the applied row.
     sent = {};
+    rejected = {};
     updatedAt = syncedAt = now();
     persist();
     status = 'synced';
@@ -384,6 +464,7 @@ export function createStore({ api, storage, now = Date.now, debounceMs = 2500 })
     updatedAt = now();
     syncedAt = 0;
     sent = {};
+    rejected = {}; // the rejected content is gone with the record
     persist();
     status = 'new';
     notify('reset');

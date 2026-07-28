@@ -3,8 +3,8 @@
 // make shows as the placeholder; an entered value wins everywhere downstream
 // (the store POSTs it as a type:'make' correction automatically).
 
-import { ALL } from '../config.js';
-import { $, bindInput, setText, setInputValue, wireCollapse, sizeRow } from './fields.js';
+import { ALL } from '../config.js?v=2.21';
+import { $, bindInput, setText, setInputValue, wireCollapse, sizeRow } from './fields.js?v=2.21';
 
 export function init(ctx) {
   wireCollapse('makeSec', 'makeToggle');

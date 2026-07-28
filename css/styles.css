@@ -329,6 +329,14 @@ input[type="date"] {
   color: var(--warn);
 }
 
+/* Sticky backend-rejection warning (#syncWarn): data loss, not advice —
+   accent red, bold, and never auto-hidden. */
+.sync-warn {
+  margin: 10px 0 0;
+  font-weight: 700;
+  color: var(--accent);
+}
+
 /* ─── Mode tabs ─── */
 
 .mode-tabs {
@@ -910,6 +918,20 @@ input[type="date"] {
 }
 .station-label { width: 118px; flex-shrink: 0; }
 .station-row .field { flex: 1; }
+/* ± toggle — the decimal keypad has no minus key, so below-zero freezer
+   readings need a tappable sign flip. */
+.sign-btn {
+  flex-shrink: 0;
+  width: 36px;
+  height: 36px;
+  font-family: var(--font-mono);
+  font-weight: 700;
+  font-size: 15px;
+  border: 1.5px solid var(--ink);
+  border-radius: 8px;
+  background: transparent;
+  color: var(--ink);
+}
 .station-last {
   display: block;
   font-size: 10px;
